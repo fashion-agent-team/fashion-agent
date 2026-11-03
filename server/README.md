@@ -41,7 +41,7 @@ npx wrangler secret put GEMINI_API_KEY
 npm run deploy                 # 나온 https://….workers.dev 주소를 VISION_URL로
 ```
 
-모델은 `wrangler.toml`의 `GEMINI_MODEL`에서 바꿉니다. `APP_TOKEN` 비밀 값을 넣으면 `X-App-Token` 헤더가 같은 요청만 받습니다. 앱은 아직 이 헤더를 보내지 않으니, 토큰을 켜기 전에 `HttpVisionService`에 헤더를 추가해야 합니다.
+모델은 `wrangler.toml`의 `GEMINI_MODEL`에서 바꿉니다. `gemini-2.5-flash`는 새로 발급한 키로는 404가 나서 `gemini-3.5-flash`를 기본으로 둡니다(2026-11-03 실제 키로 확인). 사용 가능한 모델은 `GET /v1beta/models`로 볼 수 있습니다. `APP_TOKEN` 비밀 값을 넣으면 `X-App-Token` 헤더가 같은 요청만 받습니다. 앱은 아직 이 헤더를 보내지 않으니, 토큰을 켜기 전에 `HttpVisionService`에 헤더를 추가해야 합니다.
 
 ## 오류 응답
 
@@ -59,7 +59,8 @@ npm run deploy                 # 나온 https://….workers.dev 주소를 VISION
 
 - TODO(AI 담당): 실제 옷 사진으로 프롬프트 다듬기, `confidence` 기준이 맞는지 확인
 - TODO: 앱 `HttpVisionService`에 `X-App-Token` 헤더 추가 후 토큰 켜기
-- TODO: 무료 한도 초과(429) 때 사용자에게 따로 안내할지 정하기
+- TODO: 무료 한도 초과(429)나 구글 쪽 혼잡(503) 때 한 번 재시도할지, 사용자에게 따로 안내할지 정하기
+- TODO(AI 담당): 손상 위치 `where`가 "사진 기준 오른쪽"처럼 나올 수 있음. 펼쳐 놓은 옷에서 왼쪽·오른쪽을 무엇 기준으로 말할지 프롬프트에 정하기
 
 ## 엔드포인트
 
