@@ -45,7 +45,6 @@
 
 ### 아직 안 되는 것
 
-- **진짜 비전 AI**: 프록시(`server/`)가 아직 없어서, 옷 검사는 늘 "얼룩 있는 남색 셔츠 + 청바지" 예시 응답으로 돕니다.
 - **일정 등록**: 일정 저장소와 판단 규칙은 있지만, 말로 등록하는 기능이 없습니다.
 - **얼굴 확인**: 아직 없습니다.
 - **계정 연결**: Apple·구글 로그인으로 폰을 바꿔도 이어 쓰는 기능은 아직 없습니다. 연결 방법은 [docs/ACCOUNT.md](docs/ACCOUNT.md)에 있습니다.
@@ -69,7 +68,7 @@
 - 음성 안내: flutter_tts / 음성 인식: speech_to_text (iOS Speech, 한국어)
 - 카메라: camera
 - 날씨: Open-Meteo (API 키 없음)
-- 옷 분석: 비전 LLM (앱 → `server/` 프록시 → LLM, 형식은 [server/README.md](server/README.md))
+- 옷 분석: 비전 LLM (앱 → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) 서버 → Gemini)
 - 저장: shared_preferences (옷 설명만, 사진은 저장 안 함)
 
 ## 구조
@@ -82,7 +81,6 @@ lib/
   styling/    일정·날씨·손상 규칙, 색 조합 규칙(일정 맞춤 추천용) — AI가 아닌 규칙으로 판단
   session/    옷 검사 단계별 흐름(상태 머신)
   screens/    에이전트 홈(말하기/다시 듣기), 옷 검사 화면. 모두 위·아래 두 개의 큰 버튼
-server/       비전 프록시 (API 키 보관)
 ```
 
 화면은 상태만 그리고, 판단은 `styling/` 규칙이 합니다. 비전 AI는 옷의 색·무늬 같은 사실만 돌려줍니다.
@@ -100,6 +98,21 @@ flutter run --dart-define=FAKE_CAMERA=true   # 카메라 없는 시뮬레이터
 flutter run --dart-define=VISION_URL=http://localhost:8787   # 로컬 서버
 flutter test
 ```
+
+## 레포 구성
+
+이 레포는 **앱(프론트)** 입니다. 서버 쪽은 기능별 레포로 나뉘어 있습니다.
+
+| 레포 | 하는 일 |
+| --- | --- |
+| [fashion-agent](https://github.com/fashion-agent-team/fashion-agent) | 앱 (Flutter) |
+| [fashion-agent-gateway](https://github.com/fashion-agent-team/fashion-agent-gateway) | API Gateway (REST), 계정·회원정보 |
+| [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | agent, Gemini로 기능 고르기·맞춤 추천 |
+| [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 날씨, 날씨에 맞는 옷 두께·재질 |
+| [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 기록·알림, 일정에 맞는 옷차림 |
+| [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진으로 얼룩·찢어짐 확인 (옛 `server/`, 배포된 비전 서버) |
+| [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 사진으로 화장 대칭·이에 낀 것 확인 |
+| [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 찍은 옷을 DB에 기록해 옷장 만들기·추천 |
 
 ## 브랜치 전략
 
