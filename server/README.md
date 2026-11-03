@@ -2,7 +2,64 @@
 
 앱과 비전 LLM 사이에 두는 작은 서버입니다. **API 키는 여기에만 두고 앱에는 넣지 않습니다.** 프롬프트와 응답 형식도 여기서 관리해서, 앱을 다시 배포하지 않고 고칠 수 있게 합니다.
 
-아직 구현 전입니다. 앱은 `VISION_URL`을 주지 않으면 `FakeVisionService`(예시 응답)로 돕니다. 호스팅(Cloudflare Workers, Firebase Functions, Vercel 등)과 LLM 공급사는 팀에서 정합니다.
+Cloudflare Workers + Gemini API로 만든 뼈대입니다. 앱은 `VISION_URL`을 주지 않으면 지금처럼 `FakeVisionService`(예시 응답)로 돕니다.
+
+## 파일
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `src/index.ts` | 요청 받기. 주소·purpose·사진 크기·앱 토큰 확인, 오류 코드 정리 |
+| `src/prompts.ts` | 옷 검사(outfit) 프롬프트. 격식·얼룩/찢어짐 기준 포함. **문구 다듬기는 여기서** |
+| `src/gemini.ts` | Gemini 호출. 응답을 아래 JSON 형식으로만 받도록 강제 |
+| `src/schema.ts` | 응답 형식 정의와 정리(모르는 값은 기본값, id는 g1·g2… 부여) |
+| `test/` | 가짜 Gemini로 하는 테스트 |
+
+## 실행
+
+Node 22.6 이상이 필요합니다.
+
+```bash
+cd server
+npm install
+npm test                       # 가짜 Gemini로 테스트
+cp .dev.vars.example .dev.vars # GEMINI_API_KEY 채우기 (커밋 금지)
+npm run dev                    # http://localhost:8787
+```
+
+앱을 로컬 서버에 붙이기:
+
+```bash
+flutter run --dart-define=VISION_URL=http://localhost:8787
+# 안드로이드 에뮬레이터는 http://10.0.2.2:8787
+```
+
+배포:
+
+```bash
+npx wrangler login
+npx wrangler secret put GEMINI_API_KEY
+npm run deploy                 # 나온 https://….workers.dev 주소를 VISION_URL로
+```
+
+모델은 `wrangler.toml`의 `GEMINI_MODEL`에서 바꿉니다. `APP_TOKEN` 비밀 값을 넣으면 `X-App-Token` 헤더가 같은 요청만 받습니다. 앱은 아직 이 헤더를 보내지 않으니, 토큰을 켜기 전에 `HttpVisionService`에 헤더를 추가해야 합니다.
+
+## 오류 응답
+
+200이 아니면 앱은 "분석하지 못했어요"라고 안내하고 다시 찍게 합니다. 본문은 `{"error": {"code", "message"}}`입니다.
+
+| 상태 | code | 언제 |
+| --- | --- | --- |
+| 400 | `bad_json`, `bad_purpose`, `no_image` | 요청 형식이 틀림 |
+| 401 | `unauthorized` | 앱 토큰이 다름 |
+| 413 | `image_too_large` | 사진이 약 6MB 넘음 |
+| 502 | `ai_failed`, `ai_bad_response` | Gemini 오류(무료 한도 초과 429 포함), 형식이 이상한 응답 |
+| 504 | `ai_timeout` | 25초 안에 답이 없음 |
+
+## 남은 일
+
+- TODO(AI 담당): 실제 옷 사진으로 프롬프트 다듬기, `confidence` 기준이 맞는지 확인
+- TODO: 앱 `HttpVisionService`에 `X-App-Token` 헤더 추가 후 토큰 켜기
+- TODO: 무료 한도 초과(429) 때 사용자에게 따로 안내할지 정하기
 
 ## 엔드포인트
 
