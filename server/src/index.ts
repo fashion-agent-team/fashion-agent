@@ -45,7 +45,7 @@ export async function handle(request: Request, env: Env, deps: Deps = defaultDep
     return error(400, 'bad_json', '요청 본문이 JSON이 아니에요');
   }
   const { purpose, image } = (body ?? {}) as { purpose?: unknown; image?: unknown };
-  if (!isPurpose(purpose)) return error(400, 'bad_purpose', 'purpose는 outfit, closet, check 중 하나예요');
+  if (!isPurpose(purpose)) return error(400, 'bad_purpose', 'purpose는 지금 outfit만 받아요');
   if (typeof image !== 'string' || image.length === 0) return error(400, 'no_image', 'image(base64 JPEG)가 없어요');
   if (image.length > MAX_IMAGE_BASE64) return error(413, 'image_too_large', '사진이 너무 커요');
 

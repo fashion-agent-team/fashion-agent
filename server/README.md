@@ -9,7 +9,7 @@ Cloudflare Workers + Gemini API로 만든 뼈대입니다. 앱은 `VISION_URL`�
 | 파일 | 하는 일 |
 | --- | --- |
 | `src/index.ts` | 요청 받기. 주소·purpose·사진 크기·앱 토큰 확인, 오류 코드 정리 |
-| `src/prompts.ts` | 목적별(outfit, closet, check) 프롬프트. **문구 다듬기는 여기서** |
+| `src/prompts.ts` | 옷 검사(outfit) 프롬프트. 격식·얼룩/찢어짐 기준 포함. **문구 다듬기는 여기서** |
 | `src/gemini.ts` | Gemini 호출. 응답을 아래 JSON 형식으로만 받도록 강제 |
 | `src/schema.ts` | 응답 형식 정의와 정리(모르는 값은 기본값, id는 g1·g2… 부여) |
 | `test/` | 가짜 Gemini로 하는 테스트 |

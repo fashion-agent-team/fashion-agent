@@ -1,7 +1,8 @@
 // 앱의 ClothesScan.fromJson / Garment.fromJson과 같은 모양을 정의하고 검사한다.
 // 형식을 바꾸면 lib/models/clothes_scan.dart, lib/models/garment.dart도 같이 바꾼다.
 
-export const PURPOSES = ['outfit', 'closet', 'check'] as const;
+// 앱의 ScanPurpose와 같다. 지금은 펼쳐 놓은 옷을 보는 outfit 하나다.
+export const PURPOSES = ['outfit'] as const;
 export type Purpose = (typeof PURPOSES)[number];
 
 export const CATEGORIES = ['top', 'bottom', 'outer', 'dress', 'shoes', 'other'] as const;
@@ -10,9 +11,17 @@ export const COLOR_FAMILIES = [
   'blue', 'red', 'pink', 'orange', 'yellow', 'green', 'purple', 'unknown',
 ] as const;
 export const TONES = ['light', 'mid', 'dark'] as const;
+export const FORMALITIES = ['formal', 'smart', 'casual', 'sporty', 'unknown'] as const;
+export const DEFECT_KINDS = ['stain', 'tear', 'lint', 'other'] as const;
 export const LIGHTINGS = ['ok', 'dark'] as const;
 
 export interface GarmentBox { x: number; y: number; w: number; h: number }
+
+export interface GarmentDefect {
+  kind: (typeof DEFECT_KINDS)[number];
+  where: string | null;
+  confidence: number;
+}
 
 export interface Garment {
   id: string;
@@ -24,6 +33,8 @@ export interface Garment {
   pattern: string | null;
   material: string | null;
   notes: string | null;
+  formality: (typeof FORMALITIES)[number];
+  defects: GarmentDefect[];
   box: GarmentBox | null;
   confidence: number;
 }
@@ -55,6 +66,19 @@ export const GEMINI_RESPONSE_SCHEMA = {
           pattern: { type: 'STRING', nullable: true },
           material: { type: 'STRING', nullable: true },
           notes: { type: 'STRING', nullable: true },
+          formality: { type: 'STRING', enum: [...FORMALITIES] },
+          defects: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                kind: { type: 'STRING', enum: [...DEFECT_KINDS] },
+                where: { type: 'STRING', nullable: true },
+                confidence: { type: 'NUMBER' },
+              },
+              required: ['kind', 'confidence'],
+            },
+          },
           box: {
             type: 'OBJECT',
             nullable: true,
@@ -66,7 +90,7 @@ export const GEMINI_RESPONSE_SCHEMA = {
           },
           confidence: { type: 'NUMBER' },
         },
-        required: ['category', 'name', 'colorName', 'colorFamily', 'tone', 'confidence'],
+        required: ['category', 'name', 'colorName', 'colorFamily', 'tone', 'formality', 'defects', 'confidence'],
       },
     },
     framing: { type: 'STRING', nullable: true },
@@ -94,8 +118,14 @@ export function normalizeScan(raw: unknown): ClothesScan {
     pattern: text(g.pattern),
     material: text(g.material),
     notes: text(g.notes),
+    formality: pick(FORMALITIES, g.formality, 'unknown'),
+    defects: (Array.isArray(g.defects) ? g.defects : []).filter(isObject).map((d) => ({
+      kind: pick(DEFECT_KINDS, d.kind, 'other'),
+      where: text(d.where),
+      confidence: num01(d.confidence),
+    })),
     box: box(g.box),
-    confidence: clamp01(typeof g.confidence === 'number' ? g.confidence : 0),
+    confidence: num01(g.confidence),
   }));
   return {
     garments,
@@ -118,6 +148,10 @@ function text(v: unknown): string | null {
 
 function clamp01(n: number): number {
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
+}
+
+function num01(v: unknown): number {
+  return clamp01(typeof v === 'number' ? v : 0);
 }
 
 function box(v: unknown): GarmentBox | null {

@@ -27,6 +27,6 @@ test('키는 헤더로, 사진과 프롬프트는 본문으로 보내고 JSON �
 });
 
 test('HTTP 오류와 빈 응답은 GeminiError', async () => {
-  await assert.rejects(describeWithGemini('I', 'check', { apiKey: 'k', model: 'm', fetch: fakeFetch(429, {}) }), GeminiError);
-  await assert.rejects(describeWithGemini('I', 'check', { apiKey: 'k', model: 'm', fetch: fakeFetch(200, { candidates: [] }) }), GeminiError);
+  await assert.rejects(describeWithGemini('I', 'outfit', { apiKey: 'k', model: 'm', fetch: fakeFetch(429, {}) }), GeminiError);
+  await assert.rejects(describeWithGemini('I', 'outfit', { apiKey: 'k', model: 'm', fetch: fakeFetch(200, { candidates: [] }) }), GeminiError);
 });

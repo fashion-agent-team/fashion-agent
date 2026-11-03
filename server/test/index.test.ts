@@ -28,32 +28,33 @@ test('정상 요청은 앱이 읽는 모양으로 돌려준다', async () => {
   assert.equal(data.garments[0].name, '청바지');
 });
 
-test('purpose와 목적이 Gemini 호출로 전달된다', async () => {
+test('purpose와 사진이 Gemini 호출로 전달된다', async () => {
   let seen = '';
-  await handle(post({ purpose: 'closet', image: 'AAAA' }), env, {
-    describe: async (_img, purpose) => { seen = purpose; return fakeScan; },
+  await handle(post({ purpose: 'outfit', image: 'BBBB' }), env, {
+    describe: async (img, purpose) => { seen = `${purpose}:${img}`; return fakeScan; },
   });
-  assert.equal(seen, 'closet');
+  assert.equal(seen, 'outfit:BBBB');
 });
 
 test('잘못된 요청은 400', async () => {
   assert.equal((await handle(post('not json'), env, ok)).status, 400);
   assert.equal((await handle(post({ purpose: 'face', image: 'AAAA' }), env, ok)).status, 400);
-  assert.equal((await handle(post({ purpose: 'check' }), env, ok)).status, 400);
+  assert.equal((await handle(post({ purpose: 'closet', image: 'AAAA' }), env, ok)).status, 400);
+  assert.equal((await handle(post({ purpose: 'outfit' }), env, ok)).status, 400);
 });
 
 test('APP_TOKEN이 있으면 헤더가 맞아야 한다', async () => {
   const locked = { ...env, APP_TOKEN: 'secret' };
-  assert.equal((await handle(post({ purpose: 'check', image: 'AAAA' }), locked, ok)).status, 401);
-  const res = await handle(post({ purpose: 'check', image: 'AAAA' }, { 'X-App-Token': 'secret' }), locked, ok);
+  assert.equal((await handle(post({ purpose: 'outfit', image: 'AAAA' }), locked, ok)).status, 401);
+  const res = await handle(post({ purpose: 'outfit', image: 'AAAA' }, { 'X-App-Token': 'secret' }), locked, ok);
   assert.equal(res.status, 200);
 });
 
 test('Gemini 실패는 502, 시간 초과는 504', async () => {
   const fail: Deps = { describe: async () => { throw new GeminiError('x'); } };
   const slow: Deps = { describe: async () => { throw new GeminiError('x', true); } };
-  assert.equal((await handle(post({ purpose: 'check', image: 'AAAA' }), env, fail)).status, 502);
-  assert.equal((await handle(post({ purpose: 'check', image: 'AAAA' }), env, slow)).status, 504);
+  assert.equal((await handle(post({ purpose: 'outfit', image: 'AAAA' }), env, fail)).status, 502);
+  assert.equal((await handle(post({ purpose: 'outfit', image: 'AAAA' }), env, slow)).status, 504);
 });
 
 test('없는 주소는 404, health는 200', async () => {

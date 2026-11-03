@@ -7,6 +7,8 @@ test('정상 응답은 그대로 두고 id를 g1부터 붙인다', () => {
     garments: [{
       category: 'top', name: '셔츠', colorName: '남색', colorFamily: 'navy', tone: 'dark',
       pattern: '줄무늬', material: null, notes: null,
+      formality: 'smart',
+      defects: [{ kind: 'stain', where: '오른쪽 소매 끝', confidence: 0.85 }],
       box: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 }, confidence: 0.86,
     }],
     framing: null,
@@ -15,13 +17,18 @@ test('정상 응답은 그대로 두고 id를 g1부터 붙인다', () => {
   assert.equal(scan.garments[0].id, 'g1');
   assert.equal(scan.garments[0].colorFamily, 'navy');
   assert.deepEqual(scan.garments[0].box, { x: 0.1, y: 0.2, w: 0.3, h: 0.4 });
+  assert.equal(scan.garments[0].formality, 'smart');
+  assert.deepEqual(scan.garments[0].defects, [{ kind: 'stain', where: '오른쪽 소매 끝', confidence: 0.85 }]);
   assert.equal(scan.framing, null);
   assert.equal(scan.lighting, 'ok');
 });
 
 test('모르는 값은 안전한 기본값으로 바꾼다', () => {
   const scan = normalizeScan({
-    garments: [{ category: 'hat', colorFamily: 'teal', tone: 'bright', confidence: 3, pattern: '  ' }],
+    garments: [{
+      category: 'hat', colorFamily: 'teal', tone: 'bright', confidence: 3, pattern: '  ',
+      formality: 'fancy', defects: [{ kind: 'hole', where: '', confidence: -1 }, 'junk'],
+    }],
     lighting: 'dim',
   });
   const g = scan.garments[0];
@@ -31,7 +38,14 @@ test('모르는 값은 안전한 기본값으로 바꾼다', () => {
   assert.equal(g.confidence, 1);
   assert.equal(g.pattern, null);
   assert.equal(g.name, '옷');
+  assert.equal(g.formality, 'unknown');
+  assert.deepEqual(g.defects, [{ kind: 'other', where: null, confidence: 0 }]);
   assert.equal(scan.lighting, 'ok');
+});
+
+test('defects가 없으면 빈 목록이다', () => {
+  const scan = normalizeScan({ garments: [{ category: 'top' }], lighting: 'ok' });
+  assert.deepEqual(scan.garments[0].defects, []);
 });
 
 test('garments가 없으면 빈 목록이다 (앱이 다시 찍기로 안내)', () => {
