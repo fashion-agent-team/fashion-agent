@@ -8,6 +8,7 @@ import 'services/capture_service.dart';
 import 'services/fake_vision_service.dart';
 import 'services/listen_service.dart';
 import 'services/profile_store.dart';
+import 'services/schedule_store.dart';
 import 'services/speech_service.dart';
 import 'services/vision_service.dart';
 import 'services/wardrobe_store.dart';
@@ -43,6 +44,7 @@ void main() {
     outfitCheck: SessionController(
       speech: speech,
       weatherService: weather,
+      schedule: LocalScheduleStore(),
       capture: _fakeCamera ? FakeCaptureService() : CameraCaptureService(),
       vision: _visionUrl.isEmpty
           ? FakeVisionService()

@@ -1,6 +1,8 @@
 import '../models/garment.dart';
-import '../models/outfit_feedback.dart';
 import 'korean.dart';
+
+/// 색 조합 판정. 지금 옷 검사는 색 조합을 말하지 않고, 일정에 맞는 옷 추천에서 쓸 예정이다.
+enum Verdict { good, okay, clash, unsure }
 
 /// 두 옷의 색이 어울리는지와 그 이유.
 class ColorMatch {

@@ -65,13 +65,13 @@ npm run deploy                 # 나온 https://….workers.dev 주소를 VISION
 
 ### `POST /describe-clothes`
 
-펼쳐 놓은 옷, 옷장, 꺼낸 옷 확인을 모두 이 하나로 처리합니다. 비교와 판단은 앱이 합니다.
+옷 검사에서 펼쳐 놓은 옷을 분석합니다. 일정·날씨에 맞는지 판단은 앱이 하고, AI는 격식과 얼룩·찢어짐 같은 보이는 사실만 돌려줍니다.
 
 요청
 
 ```json
 {
-  "purpose": "outfit",        // outfit | closet | check
+  "purpose": "outfit",        // 지금은 outfit 하나
   "image": "<base64 JPEG>"
 }
 ```
@@ -90,7 +90,11 @@ npm run deploy                 # 나온 https://….workers.dev 주소를 VISION
       "tone": "dark",               // light | mid | dark
       "pattern": "줄무늬",          // 무늬 없으면 null
       "material": "면 같음",        // 사진으로 본 추정. 모르면 null
-      "notes": "약간 구김 있음",    // 구김, 얼룩 등. 없으면 null
+      "notes": "약간 구김 있음",    // 그 밖의 상태. 없으면 null
+      "formality": "smart",         // formal(정장·구두) | smart(셔츠·니트·슬랙스) | casual(티·청바지) | sporty(운동복) | unknown
+      "defects": [                  // 얼룩·찢어짐. 없으면 []
+        { "kind": "stain", "where": "오른쪽 소매 끝", "confidence": 0.85 }  // kind: stain | tear | lint | other
+      ],
       "box": { "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4 },  // 사진 크기를 1로 본 비율
       "confidence": 0.86            // 0~1. 색을 얼마나 확신하는지
     }
@@ -103,6 +107,7 @@ npm run deploy                 # 나온 https://….workers.dev 주소를 VISION
 ## 프롬프트 원칙
 
 - **본 사실만** 답하게 합니다. "어울린다", "예쁘다" 같은 판단은 묻지도 받지도 않습니다. 판단은 앱의 `lib/styling/` 규칙이 합니다.
+- `defects`는 사진에서 실제로 보이는 것만 넣게 합니다. `where`는 "오른쪽 소매 끝", "밑단 왼쪽"처럼 손으로 찾아갈 수 있는 말로 받습니다. 애매하면 `confidence`를 낮추게 합니다. 앱은 0.7 미만이면 "손으로 확인해 보세요"라고만 말합니다.
 - 색이 조명 때문에 애매하면 `confidence`를 낮추게 합니다. 앱은 0.6 미만이면 판단하지 않고 다시 비춰 달라고 합니다.
 - `framing`은 "흐려요"가 아니라 "폰을 오른쪽으로", "한 걸음 뒤로"처럼 사용자가 바로 따라 할 수 있는 문장으로 받습니다.
 - 응답은 위 JSON 스키마로 강제합니다(LLM의 구조화 출력 기능 사용).

@@ -35,3 +35,31 @@ List<String> weatherWarnings(Weather weather, List<Garment> garments) {
   if (weather.needsUmbrella) warnings.add('비 소식이 있으니 우산을 챙기세요.');
   return warnings;
 }
+
+/// 일교차가 이 이상이면 겉옷을 챙기라고 한다.
+const bigDailyRange = 10;
+
+/// 일교차가 크면 겉옷 안내. 아니면 null.
+String? dailyRangeAdvice(Weather w) {
+  final range = (w.maxTemperature - w.minTemperature).round();
+  if (range < bigDailyRange) return null;
+  return '오늘은 일교차가 $range도로 커요. 낮에 덥더라도 아침저녁을 위해 겉옷을 챙기세요.';
+}
+
+/// 지금 입은 옷이 오늘 날씨에 맞는지. 맞으면 이유 한 문장, 아니면 고칠 점들.
+({bool ok, List<String> notes}) weatherFit(
+    Weather weather, List<Garment> garments) {
+  final notes = [...weatherWarnings(weather, garments)];
+  final hasOuter = garments.any((g) => g.category == GarmentCategory.outer);
+  if (!hasOuter) {
+    final outer = outerAdvice(weather) ?? dailyRangeAdvice(weather);
+    if (outer != null) notes.add('겉옷은 보이지 않아요. $outer');
+  }
+  // 우산 안내는 옷차림 문제는 아니므로 맞는지 판단에서는 뺀다.
+  final ok = notes.every((n) => n.contains('우산'));
+  if (ok) {
+    notes.insert(0,
+        '체감 온도가 ${ira(spokenDegrees(weather.apparentTemperature))}서 오늘 날씨에 알맞은 옷차림이에요.');
+  }
+  return (ok: ok, notes: notes);
+}
