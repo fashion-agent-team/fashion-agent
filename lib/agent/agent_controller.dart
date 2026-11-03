@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/user_profile.dart';
-import '../models/weather.dart';
 import '../services/listen_service.dart';
 import '../services/profile_store.dart';
 import '../services/speech_service.dart';
 import '../services/weather_service.dart';
+import '../styling/weather_rules.dart';
 import 'agent_speech.dart';
 import 'intent_router.dart';
 import 'onboarding_flow.dart';
@@ -130,14 +130,4 @@ class AgentController extends ChangeNotifier {
     message = text;
     notifyListeners();
   }
-}
-
-/// 일교차가 이 이상이면 겉옷을 챙기라고 한다.
-const bigDailyRange = 10;
-
-/// 일교차가 크면 겉옷 안내. 아니면 null.
-String? dailyRangeAdvice(Weather w) {
-  final range = (w.maxTemperature - w.minTemperature).round();
-  if (range < bigDailyRange) return null;
-  return '오늘은 일교차가 $range도로 커요. 낮에 덥더라도 아침저녁을 위해 겉옷을 챙기세요.';
 }

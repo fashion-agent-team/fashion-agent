@@ -9,7 +9,9 @@ Intent routeIntent(String text) {
 
   if (has(r'일정|스케줄|약속|미팅|회의')) return Intent.schedule;
   if (has(r'얼굴|화장|메이크업|머리|헤어|치아|이빨|이에|고춧가루')) return Intent.faceCheck;
-  if (has(r'검사|코디|입은|옷차림|어울려|어울리')) return Intent.outfitCheck;
+  if (has(r'검사|코디|입은|옷차림|어울려|어울리|얼룩|찢어|구멍')) {
+    return Intent.outfitCheck;
+  }
   if (has(r'날씨|기온|온도|우산|비 와|비와|비가|눈 와|일교차|춥|더워|덥|겉옷')) {
     return Intent.weather;
   }

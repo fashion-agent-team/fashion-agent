@@ -1,8 +1,10 @@
 import 'package:fashion_agent/models/clothes_scan.dart';
+import 'package:fashion_agent/models/schedule_event.dart';
 import 'package:fashion_agent/models/weather.dart';
 import 'package:fashion_agent/screens/session_screen.dart';
 import 'package:fashion_agent/services/capture_service.dart';
 import 'package:fashion_agent/services/fake_vision_service.dart';
+import 'package:fashion_agent/services/schedule_store.dart';
 import 'package:fashion_agent/services/speech_service.dart';
 import 'package:fashion_agent/services/vision_service.dart';
 import 'package:fashion_agent/services/wardrobe_store.dart';
@@ -42,62 +44,58 @@ SessionController controllerWith({
   FakeSpeech? speech,
   VisionService? vision,
   WardrobeStore? wardrobe,
+  List<ScheduleEvent> events = const [],
 }) =>
     SessionController(
       speech: speech ?? FakeSpeech(),
       weatherService: FakeWeatherService(),
+      schedule: InMemoryScheduleStore([...events]),
       capture: FakeCaptureService(),
       vision: vision ?? FakeVisionService(),
       wardrobe: wardrobe ?? InMemoryWardrobeStore(),
+      clock: () => DateTime(2026, 11, 3, 9),
     );
 
 void main() {
-  test('날씨를 읽고 고른 옷을 찍어 달라고 한다', () async {
+  test('날씨와 일정을 조용히 가져오고 옷을 찍어 달라고 한다', () async {
     final speech = FakeSpeech();
     final c = controllerWith(speech: speech);
     await c.start();
 
-    expect(speech.spoken[1], startsWith('오늘 날씨는 맑음입니다.'));
-    expect(c.step, SessionStep.capturingOutfit);
-    expect(speech.spoken.last, contains('펼쳐 놓고'));
+    expect(speech.spoken, hasLength(1));
+    expect(speech.spoken.single, contains('펼쳐 놓고'));
+    expect(c.weather, isNotNull);
+    expect(c.step, SessionStep.capturing);
   });
 
-  test('부딪히는 조합이면 경고하고, 옷장 대안 → 꺼낸 옷 확인 → 다시 피드백까지 간다', () async {
+  test('찍으면 일정·날씨·얼룩을 한 번에 알려 주고, 끝나면 돌아간다', () async {
     final speech = FakeSpeech();
     final wardrobe = InMemoryWardrobeStore();
-    final c = controllerWith(speech: speech, wardrobe: wardrobe);
+    final c = controllerWith(
+      speech: speech,
+      wardrobe: wardrobe,
+      events: [ScheduleEvent(title: '면접', start: DateTime(2026, 11, 3, 14))],
+    );
+    var finished = false;
+    c.onFinished = () => finished = true;
     await c.start();
 
-    await c.primary(); // 고른 옷 찍기
-    expect(c.step, SessionStep.feedback);
-    expect(speech.spoken.last, contains('상의는 빨간색 셔츠, 면 같음, 약간 구김 있음.'));
-    expect(speech.spoken.last, contains('빨간색과 초록색은 서로 부딪혀 보일 수 있어요.'));
-
-    await c.secondary(); // 다른 옷 찾기
-    expect(c.step, SessionStep.capturingCloset);
-
-    await c.primary(); // 옷장 찍기
-    expect(c.step, SessionStep.alternative);
-    expect(speech.spoken.last,
-        contains('초록색 면바지 대신 가운데 아래, 왼쪽에서 두 번째에 있는 베이지 면바지는 어때요?'));
-
-    await c.primary(); // 꺼냈어요
-    expect(c.step, SessionStep.checkingPicked);
-
-    await c.primary(); // 꺼낸 옷 찍기
-    expect(c.step, SessionStep.feedback);
-    expect(speech.spoken.last, startsWith('맞아요. 잘 어울리는 조합이에요.'));
-
-    await c.primary(); // 다음 → 겉옷
-    expect(c.step, SessionStep.outerAdvice);
-    expect(speech.spoken.last, contains('자켓이나 가디건'));
-
-    await c.primary(); // 완료
-    expect(c.step, SessionStep.done);
-    expect(speech.spoken.last, contains('빨간색 셔츠, 베이지 면바지'));
+    await c.primary(); // 옷 찍기
+    expect(c.step, SessionStep.result);
+    final said = speech.spoken.last;
+    expect(said, startsWith('보이는 옷은 남색 셔츠, 파란색 청바지예요.'));
+    expect(said, contains('오후 2시 면접 일정 기준으로 볼게요.'));
+    expect(said, contains('파란색 청바지는 편한 옷이라 면접에는'));
+    expect(said, contains('겉옷은 보이지 않아요.'));
+    expect(said, contains('남색 셔츠 오른쪽 소매 끝에 얼룩이 있어요.'));
+    expect(c.result?.allGood, isFalse);
 
     // 사진은 저장하지 않고 본 옷의 설명만 쌓인다.
-    expect(wardrobe.garments.length, 2 + 3 + 1);
+    expect(wardrobe.garments, hasLength(2));
+
+    expect(c.primaryLabel, '돌아가기');
+    await c.primary();
+    expect(finished, isTrue);
   });
 
   test('어두우면 다시 찍어 달라고 한다', () async {
@@ -111,28 +109,8 @@ void main() {
     await c.start();
     await c.primary();
 
-    expect(c.step, SessionStep.capturingOutfit);
+    expect(c.step, SessionStep.capturing);
     expect(speech.spoken.last, contains('너무 어두워요'));
-  });
-
-  test('에이전트에서 열면 날씨 안내 없이 옷 검사부터 하고, 끝나면 돌아간다', () async {
-    final speech = FakeSpeech();
-    final c = controllerWith(speech: speech);
-    var finished = false;
-    c.onFinished = () => finished = true;
-    await c.startOutfitCheck();
-
-    expect(speech.spoken, hasLength(1));
-    expect(speech.spoken.single, contains('펼쳐 놓고'));
-    expect(c.weather, isNotNull);
-
-    await c.primary(); // 고른 옷 찍기
-    await c.primary(); // 다음 → 겉옷
-    await c.primary(); // 완료
-    expect(c.step, SessionStep.done);
-    expect(c.primaryLabel, '돌아가기');
-    await c.primary();
-    expect(finished, isTrue);
   });
 
   testWidgets('화면은 위·아래 두 개의 큰 버튼이다', (tester) async {
@@ -140,11 +118,11 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: SessionScreen(controller: c)));
     await tester.pumpAndSettle();
 
-    expect(find.text('고른 옷 찍기'), findsOneWidget);
+    expect(find.text('옷 찍기'), findsOneWidget);
     expect(find.text('다시 듣기'), findsOneWidget);
 
-    await tester.tap(find.text('고른 옷 찍기'));
+    await tester.tap(find.text('옷 찍기'));
     await tester.pumpAndSettle();
-    expect(find.text('다른 옷 찾기'), findsOneWidget);
+    expect(find.text('다시 검사'), findsOneWidget);
   });
 }
