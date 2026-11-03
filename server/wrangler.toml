@@ -1,0 +1,12 @@
+name = "fashion-agent-vision"
+main = "src/index.ts"
+compatibility_date = "2024-10-22"
+
+[vars]
+# 모델은 여기서 바꾼다. 앱은 다시 배포하지 않아도 된다.
+GEMINI_MODEL = "gemini-2.5-flash"
+
+# 비밀 값은 이 파일에 쓰지 않는다.
+#   로컬: .dev.vars 파일 (.dev.vars.example 참고)
+#   배포: npx wrangler secret put GEMINI_API_KEY
+#         npx wrangler secret put APP_TOKEN   (선택)
