@@ -20,7 +20,7 @@ abstract class VisionService {
 
 /// 프록시 서버의 `/describe-clothes`를 부른다. API 키는 프록시에만 있다.
 ///
-/// 요청·응답 형식은 `server/README.md`를 보라.
+/// 요청·응답 형식은 mcp-clothes-state 레포(https://github.com/fashion-agent-team/mcp-clothes-state)의 README를 보라.
 class HttpVisionService implements VisionService {
   HttpVisionService(this.baseUrl, {http.Client? client})
       : _client = client ?? http.Client();
