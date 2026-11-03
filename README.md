@@ -109,10 +109,11 @@ flutter test
 | [fashion-agent-gateway](https://github.com/fashion-agent-team/fashion-agent-gateway) | API Gateway (REST), 계정·회원정보 |
 | [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | agent, Gemini로 기능 고르기·맞춤 추천 |
 | [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 날씨, 날씨에 맞는 옷 두께·재질 |
-| [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 기록·알림, 일정에 맞는 옷차림 |
+| [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 기록·알림, 일정·장소에 맞는 옷차림 |
 | [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진으로 얼룩·찢어짐 확인 (옛 `server/`, 배포된 비전 서버) |
 | [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 사진으로 화장 대칭·이에 낀 것 확인 |
 | [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 찍은 옷을 DB에 기록해 옷장 만들기·추천 |
+| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | AI가 애매할 때 가족·친구에게 사진 보내 확인 요청 |
 
 ## 브랜치 전략
 
