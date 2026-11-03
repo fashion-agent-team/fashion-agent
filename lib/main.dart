@@ -15,9 +15,15 @@ import 'services/wardrobe_store.dart';
 import 'services/weather_service.dart';
 import 'session/session_controller.dart';
 
-/// 프록시 주소. 비어 있으면 가짜 비전 AI로 돈다.
-/// 예: `flutter run --dart-define=VISION_URL=https://example.workers.dev`
-const _visionUrl = String.fromEnvironment('VISION_URL');
+/// 비전 프록시 주소. 기본은 팀이 배포한 Cloudflare Worker다.
+/// 로컬 서버: `flutter run --dart-define=VISION_URL=http://localhost:8787`
+const _visionUrl = String.fromEnvironment(
+  'VISION_URL',
+  defaultValue: 'https://fashion-agent-vision.fashion-agent-team.workers.dev',
+);
+
+/// 서버 없이 예시 응답으로 돌릴 때: `--dart-define=FAKE_VISION=true`
+const _fakeVision = bool.fromEnvironment('FAKE_VISION');
 
 /// 카메라 없는 시뮬레이터에서 돌릴 때: `--dart-define=FAKE_CAMERA=true`
 const _fakeCamera = bool.fromEnvironment('FAKE_CAMERA');
@@ -46,7 +52,7 @@ void main() {
       weatherService: weather,
       schedule: LocalScheduleStore(),
       capture: _fakeCamera ? FakeCaptureService() : CameraCaptureService(),
-      vision: _visionUrl.isEmpty
+      vision: _fakeVision || _visionUrl.isEmpty
           ? FakeVisionService()
           : HttpVisionService(Uri.parse(_visionUrl)),
       wardrobe: LocalWardrobeStore(),
