@@ -52,8 +52,10 @@ npm run deploy                 # 나온 https://….workers.dev 주소를 VISION
 | 400 | `bad_json`, `bad_purpose`, `no_image` | 요청 형식이 틀림 |
 | 401 | `unauthorized` | 앱 토큰이 다름 |
 | 413 | `image_too_large` | 사진이 약 6MB 넘음 |
-| 502 | `ai_failed`, `ai_bad_response` | Gemini 오류(무료 한도 초과 429 포함), 형식이 이상한 응답 |
+| 502 | `ai_failed`, `ai_bad_response` | Gemini 오류(무료 한도 초과 429 포함), 형식이 이상한 응답. `message`에 구글이 준 이유가 붙음 |
 | 504 | `ai_timeout` | 25초 안에 답이 없음 |
+
+`ai_failed`일 때 이유 보기: `message`의 `Gemini 오류 (400): …` 뒷부분을 보거나, 다른 터미널에서 `npx wrangler tail`을 켜 두고 요청을 다시 보내면 로그에 찍힙니다. 흔한 이유는 `API key not valid`(비밀 값을 잘못 붙여 넣음, `npx wrangler secret put GEMINI_API_KEY`로 다시 넣기), 모델 이름이 없음(404), 사진이 JPEG가 아님(`Unable to process input image`)입니다.
 
 ## 남은 일
 

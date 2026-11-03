@@ -62,8 +62,10 @@ export async function describeWithGemini(
   }
 
   if (!response.ok) {
-    // 429는 무료 사용량 초과일 때가 많다.
-    throw new GeminiError(`Gemini 오류 (${response.status})`);
+    // 429는 무료 사용량 초과일 때가 많다. 400은 키·모델·사진 문제인데, 구글이 준 이유를 같이 남긴다.
+    const reason = await errorReason(response);
+    console.error(`Gemini ${response.status}: ${reason}`); // npx wrangler tail 로 볼 수 있다
+    throw new GeminiError(`Gemini 오류 (${response.status})${reason ? `: ${reason}` : ''}`);
   }
 
   const body = (await response.json()) as {
@@ -75,5 +77,21 @@ export async function describeWithGemini(
     return JSON.parse(text);
   } catch {
     throw new GeminiError('Gemini 응답이 JSON이 아니에요');
+  }
+}
+
+/** 구글 오류 본문 {"error":{"message"}}에서 이유만 꺼낸다. 키는 본문에 들어 있지 않다. */
+async function errorReason(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    try {
+      const message = (JSON.parse(text) as { error?: { message?: unknown } }).error?.message;
+      if (typeof message === 'string') return message.slice(0, 300);
+    } catch {
+      // JSON이 아니면 본문 앞부분을 그대로 쓴다.
+    }
+    return text.slice(0, 300);
+  } catch {
+    return '';
   }
 }

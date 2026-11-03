@@ -30,3 +30,11 @@ test('HTTP 오류와 빈 응답은 GeminiError', async () => {
   await assert.rejects(describeWithGemini('I', 'outfit', { apiKey: 'k', model: 'm', fetch: fakeFetch(429, {}) }), GeminiError);
   await assert.rejects(describeWithGemini('I', 'outfit', { apiKey: 'k', model: 'm', fetch: fakeFetch(200, { candidates: [] }) }), GeminiError);
 });
+
+test('Gemini 오류 본문의 이유를 메시지에 담는다', async () => {
+  const fetch400 = fakeFetch(400, { error: { code: 400, message: 'API key not valid.', status: 'INVALID_ARGUMENT' } });
+  await assert.rejects(
+    describeWithGemini('I', 'outfit', { apiKey: 'k', model: 'm', fetch: fetch400 }),
+    (e: unknown) => e instanceof GeminiError && e.message === 'Gemini 오류 (400): API key not valid.',
+  );
+});
