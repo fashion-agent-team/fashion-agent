@@ -23,6 +23,56 @@ enum ColorFamily {
 /// 밝기 톤.
 enum Tone { light, mid, dark }
 
+/// 옷의 격식. 비전 AI 응답의 `formality` 값과 이름이 같다. 일정에 맞는지 판단하는 데 쓴다.
+enum Formality {
+  /// 정장, 블라우스, 구두처럼 격식 있는 옷.
+  formal,
+
+  /// 셔츠, 니트, 슬랙스처럼 단정한 옷.
+  smart,
+
+  /// 티셔츠, 청바지, 맨투맨처럼 편한 옷.
+  casual,
+
+  /// 트레이닝복, 운동복.
+  sporty,
+  unknown,
+}
+
+/// 얼룩·찢어짐 같은 옷의 손상. 비전 AI 응답의 `defects` 항목이다.
+class GarmentDefect {
+  const GarmentDefect({required this.kind, this.where, this.confidence = 1});
+
+  factory GarmentDefect.fromJson(Map<String, dynamic> json) => GarmentDefect(
+        kind: _byName(DefectKind.values, json['kind'], DefectKind.other),
+        where: _blankToNull(json['where']),
+        confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
+      );
+
+  final DefectKind kind;
+
+  /// "오른쪽 소매 끝"처럼 손으로 찾아갈 수 있는 위치.
+  final String? where;
+
+  /// 0~1. 낮으면 단정하지 않고 손으로 확인해 보라고 한다.
+  final double confidence;
+
+  Map<String, dynamic> toJson() =>
+      {'kind': kind.name, 'where': where, 'confidence': confidence};
+}
+
+enum DefectKind {
+  /// 얼룩
+  stain,
+
+  /// 찢어짐·구멍
+  tear,
+
+  /// 보풀·먼지
+  lint,
+  other,
+}
+
 /// 사진 속 옷의 위치. 사진 크기를 1로 본 비율 좌표다.
 class GarmentBox {
   const GarmentBox(this.x, this.y, this.w, this.h);
@@ -57,6 +107,8 @@ class Garment {
     this.pattern,
     this.material,
     this.notes,
+    this.formality = Formality.unknown,
+    this.defects = const [],
     this.box,
     this.confidence = 1,
   });
@@ -73,6 +125,11 @@ class Garment {
         pattern: _blankToNull(json['pattern']),
         material: _blankToNull(json['material']),
         notes: _blankToNull(json['notes']),
+        formality:
+            _byName(Formality.values, json['formality'], Formality.unknown),
+        defects: (json['defects'] as List? ?? const [])
+            .map((d) => GarmentDefect.fromJson(d as Map<String, dynamic>))
+            .toList(),
         box: json['box'] == null
             ? null
             : GarmentBox.fromJson(json['box'] as Map<String, dynamic>),
@@ -96,8 +153,12 @@ class Garment {
   /// "니트 같음"처럼 사진으로 추정한 재질. 확실하지 않으므로 보조로만 쓴다.
   final String? material;
 
-  /// "약간 구김 있음", "소매에 얼룩" 같은 상태.
+  /// "약간 구김 있음" 같은 그 밖의 상태.
   final String? notes;
+  final Formality formality;
+
+  /// 얼룩·찢어짐. 없으면 빈 목록.
+  final List<GarmentDefect> defects;
   final GarmentBox? box;
 
   /// 0~1. 낮으면 추천에서 빼고 다시 비춰 달라고 한다.
@@ -119,6 +180,8 @@ class Garment {
         'pattern': pattern,
         'material': material,
         'notes': notes,
+        'formality': formality.name,
+        'defects': [for (final d in defects) d.toJson()],
         'box': box?.toJson(),
         'confidence': confidence,
       };

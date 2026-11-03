@@ -35,7 +35,7 @@ class _AgentScreenState extends State<AgentScreen> {
     final navigator = Navigator.of(context);
     session.onFinished = navigator.pop;
     await navigator.push(MaterialPageRoute<void>(
-      builder: (_) => SessionScreen(controller: session, outfitCheckOnly: true),
+      builder: (_) => SessionScreen(controller: session),
     ));
     session.onFinished = null;
   }

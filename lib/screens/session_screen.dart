@@ -6,13 +6,9 @@ import '../session/session_controller.dart';
 ///
 /// VoiceOver를 켠 사용자도 화면 어디를 눌러도 버튼을 찾을 수 있게, 작은 버튼은 두지 않는다.
 class SessionScreen extends StatefulWidget {
-  const SessionScreen(
-      {super.key, required this.controller, this.outfitCheckOnly = false});
+  const SessionScreen({super.key, required this.controller});
 
   final SessionController controller;
-
-  /// 에이전트에서 열었으면 날씨 안내 없이 바로 옷 검사부터 한다.
-  final bool outfitCheckOnly;
 
   @override
   State<SessionScreen> createState() => _SessionScreenState();
@@ -24,8 +20,7 @@ class _SessionScreenState extends State<SessionScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => widget.outfitCheckOnly ? _c.startOutfitCheck() : _c.start());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _c.start());
   }
 
   @override
