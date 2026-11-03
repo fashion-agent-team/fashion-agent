@@ -94,9 +94,10 @@ git clone https://github.com/fashion-agent-team/fashion-agent.git
 cd fashion-agent
 git checkout develop
 flutter pub get
-flutter run                                  # 가짜 비전 AI로 실행
+flutter run                                  # 배포된 비전 서버(Gemini)로 실행
+flutter run --dart-define=FAKE_VISION=true   # 서버 없이 예시 응답으로 실행
 flutter run --dart-define=FAKE_CAMERA=true   # 카메라 없는 시뮬레이터
-flutter run --dart-define=VISION_URL=https://<프록시 주소>
+flutter run --dart-define=VISION_URL=http://localhost:8787   # 로컬 서버
 flutter test
 ```
 

@@ -2,7 +2,7 @@
 
 앱과 비전 LLM 사이에 두는 작은 서버입니다. **API 키는 여기에만 두고 앱에는 넣지 않습니다.** 프롬프트와 응답 형식도 여기서 관리해서, 앱을 다시 배포하지 않고 고칠 수 있게 합니다.
 
-Cloudflare Workers + Gemini API로 만든 뼈대입니다. 앱은 `VISION_URL`을 주지 않으면 지금처럼 `FakeVisionService`(예시 응답)로 돕니다.
+Cloudflare Workers + Gemini API로 만든 뼈대입니다. 배포 주소는 `https://fashion-agent-vision.fashion-agent-team.workers.dev`이고, 앱은 기본으로 이 주소를 씁니다. 서버 없이 돌리려면 `--dart-define=FAKE_VISION=true`를 주면 `FakeVisionService`(예시 응답)로 돕니다.
 
 ## 파일
 
