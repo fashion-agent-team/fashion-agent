@@ -15,7 +15,7 @@ export interface Deps {
 
 const defaultDeps: Deps = {
   describe: (image, purpose, env) =>
-    describeWithGemini(image, purpose, { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL }),
+    describeWithGemini(image, purpose, { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL || 'gemini-3.5-flash' }),
 };
 
 /** base64 문자열 길이 기준. 약 6MB JPEG까지 받는다. */
