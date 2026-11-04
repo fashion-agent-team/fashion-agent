@@ -42,11 +42,11 @@ psql -v ON_ERROR_STOP=1 -d fashion_check -f checks.sql  # 마지막 줄 "checks:
 psql -v ON_ERROR_STOP=1 -d fashion_check -f seed-dev.sql # 선택: 개발용 예시 데이터
 ```
 
-`docker compose`로 띄운 DB에서 서비스들이 Flyway로 표를 만든 경우에도 `checks.sql`은 그대로 돌릴 수 있습니다(끝에 ROLLBACK). 다만 `../schema.sql`을 서비스 DB에 직접 실행하면 Flyway 이력 표가 없어 서비스가 뜨지 않으니, 확인용 DB(`fashion_check`)에서만 쓰세요.
+`docker compose`로 띄운 DB에서 서비스들이 Flyway로 표를 만든 경우에도 `checks.sql`은 그대로 돌릴 수 있습니다(끝에 ROLLBACK, Flyway 이력 표는 검사에서 빼고, 이미 있는 데이터와 겹치지 않는 시험용 id만 씀). 네 서비스 표가 모두 있어야 합니다. 다만 `../schema.sql`을 서비스 DB에 직접 실행하면 Flyway 이력 표가 없어 서비스가 뜨지 않으니, 확인용 DB(`fashion_check`)에서만 쓰세요.
 
 ## 확인한 것 (2026-11-04)
 
 - PostgreSQL 16.15 + pgvector 0.6.0에서 네 파일을 각각 **search_path를 그 스키마 하나로만 둔 채** 실행(Flyway보다 엄격한 조건) → 모두 성공
 - `../schema.sql` 한 번에 실행 → 표 10개
-- `checks.sql` 검사 32개 통과 (제약 조건, 하루 일정 조회, 8시 알림 한 번, 같은 옷 찾기, 옷장·코디 지식 검색, 첫 답만 인정, 만료, 스키마를 넘는 FK 0개 등)
+- `checks.sql` 검사 34개 통과 (제약 조건, 하루 일정 조회, 8시 알림 한 번, 같은 옷 찾기, 옷장·코디 지식 검색, 첫 답만 인정, 만료, 스키마를 넘는 FK 0개 등)
 - `seed-dev.sql` 두 번 실행해도 같은 결과

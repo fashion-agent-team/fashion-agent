@@ -7,7 +7,7 @@
 | 요구사항 통합(spec), 결정과 이유, ERD·컬럼 규칙, 할 일 | [specs/005-database/](../../specs/005-database/spec.md) ([data-model.md](../../specs/005-database/data-model.md), [research.md](../../specs/005-database/research.md), [tasks.md](../../specs/005-database/tasks.md)) |
 | 서비스별 Flyway 마이그레이션(각 레포에 그대로 복사) | [db/](db/README.md): `account/` `schedule/` `closet/` `helper/` |
 | 전체를 한 번에 만드는 SQL (생성 파일) | [schema.sql](schema.sql) (`db/build-schema.sh`가 만듦) |
-| 검사 32개 / 개발용 예시 데이터 | [db/checks.sql](db/checks.sql) / [db/seed-dev.sql](db/seed-dev.sql) |
+| 검사 34개 / 개발용 예시 데이터 | [db/checks.sql](db/checks.sql) / [db/seed-dev.sql](db/seed-dev.sql) |
 | Redis 키 | [specs/005-database/contracts/redis-keys.md](../../specs/005-database/contracts/redis-keys.md) |
 
 PostgreSQL 16.15 + pgvector 0.6.0에서 실행하고 검사가 모두 통과하는 것을 확인했습니다(2026-11-04).

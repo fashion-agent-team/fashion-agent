@@ -69,7 +69,7 @@ docs/infra/
 │   ├── closet/V1__init.sql      # → mcp-closet
 │   ├── helper/V1__init.sql      # → mcp-helper
 │   ├── build-schema.sh          # 위 네 개 → ../schema.sql
-│   ├── checks.sql               # 검사 32개
+│   ├── checks.sql               # 검사 34개
 │   └── seed-dev.sql             # 개발용 예시 데이터
 ├── schema.sql                   # 생성 파일 (손으로 고치지 않음)
 ├── init-schemas.sql             # docker 첫 실행: 확장 + 빈 스키마

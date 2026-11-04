@@ -1,11 +1,12 @@
 -- 개발용 예시 데이터 (APP_ENV=dev에서만). 발표·운영 DB에는 넣지 않습니다.
 --   psql -d fashion -f docs/infra/db/seed-dev.sql
--- 여러 번 실행해도 같은 결과가 되게 ON CONFLICT로 씁니다. 일정은 실행한 날(서울) 기준 오늘·내일입니다.
+-- 여러 번 실행해도 되게 ON CONFLICT로 씁니다. 일정은 실행할 때마다 그날(서울) 기준 오늘·내일로 다시 맞춥니다.
 -- dev 로그인(POST /api/v1/auth/dev {"deviceId":"dev-seed-device"})이 이 사용자로 들어옵니다.
+-- 그 deviceId로 먼저 로그인해 다른 id의 사용자가 이미 있으면 사용자는 넣지 않고, 아래 표들은 FK 오류로 멈춥니다(그 사용자를 지우고 다시 실행).
 
 INSERT INTO account.users (id, provider, dev_device_id, last_login_at)
 VALUES ('11111111-1111-1111-1111-111111111111', 'dev', 'dev-seed-device', now())
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO account.profiles (user_id, name, job, height_cm, agent_name)
 VALUES ('11111111-1111-1111-1111-111111111111', '테스트', '대학생', 172.0, '코디')
@@ -19,7 +20,7 @@ VALUES
   ('e_seed_2', '11111111-1111-1111-1111-111111111111', '친구 결혼식',
    (date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') + interval '1 day 14 hours') AT TIME ZONE 'Asia/Seoul',
    '더채플앳청담', '예식장', 'wedding', 'title')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET start_at = EXCLUDED.start_at, notified_at = NULL, updated_at = now();
 
 INSERT INTO closet.garments (id, user_id, category, name, color_name, color_family, tone, formality, description)
 VALUES

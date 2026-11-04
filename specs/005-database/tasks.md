@@ -24,7 +24,7 @@
 
 ## Phase 4: User Story 2 - 사용자 데이터가 섞이지 않고 쌓인다 (P1)
 
-- [x] T010 [US2] `docs/infra/db/checks.sql` 검사 32개 (FR-A·S·C·H·X) 통과
+- [x] T010 [US2] `docs/infra/db/checks.sql` 검사 34개 (FR-A·S·C·H·X) 통과
 - [x] T011 [US2] `docs/infra/db/seed-dev.sql` 개발용 예시 데이터, 두 번 실행해도 같음
 
 ## Phase 5: 각 서비스 레포 (담당자)

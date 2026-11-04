@@ -63,7 +63,8 @@ INSERT INTO account.push_tokens (user_id, token, platform) VALUES ('00000000-000
 INSERT INTO account.push_tokens (user_id, token, platform) VALUES ('00000000-0000-0000-0000-00000000000b', 'tok-1', 'ios')
   ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, last_seen_at = now(), updated_at = now();
 SELECT pg_temp.must_be('FR-A5 폰 두 대 + 같은 폰은 주인 하나',
-  (SELECT string_agg(token || '=' || right(user_id::text, 1), ',' ORDER BY token) FROM account.push_tokens), 'tok-1=b,tok-2=a');
+  (SELECT string_agg(token || '=' || right(user_id::text, 1), ',' ORDER BY token) FROM account.push_tokens
+    WHERE token IN ('tok-1', 'tok-2')), 'tok-1=b,tok-2=a');
 
 INSERT INTO account.refresh_tokens (user_id, token_hash, expires_at)
   VALUES ('00000000-0000-0000-0000-00000000000a', repeat('a', 64), now() + interval '30 days');
@@ -85,7 +86,7 @@ SELECT pg_temp.must_fail('FR-S1 제목 공백 거부',
   $q$INSERT INTO schedule.events (id, user_id, title, start_at) VALUES ('e_x', '00000000-0000-0000-0000-00000000000a', '  ', now())$q$, '23514');
 SELECT pg_temp.must_fail('FR-S2 자리 종류는 6개 중 하나',
   $q$INSERT INTO schedule.events (id, user_id, title, start_at, occasion) VALUES ('e_x', '00000000-0000-0000-0000-00000000000a', '파티', now(), 'party')$q$, '23514');
-INSERT INTO schedule.events (id, user_id, title, start_at) VALUES ('e_5', '00000000-0000-0000-0000-00000000000b', '약속', now());
+INSERT INTO schedule.events (id, user_id, title, start_at) VALUES ('e_5', '00000000-0000-0000-0000-00000000000b', '약속', '2026-11-22T12:00:00+09:00');
 SELECT pg_temp.must_be('FR-S2 장소를 못 찾으면 평상·기본값',
   (SELECT occasion || '/' || occasion_source FROM schedule.events WHERE id = 'e_5'), 'casual/default');
 
@@ -93,7 +94,7 @@ SELECT pg_temp.must_be('FR-S2 장소를 못 찾으면 평상·기본값',
 UPDATE schedule.events SET notified_at = now() WHERE id = 'e_1';
 SELECT pg_temp.must_be('FR-S4 알림은 일정마다 한 번',
   (SELECT string_agg(id, ',' ORDER BY id) FROM schedule.events
-    WHERE notified_at IS NULL AND start_at >= '2026-11-20T00:00:00+09:00' AND start_at < '2026-11-21T00:00:00+09:00'), 'e_2,e_4');
+    WHERE id IN ('e_1', 'e_2', 'e_3', 'e_4', 'e_5') AND notified_at IS NULL AND start_at >= '2026-11-20T00:00:00+09:00' AND start_at < '2026-11-21T00:00:00+09:00'), 'e_2,e_4');
 
 -- ---------------------------------------------------------------- closet
 INSERT INTO closet.garments (id, user_id, category, name, color_name, color_family, tone, formality, description, embedding) VALUES
@@ -113,7 +114,9 @@ SELECT pg_temp.must_be('FR-C2 유사도 계산(코사인 1 - 거리)',
 INSERT INTO closet.wears (user_id, garment_id, worn_on) VALUES ('00000000-0000-0000-0000-00000000000a', 'c_1', '2026-11-19');
 INSERT INTO closet.wears (user_id, garment_id, worn_on) VALUES ('00000000-0000-0000-0000-00000000000a', 'c_1', '2026-11-19')
   ON CONFLICT ON CONSTRAINT wears_garment_day_uq DO NOTHING;
-SELECT pg_temp.must_be('FR-C4 같은 날 같은 옷은 한 번만', (SELECT count(*) FROM closet.wears), 1::bigint);
+SELECT pg_temp.must_be('FR-C4 같은 날 같은 옷은 한 번만', (SELECT count(*) FROM closet.wears WHERE garment_id = 'c_1'), 1::bigint);
+SELECT pg_temp.must_fail('FR-C4 남의 옷에 입은 날 기록 금지',
+  $q$INSERT INTO closet.wears (user_id, garment_id, worn_on) VALUES ('00000000-0000-0000-0000-00000000000b', 'c_1', '2026-11-20')$q$, '23503');
 
 -- closet_search: 내 옷만, 제외 목록 빼고, 가까운 순, 마지막으로 입은 날 함께
 SELECT pg_temp.must_be('FR-C5·C6 후보 검색(내 옷, 제외 목록, 최대 개수)',
@@ -135,6 +138,8 @@ INSERT INTO closet.style_docs (content, metadata, embedding) VALUES
   ('면접에는 어두운 슬랙스와 셔츠', '{"source":"style_docs/interview.md","chunkNo":0,"occasion":"formal"}',  pg_temp.vec(1, 0)),
   ('결혼식 하객은 흰 상의를 피한다', '{"source":"style_docs/wedding.md","chunkNo":0,"occasion":"wedding"}',  pg_temp.vec(0.8, 0.2)),
   ('장례식은 검정·무채색',          '{"source":"style_docs/mourning.md","chunkNo":0,"occasion":"mourning"}', pg_temp.vec(0, 1));
+SELECT pg_temp.must_fail('FR-C7 같은 문서 조각 두 번 넣기 금지',
+  $q$INSERT INTO closet.style_docs (content, metadata, embedding) VALUES ('중복', '{"source":"style_docs/interview.md","chunkNo":0}', pg_temp.vec(1, 0))$q$, '23505');
 SELECT pg_temp.must_be('FR-C7 코디 지식 검색(출처와 함께, 자리로 거르기)',
   (SELECT metadata::jsonb ->> 'source' FROM closet.style_docs
     WHERE metadata::jsonb @@ '$.occasion == "formal"'
@@ -171,14 +176,16 @@ SELECT pg_temp.must_be('FR-X1 스키마를 넘는 FK 0개',
      JOIN pg_class s ON s.oid = c.conrelid JOIN pg_class t ON t.oid = c.confrelid
     WHERE c.contype = 'f' AND s.relnamespace <> t.relnamespace), 0::bigint);
 SELECT pg_temp.must_be('FR-X2 user_id가 없는 표는 account.users·closet.style_docs뿐',
-  (SELECT string_agg(table_schema || '.' || table_name, ',' ORDER BY 1) FROM information_schema.tables t
+  (SELECT string_agg(table_schema || '.' || table_name, ',' ORDER BY table_schema, table_name) FROM information_schema.tables t
     WHERE table_schema IN ('account', 'schedule', 'closet', 'helper') AND table_type = 'BASE TABLE'
+      AND table_name <> 'flyway_schema_history'
       AND NOT EXISTS (SELECT 1 FROM information_schema.columns c
                        WHERE c.table_schema = t.table_schema AND c.table_name = t.table_name AND c.column_name = 'user_id')),
   'account.users,closet.style_docs');
 SELECT pg_temp.must_be('FR-X3 시간 컬럼은 모두 timestamptz',
   (SELECT count(*) FROM information_schema.columns
-    WHERE table_schema IN ('account', 'schedule', 'closet', 'helper') AND data_type = 'timestamp without time zone'), 0::bigint);
+    WHERE table_schema IN ('account', 'schedule', 'closet', 'helper') AND table_name <> 'flyway_schema_history'
+      AND data_type = 'timestamp without time zone'), 0::bigint);
 SELECT pg_temp.must_be('FR-X4 사진 원본을 담을 bytea 컬럼 0개',
   (SELECT count(*) FROM information_schema.columns
     WHERE table_schema IN ('account', 'schedule', 'closet', 'helper') AND data_type = 'bytea'), 0::bigint);

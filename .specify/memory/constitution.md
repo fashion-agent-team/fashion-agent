@@ -3,6 +3,7 @@ Sync Impact Report
 - Version: 1.0.0 → 1.1.0 (2026-11-04)
   - 기술 제약: AI를 Gemini에서 GPT(OpenAI)로 바꿈 (원칙 III·IV·V의 "Gemini" → "GPT")
   - 기술 제약: DB 마이그레이션 규칙 추가 (specs/005-database)
+  - 원칙 IV: agent Redis 세션의 직전 사진(10분)을 예외로 명시 (contracts 5-2절에서 이미 합의한 동작)
 - 이전: (template) → 1.0.0
 - Added: 원칙 I~V, 기술 제약, 작업 방식, 거버넌스 (모두 새로 작성)
 - Source: docs/contracts/README.md (PR #12), docs/GITFLOW.md, docs/infra/DB.md
@@ -34,7 +35,7 @@ Sync Impact Report
 
 ### IV. 개인정보를 최소로 다룬다
 
-- 사진은 어떤 서비스도 저장하지 않는다. 유일한 예외는 가족 확인 요청 사진을 24시간 동안만 두는 것이다.
+- 사진은 어떤 서비스도 저장하지 않는다. 예외는 둘뿐이다: 가족 확인 요청 사진을 R2에 24시간, 그리고 agent가 "가족에게 물어봐 줘"용으로 직전 사진 한 장을 Redis 대화 세션에 두는 것(10분만 쓰고 세션과 함께 30분 안에 사라짐, Redis는 디스크에 저장하지 않음).
 - 사용자 id는 게이트웨이가 확인한 값만 쓴다. GPT나 앱이 보낸 값을 믿지 않는다(남의 일정·옷장 접근 차단).
 - 로그에 사진, 토큰, 전화번호를 남기지 않는다. 비밀 값은 레포에 넣지 않는다.
 

@@ -27,7 +27,8 @@ CREATE TABLE garments (
   CONSTRAINT garments_tone_check      CHECK (tone IN ('light', 'mid', 'dark')),
   CONSTRAINT garments_formality_check CHECK (formality IN ('formal', 'smart', 'casual', 'sporty', 'unknown')),
   CONSTRAINT garments_description_object CHECK (jsonb_typeof(description) = 'object'),
-  CONSTRAINT garments_seen_order      CHECK (last_seen_at >= first_seen_at)
+  CONSTRAINT garments_seen_order      CHECK (last_seen_at >= first_seen_at),
+  CONSTRAINT garments_id_user_uq      UNIQUE (id, user_id)   -- wears가 (옷, 주인)을 함께 가리키게
 );
 -- 한 사람의 옷만 훑습니다(100벌 안팎). 벡터 근사 인덱스(HNSW)는 두지 않습니다:
 -- 모든 사람의 옷에서 가까운 40개를 먼저 뽑은 뒤 user_id로 거르면 내 옷이 빠질 수 있어서입니다.
@@ -39,11 +40,14 @@ CREATE INDEX garments_user_seen_idx     ON garments (user_id, last_seen_at DESC)
 CREATE TABLE wears (
   id          bigint                   GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id     uuid                     NOT NULL,
-  garment_id  varchar(40)              NOT NULL REFERENCES garments (id) ON DELETE CASCADE,
+  garment_id  varchar(40)              NOT NULL,
   worn_on     date                     NOT NULL,
   created_at  timestamp with time zone NOT NULL DEFAULT now(),
   updated_at  timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT wears_garment_day_uq UNIQUE (garment_id, worn_on)
+  CONSTRAINT wears_garment_day_uq UNIQUE (garment_id, worn_on),
+  -- 남의 옷에 내 입은 날이 붙지 않게: 옷과 주인을 함께 참조
+  CONSTRAINT wears_garment_owner_fk FOREIGN KEY (garment_id, user_id)
+    REFERENCES garments (id, user_id) ON DELETE CASCADE
 );
 CREATE INDEX wears_user_day_idx ON wears (user_id, worn_on DESC);
 
@@ -59,3 +63,5 @@ CREATE TABLE style_docs (
   embedding  public.vector(384) NOT NULL
 );
 CREATE INDEX style_docs_embedding_idx ON style_docs USING hnsw (embedding public.vector_cosine_ops);
+-- 같은 문서 조각을 두 번 넣지 않게(다시 넣을 때는 id를 source+chunkNo로 만든 UUID로 두면 PgVectorStore가 덮어씀)
+CREATE UNIQUE INDEX style_docs_source_chunk_uq ON style_docs (((metadata::jsonb ->> 'source')), ((metadata::jsonb ->> 'chunkNo')));

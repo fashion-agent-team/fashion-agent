@@ -155,8 +155,8 @@ mcp-schedule#3에 이미 들어간 `V1__init.sql`과 같습니다(복사본).
 | 표 | 규칙 |
 | --- | --- |
 | garments | 검색·필터에 쓰는 값(category·color_family·tone·formality)은 컬럼, 나머지 Garment 전체는 `description jsonb`(객체만). `embedding public.vector(384)`은 null 허용(모델 준비 전). 벡터 근사 인덱스 없음(research R3) |
-| wears | `(garment_id, worn_on)` UNIQUE. 넣을 때 `ON CONFLICT ON CONSTRAINT wears_garment_day_uq DO NOTHING` |
-| style_docs | Spring AI PgVectorStore 표 모양(`id uuid, content text, metadata json, embedding vector(384)`) + HNSW 코사인 인덱스. `source`·`chunkNo`·`occasion`은 metadata에 |
+| wears | `(garment_id, worn_on)` UNIQUE. 넣을 때 `ON CONFLICT ON CONSTRAINT wears_garment_day_uq DO NOTHING`. FK는 `(garment_id, user_id) → garments(id, user_id)`라 남의 옷에 입은 날을 붙일 수 없음 |
+| style_docs | Spring AI PgVectorStore 표 모양(`id uuid, content text, metadata json, embedding vector(384)`) + HNSW 코사인 인덱스. `source`·`chunkNo`·`occasion`은 metadata에. `(source, chunkNo)` 유니크 식 인덱스로 같은 조각 두 번 넣기 방지(다시 넣을 때는 id를 source+chunkNo로 만든 UUID로) |
 
 자주 쓰는 쿼리(모두 `checks.sql`에서 확인):
 
@@ -194,4 +194,5 @@ SELECT g.*, (SELECT max(worn_on) FROM closet.wears w WHERE w.garment_id = g.id) 
 | 실행 파일 | `schema.sql` 하나 | 서비스별 `V1__init.sql` + 이어 붙인 `schema.sql` | 각 레포의 Flyway에 그대로 복사 |
 | 제약 추가 | - | 생일 1900년 이후, 에이전트 이름 공백 금지, 설명은 JSON 객체, 마지막 본 시각 ≥ 처음, 전화번호 숫자만, 연락처 이름 공백 금지 | 잘못된 값이 말로 들어오는 경우를 DB에서 한 번 더 막음 |
 | `profiles.gender` | varchar(10) | varchar(20) | 말로 받은 그대로 저장 |
+| `closet.wears` FK | garment_id만 | (garment_id, user_id) | 입은 날의 주인과 옷의 주인이 다를 수 없게 |
 | 스키마 이름 | `account.users`처럼 붙여 씀 | 파일 안에서는 안 붙임 | Flyway `default-schema`로 실행 |
