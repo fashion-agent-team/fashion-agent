@@ -361,7 +361,10 @@ components:
             type: object
             properties:
               inputId: { type: string }
-              say: { type: string }
+              kind: { type: string, enum: [stain, tear, lint, other] }
+              action: { type: string, enum: [wash, repair, change, ok, check], description: "할 일. 얼룩=wash, 찢어짐=repair, 보풀=ok, 확실하지 않음=check" }
+              where: { type: string, nullable: true, description: "바라보는 사람(사진) 기준 위치. 사용자가 물을 때만 말함" }
+              say: { type: string, description: "할 일 중심 안내 문장" }
         stillMissing: { type: array, items: { type: string, enum: [top, bottom, outer, dress, shoes, other] }, description: 1단계 추천 중 아직 안 보여 준 것 }
         retake: { type: string, nullable: true, description: "다시 보여 달라는 이유 (어두움, 잘림)" }
         source: { type: string, enum: [model, gemini] }
@@ -388,7 +391,7 @@ components:
             required: [kind, confidence]
             properties:
               kind: { type: string, enum: [stain, tear, lint, other] }
-              where: { type: string, nullable: true, description: 입은 사람 기준 왼쪽·오른쪽 }
+              where: { type: string, nullable: true, description: 바라보는 사람(사진) 기준 위치 }
               confidence: { type: number }
         box:
           type: object
