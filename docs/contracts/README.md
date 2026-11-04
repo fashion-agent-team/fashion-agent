@@ -119,7 +119,7 @@ MCP 서버는 Streamable HTTP로 `http://<서비스>:<포트>/mcp`를 엽니다.
                   └─ closet_search(userId, 상황)      ※ 선택, 옷장에 옷이 쌓인 뒤
   agent → Gemini(추천 모드) → "오늘은 체감 9도에 오전 면접이 있어요. 어두운 슬랙스에 셔츠, 겉옷을 추천드려요.
                                옷을 꺼내서 카메라에 한 벌씩 보여 주시거나, 두 벌을 나란히 놓아 주세요."
-  agent: 날씨·일정·추천 내용을 세션(Redis)에 저장, 응답 next = camera_live
+  agent: 날씨·일정·추천 내용을 세션(Redis)에 저장, 응답 next = camera_outfit
 
 [2단계: 카메라 켜 두면 자동 판단]
   앱(폰 안, 실시간): ML Kit 물체 인식으로 매 순간 확인
@@ -130,7 +130,7 @@ MCP 서버는 Streamable HTTP로 `http://<서비스>:<포트>/mcp`를 엽니다.
   agent → Gemini(확인 모드): 세션의 날씨·일정·추천 + 지금 본 옷 + 앞서 본 옷들
      → 한 벌: "이 남색 셔츠는 면접에 좋아요. 겉옷도 보여 주세요."
      → 두 벌: "왼쪽 흰 셔츠가 오른쪽 체크 셔츠보다 면접에 더 단정해요."
-  응답 next = camera_live (계속) … 사용자가 "이걸로 할게" / "됐어"
+  응답 next = camera_outfit (계속) … 사용자가 "이걸로 할게" / "됐어"
   agent: closet_save + closet_wear (입은 옷 기록) → 마무리 안내, next = done
 ```
 
@@ -194,7 +194,7 @@ MCP 서버는 Streamable HTTP로 `http://<서비스>:<포트>/mcp`를 엽니다.
 ```
 `fit`: good | ok | bad. 한 벌만 보이면 `comparison`은 null.
 
-Gemini가 실패하거나 25초 안에 답이 없으면 agent는 `clothes_inspect` 결과만으로 짧게 말합니다("흰 셔츠가 보여요. 지금은 판단을 못 했어요. 다시 보여 주세요.").
+Gemini가 실패하거나 25초 안에 답이 없으면 agent는 위 판단 기준을 코드로 옮긴 규칙으로 판단해서 같은 모양으로 답합니다(사용자는 항상 답을 들음). 도구 하나가 실패하면 그 데이터 없이 계속합니다.
 
 ### 5-2. 개별 기능
 
