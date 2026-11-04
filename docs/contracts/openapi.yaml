@@ -367,7 +367,7 @@ components:
               say: { type: string, description: "할 일 중심 안내 문장" }
         stillMissing: { type: array, items: { type: string, enum: [top, bottom, outer, dress, shoes, other] }, description: 1단계 추천 중 아직 안 보여 준 것 }
         retake: { type: string, nullable: true, description: "다시 보여 달라는 이유 (어두움, 잘림)" }
-        source: { type: string, enum: [model, gemini] }
+        source: { type: string, enum: [model, gpt] }
 
     Garment:
       type: object
