@@ -116,7 +116,7 @@ flutter test
 | [fashion-agent](https://github.com/fashion-agent-team/fashion-agent) | 앱 (Flutter) | - | Flutter, ML Kit, Firebase Auth, FCM | 미정 |
 | [fashion-agent-gateway](https://github.com/fashion-agent-team/fashion-agent-gateway) | 입구: 로그인 확인·JWT·사용량 제한, 계정·회원정보 | 8080 | Spring Cloud Gateway, Spring Security, Redis | 미정 |
 | [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | 대화, MCP에서 데이터 모아 Gemini로 판단·추천 | 8081 | Spring AI(ChatClient, MCP 클라이언트), Gemini | 이진행 |
-| [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 오늘 날씨·일교차 데이터 | 8091 | Spring AI MCP 서버, 기상청 API | 박창근 |
+| [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 오늘 날씨·일교차 데이터 | 8091 | Spring AI MCP 서버, Open-Meteo | 박창근 |
 | [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 저장·조회, 장소 종류 | 8092 | Spring AI MCP 서버, 카카오 로컬, PostgreSQL | 정지원 |
 | [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진에서 종류·색·얼룩·찢어짐 찾기 | 8093 | YOLO+FashionCLIP(ONNX Runtime Java), Gemini 폴백 | 미정 |
 | [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 화장 대칭·이에 낀 것 확인 | 8094 | ML Kit 윤곽점 규칙, 치아 분류 모델 | 미정 |
