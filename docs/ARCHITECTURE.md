@@ -62,7 +62,7 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 | 11/13 – 11/17 | 2. 기능 넓히기 | mcp-schedule(음성 일정 등록), mcp-closet RAG, face-check, 모델 2차 학습, 얼룩 위치 왼쪽·오른쪽 기준 |
 | 11/18 – 11/19 | 3. 리허설 | 실제 아이폰으로 처음부터 끝까지, 예비 서버 전환 확인, 발표 시나리오 녹화 |
 
-인터페이스 예시(첫날 확정):
+인터페이스는 [contracts/](contracts/README.md)에 정해 두었습니다(앱 API는 [openapi.yaml](contracts/openapi.yaml), MCP 도구는 [mcp-tools.md](contracts/mcp-tools.md), 전체 실행 뼈대는 [infra/](infra/docker-compose.yml)). 요약:
 
 ```
 POST /outfit-check   Authorization: Bearer <JWT>

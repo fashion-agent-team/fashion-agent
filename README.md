@@ -144,6 +144,8 @@ DB: 계정, 회원정보, 일정, 옷장 (PostgreSQL + pgvector)
 
 레포별 기술 스택, 요청 흐름, 시작 순서는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)와 [docs/architecture.pdf](docs/architecture.pdf)를 보세요.
 
+서비스 간 약속(앱 API, MCP 도구 입출력, 인증, 오류, 포트, DB 스키마)은 [docs/contracts/](docs/contracts/README.md)에 있습니다. 각 레포는 이 약속대로 만들고, 바꿀 때는 이 문서를 먼저 고칩니다.
+
 ## 지금까지 진행 상황 (2026-11-04 기준)
 
 ### 정한 것
@@ -177,7 +179,7 @@ DB: 계정, 회원정보, 일정, 옷장 (PostgreSQL + pgvector)
 
 ### 다음 할 일
 
-- 첫날: 앱 ↔ 게이트웨이 API 모양과 MCP 도구 입출력 정하기, 학습용 옷 사진 찍기·라벨링 시작
+- 첫날: [docs/contracts/](docs/contracts/README.md) 약속 같이 읽고 확정, 버전·담당자 정하기, 학습용 옷 사진 찍기·라벨링 시작
 - 데모 경로 먼저: fashion-agent-gateway, fashion-agent-agent(+mcp-weather), mcp-clothes-state(모델 학습 + Spring AI MCP)
 - 앱이 비전 서버를 직접 부르던 것을 Gateway → agent 경유로 바꾸기
 - 그다음 mcp-schedule, mcp-closet(RAG), mcp-face-check, mcp-helper
