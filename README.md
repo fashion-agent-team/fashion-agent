@@ -70,6 +70,9 @@
 - 날씨: Open-Meteo (API 키 없음)
 - 옷 분석: 비전 LLM (앱 → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) 서버 → Gemini)
 - 저장: shared_preferences (옷 설명만, 사진은 저장 안 함)
+- 백엔드 언어: **Java** (2026-11-04 확정)
+- API Gateway: **Spring Cloud Gateway** (2026-11-04 확정)
+- MCP 서버: Spring AI MCP 또는 MCP Java SDK (후보, 미확정)
 
 ## 구조
 
@@ -113,6 +116,62 @@ flutter test
 | [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진으로 얼룩·찢어짐 확인 (옛 `server/`, 배포된 비전 서버) |
 | [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 사진으로 화장 대칭·이에 낀 것 확인 |
 | [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 찍은 옷을 DB에 기록해 옷장 만들기·추천 |
+| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | AI가 확실하지 않을 때 등록한 가족·친구에게 사진을 보내 확인 요청(지인 확인) |
+
+서버 레포는 모두 2026-11-03에 만들었고 public, `main`·`develop` 브랜치로 GitFlow를 씁니다. 아직 README와 할 일만 있고, 코드가 있는 곳은 mcp-clothes-state(옛 `server/`, 기록째 이전)뿐입니다.
+
+## 아키텍처
+
+```
+앱 (Flutter: 음성·카메라)
+  └─ REST ─▶ API Gateway (Spring Cloud Gateway)
+               ├─ account: 기존 회원 / Apple·구글 로그인
+               ├─ 회원정보: 이름·생년월일·성별·직업·키·몸무게 (건너뛰기 가능)
+               └─ agent (Gemini가 어떤 기능을 쓸지 고름)
+                    ├─ MCP weather       날씨, 옷 두께·재질
+                    ├─ MCP schedule      일정, 장소 분위기
+                    ├─ MCP clothes_state 옷 이물질·이염·찢어짐
+                    ├─ MCP face_check    화장 대칭, 이에 낀 음식물
+                    ├─ MCP closet        전용 옷장
+                    └─ MCP helper        지인 확인 요청
+DB: 계정, 회원정보, 일정, 옷장
+```
+
+자세한 그림은 [아키텍처 페이지](https://claude.ai/artifact/4VbiNaDHunmkHJ47PVML2T)를 보세요.
+
+## 지금까지 진행 상황 (2026-11-04 기준)
+
+### 정한 것
+
+| 날짜 | 결정 |
+| --- | --- |
+| 2026-10-27 | Jetson은 당분간 쓰지 않고, 옷 분석은 클라우드 AI(Gemini API, 학습 없이 프롬프트)로 |
+| 2026-11-03 | 기능별 MCP 구조로 가고, 기능마다 레포를 따로 나눔(위 [레포 구성](#레포-구성)) |
+| 2026-11-04 | API Gateway는 **Spring Cloud Gateway** |
+| 2026-11-04 | 백엔드 언어는 **Java** |
+
+아직 안 정한 것: 날씨 API를 Open-Meteo로 계속 쓸지(지금 코드는 Open-Meteo), MCP 서버 라이브러리(Spring AI MCP / MCP Java SDK), 역할 분담.
+
+### develop에 머지된 PR
+
+| PR | 내용 |
+| --- | --- |
+| #1 | 플랫폼 폴더(android·ios·web) 생성, 초기 세팅 |
+| #2 | 오늘 날씨·기온 음성 안내 (Open-Meteo) |
+| #3 | 음성 AI 에이전트 뼈대: 음성 온보딩, 기능 고르기, 계정 자리 |
+| #4 | 옷 검사 방향 변경: 일정·날씨 적합성, 얼룩·찢어짐 안내 (색 조합 안내 제거) |
+| #5 | Gemini 비전 프록시 서버 뼈대 (Cloudflare Workers), 응답에 격식·손상 추가 |
+| #6 | 기본 Gemini 모델을 gemini-3.5-flash로 변경 |
+| #7 | 앱 기본 비전 서버를 배포된 Cloudflare Worker로 연결 |
+| #8 | Gemini 오류 응답에 이유를 함께 담기 |
+| #9 | 옷 이름과 메모를 짧게 받도록 프롬프트 조정 |
+| #10 | 서버 코드(`server/`)를 mcp-clothes-state 레포로 옮기고 앱 레포로 정리 |
+
+### 다음 할 일
+
+- Spring Cloud Gateway(Java)로 fashion-agent-gateway 뼈대 만들기, 계정·회원정보 API
+- fashion-agent-agent와 MCP 서버들을 Java로 시작
+- 앱이 비전 서버를 직접 부르던 것을 Gateway → agent 경유로 바꾸기
 
 ## 브랜치 전략
 
