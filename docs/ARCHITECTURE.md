@@ -67,13 +67,13 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 
 ## 시작 순서 (제안)
 
-한 명이 레포 하나씩 맡되, 데모 경로부터 시작합니다.
+한 명이 레포 하나씩 맡습니다. 1차 배분(2026-11-04): agent 이진행, mcp-weather 박창근, mcp-schedule 정지원(임시, 바꿔도 됨). 끝나면 다음 레포를 나눕니다. agent는 게이트웨이 없이 `X-User-Id` 헤더로 직접 호출하며 개발합니다.
 
 | 기간 | 단계 | 할 일 |
 | --- | --- | --- |
 | 11/4 – 11/5 | 0. 약속 정하기 | 앱 ↔ 게이트웨이 API 모양, MCP 도구 이름·입출력, JWT에 담을 값, Docker Compose 뼈대, 학습용 사진 찍기·라벨링 시작 |
-| 11/6 – 11/12 | 1. 데모 경로 | 게이트웨이 + account, agent + mcp-weather, clothes-state 모델 1차 학습 + MCP 서버, 앱 연결 주소를 게이트웨이로 |
-| 11/13 – 11/17 | 2. 기능 넓히기 | mcp-closet RAG(옷 추천에 붙이기), mcp-schedule 음성 일정 등록, 개별 기능(face-check, helper), 모델 2차 학습 |
+| 11/6 – 11/12 | 1. 1차 레포 | agent + mcp-weather + mcp-schedule(일정 조회)로 1단계 말 추천 완성. 끝나는 대로 게이트웨이 + account, clothes-state 모델 1차 학습 + MCP 서버 |
+| 11/13 – 11/17 | 2. 기능 넓히기 | mcp-closet RAG(옷 추천에 붙이기), 앱 연결 주소를 게이트웨이로, 개별 기능(face-check, helper), 모델 2차 학습 |
 | 11/18 – 11/19 | 3. 리허설 | 실제 아이폰으로 처음부터 끝까지, 예비 서버 전환 확인, 발표 시나리오 녹화 |
 
 인터페이스는 [contracts/](contracts/README.md)에 정해 두었습니다(앱 API는 [openapi.yaml](contracts/openapi.yaml), MCP 도구는 [mcp-tools.md](contracts/mcp-tools.md), 전체 실행 뼈대는 [infra/](infra/docker-compose.yml)). 요약:
