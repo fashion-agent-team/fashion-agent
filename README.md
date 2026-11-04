@@ -111,17 +111,19 @@ flutter test
 
 이 레포는 **앱(프론트)** 입니다. 서버 쪽은 기능별 레포로 나뉘어 있습니다.
 
-| 레포 | 하는 일 |
-| --- | --- |
-| [fashion-agent](https://github.com/fashion-agent-team/fashion-agent) | 앱 (Flutter) |
-| [fashion-agent-gateway](https://github.com/fashion-agent-team/fashion-agent-gateway) | API Gateway (REST), 계정·회원정보 |
-| [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | agent, Gemini로 기능 고르기·맞춤 추천 |
-| [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 날씨, 날씨에 맞는 옷 두께·재질 |
-| [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 기록·알림, 일정에 맞는 옷차림 |
-| [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진으로 얼룩·찢어짐 확인 (옛 `server/`, 배포된 비전 서버) |
-| [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 사진으로 화장 대칭·이에 낀 것 확인 |
-| [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 찍은 옷을 DB에 기록해 옷장 만들기·추천 |
-| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | 사용자가 원할 때 등록한 가족·친구에게 사진을 보내 확인 요청(개별 기능) |
+| 레포 | 하는 일 | 포트 | 기술 | 담당 |
+| --- | --- | --- | --- | --- |
+| [fashion-agent](https://github.com/fashion-agent-team/fashion-agent) | 앱 (Flutter) | - | Flutter, ML Kit, Firebase Auth, FCM | 미정 |
+| [fashion-agent-gateway](https://github.com/fashion-agent-team/fashion-agent-gateway) | 입구: 로그인 확인·JWT·사용량 제한, 계정·회원정보 | 8080 | Spring Cloud Gateway, Spring Security, Redis | 미정 |
+| [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | 대화, MCP에서 데이터 모아 Gemini로 판단·추천 | 8081 | Spring AI(ChatClient, MCP 클라이언트), Gemini | 미정 |
+| [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 오늘 날씨·일교차 데이터 | 8091 | Spring AI MCP 서버, 기상청 API | 미정 |
+| [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 저장·조회, 장소 종류 | 8092 | Spring AI MCP 서버, 카카오 로컬, PostgreSQL | 미정 |
+| [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진에서 종류·색·얼룩·찢어짐 찾기 | 8093 | YOLO+FashionCLIP(ONNX Runtime Java), Gemini 폴백 | 미정 |
+| [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 화장 대칭·이에 낀 것 확인 | 8094 | ML Kit 윤곽점 규칙, 치아 분류 모델 | 미정 |
+| [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 내 옷 기록, 비슷한 옷·코디 찾기(RAG) | 8095 | pgvector, multilingual-e5 임베딩 | 미정 |
+| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | 사용자가 원할 때 가족·친구에게 사진 확인 요청 | 8096 | 문자 API, 웹 답장 링크, FCM | 미정 |
+
+담당은 팀이 정한 뒤 이 표와 각 레포 README에 적습니다. 서버끼리 주고받는 약속은 [docs/contracts/](docs/contracts/README.md)에 있고, 팀이 정할 것은 [docs/contracts/README.md](docs/contracts/README.md)의 "아직 안 정한 것"에 모아 두었습니다.
 
 서버 레포는 모두 2026-11-03에 만들었고 public, `main`·`develop` 브랜치로 GitFlow를 씁니다. 아직 README와 할 일만 있고, 코드가 있는 곳은 mcp-clothes-state(옛 `server/`, 기록째 이전)뿐입니다.
 
