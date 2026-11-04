@@ -77,7 +77,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ```json
 { "eventId": "e_01", "occasion": "wedding", "placeCategory": "예식장", "spokenSummary": "11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식을 등록했어요." }
 ```
-`place`가 있으면 카카오 로컬 API로 장소 종류를 찾아 `occasion`을 정하고, 없으면 제목 키워드로 정합니다. 일정 당일 아침 8시에 FCM 알림을 보냅니다(도구가 아니라 서버 스케줄러).
+`occasion`은 **제목 키워드를 먼저** 보고, 제목으로 못 정하면 `place`를 카카오 로컬 API로 찾은 장소 종류로 정하고, 둘 다 아니면 `casual`입니다(2026-11-04 정함). "친구 결혼식"은 장소가 호텔이어도 결혼식이기 때문입니다. 어느 쪽으로 정했는지는 DB의 `occasion_source`(title·place·fallback)에 남깁니다. 일정 당일 아침 8시에 FCM 알림을 보냅니다(도구가 아니라 서버 스케줄러).
 
 ### `schedule_list`
 옷 추천 1단계에서 agent가 오늘 날짜로 부르고, "오늘 일정 뭐야?"에도 씁니다.
