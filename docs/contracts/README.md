@@ -14,7 +14,6 @@
 
 이 문서의 나머지는 정해 둔 초안입니다. 아래만 팀이 정하면 됩니다.
 
-- [ ] Spring Boot·Spring AI·Spring Cloud 버전 (1절 표)
 - [ ] 레포별 담당자
 - [ ] 배포할 서버(VM)와 도메인. helper의 가족 답장 링크 주소(`HELPER_PUBLIC_BASE_URL`)도 이걸로 정해짐
 - [ ] Apple 개발자 계정: Apple 로그인, 푸시 알림(APNs), 실기기 배포에 필요 (유료, 누구 계정으로 할지)
@@ -23,13 +22,16 @@
 
 ## 1. 공통 규칙
 
-- 언어·버전: Java 21, Spring Boot 3.x, Spring AI. **정확한 버전은 첫날 게이트웨이 담당이 하나로 정해 아래 표에 적고 모두 같은 버전을 씁니다.**
+- 언어·버전: 아래 표로 고정합니다(2026-11-04 정함, 최근 정식판 중 서로 호환되는 안정 버전). **모든 서버 레포가 같은 버전을 씁니다.** 패치 버전(마지막 숫자)만 올리는 건 괜찮고, 그 이상 올릴 때는 이 표를 먼저 고칩니다.
 
   | 항목 | 버전 |
   | --- | --- |
-  | Spring Boot | (첫날 기입) |
-  | Spring AI (BOM) | (첫날 기입) |
-  | Spring Cloud | (첫날 기입) |
+  | Java | 21 |
+  | Spring Boot | 4.0.9 |
+  | Spring Cloud (Gateway) | 2025.1.4 |
+  | Spring AI (BOM) | 2.0.2 |
+
+  Spring Boot 4.1도 나와 있지만 Spring Cloud 최신판(2025.1.x)이 Boot 4.0 기준이라 4.0을 씁니다. 첫 프로젝트는 [start.spring.io](https://start.spring.io)에서 Boot 4.0.x를 고르고 Spring AI·Gateway가 함께 추가되는지 확인합니다.
 
 - JSON 필드 이름은 camelCase, enum 값은 소문자 영어(`top`, `smart`), 사람에게 읽어 줄 문장은 한국어.
 - 시간은 ISO-8601에 시간대까지: `2026-11-20T14:00:00+09:00`. 서버 기본 시간대는 `Asia/Seoul`.
@@ -239,7 +241,6 @@ agent는 DB를 쓰지 않고, 대화 상태(직전 질문, 직전 사진 10분 �
 ## 8. 첫날 체크리스트
 
 - [ ] 이 문서와 openapi.yaml, mcp-tools.md를 같이 읽고 고칠 곳 PR로 고치기
-- [ ] 버전 표 채우기
 - [ ] 담당자 정하기 (README 레포 구성 표에 이름 적기)
 - [ ] 각 레포에 `GET /actuator/health`만 있는 Spring Boot 뼈대 올리고 docker-compose로 같이 띄워 보기
 - [ ] 학습용 옷 사진 찍기 시작 (얼룩·찢어짐·보풀, 사진마다 위치 라벨)
