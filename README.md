@@ -121,7 +121,7 @@ flutter test
 | [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진으로 얼룩·찢어짐 확인 (옛 `server/`, 배포된 비전 서버) |
 | [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 사진으로 화장 대칭·이에 낀 것 확인 |
 | [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 찍은 옷을 DB에 기록해 옷장 만들기·추천 |
-| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | AI가 확실하지 않을 때 등록한 가족·친구에게 사진을 보내 확인 요청(지인 확인) |
+| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | 사용자가 원할 때 등록한 가족·친구에게 사진을 보내 확인 요청(개별 기능) |
 
 서버 레포는 모두 2026-11-03에 만들었고 public, `main`·`develop` 브랜치로 GitFlow를 씁니다. 아직 README와 할 일만 있고, 코드가 있는 곳은 mcp-clothes-state(옛 `server/`, 기록째 이전)뿐입니다.
 
@@ -159,6 +159,7 @@ DB: 계정, 회원정보, 일정, 옷장 (PostgreSQL + pgvector)
 | 2026-11-04 | 옷 상태·얼굴 확인은 비용 때문에 Gemini 직접 분석 대신 **자체 학습/사전 학습 모델**로 (10-27 결정 변경, Gemini는 폴백) |
 | 2026-11-04 | 옷장 추천(mcp-closet)은 **RAG**로 |
 | 2026-11-04 | 한 명이 레포 하나씩 맡아 진행 |
+| 2026-11-04 | 중심 기능은 옷 추천: MCP 서버(옷 상태·날씨·일정·옷장)가 데이터를 주고 Gemini가 판단·추천. 얼굴 확인과 가족 확인 요청은 개별 기능 |
 
 아직 안 정한 것: 담당자 배정, 레포별 추천 기술 최종 확인([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)의 추천 기준), 학습 데이터 수집 방법.
 

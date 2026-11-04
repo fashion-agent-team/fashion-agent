@@ -42,14 +42,20 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 
 **학습 데이터**: 공개 원단 결함 데이터(AITEX 등)는 공장 원단 사진이라 펼쳐 놓은 옷과 다릅니다. 우리 옷 사진을 직접 찍어 라벨링합니다(결함 종류마다 수백 장 목표). 모델이 준비될 때까지 지금 배포된 Gemini 옷 분석 서버를 데모용 예비로 둡니다. Ultralytics는 AGPL 라이선스라 상용화 전에 다시 확인합니다.
 
+## 기능 구분
+
+중심 기능은 **옷 추천(옷 검사)** 하나입니다. MCP 서버들은 데이터만 돌려주고, agent가 모은 데이터를 Gemini에 넘겨 판단과 추천을 맡깁니다. 날씨 묻기, 일정 등록, 얼굴 확인(face-check), 가족·친구에게 확인 요청(helper)은 따로 부르는 개별 기능입니다.
+
 ## "옷 검사해 줘" 요청 흐름
 
 1. 앱이 말을 글자로 바꾸고(STT), 펼쳐 놓은 옷을 찍습니다.
-2. `POST /outfit-check`로 글자·사진·토큰을 보내면 게이트웨이가 토큰과 사용량을 확인하고 agent로 넘깁니다.
-3. agent가 Gemini에 도구 목록을 주고 고르게 합니다(예: weather, schedule, clothes_state).
-4. MCP 서버들이 오늘 날씨, 오늘 일정과 장소 종류, 옷 상태(YOLO가 찾은 얼룩 위치 포함)를 돌려줍니다.
-5. 우리 모델의 확신도가 낮으면 그 사진만 Gemini에 다시 묻고, 그래도 애매하면 가족에게 물을지 묻습니다(mcp-helper).
-6. agent가 결과를 한국어 문장으로 정리하면 앱이 읽어 줍니다.
+2. `POST /api/v1/agent/turn`으로 사진·위치·토큰을 보내면 게이트웨이가 토큰과 사용량을 확인하고 agent로 넘깁니다.
+3. agent가 `clothes_inspect`로 옷 종류·색·격식·얼룩/찢어짐 위치를 받습니다. 어둡거나 잘렸으면 다시 찍어 달라고 합니다.
+4. agent가 동시에 데이터를 모읍니다: 오늘 날씨(`weather_today`), 오늘 일정과 장소 종류(`schedule_list`), (선택) 내 옷장 후보와 코디 지식(`closet_search`, RAG 검색).
+5. 모은 JSON과 판단 기준을 Gemini에 한 번 넘기면, Gemini가 일정·날씨에 맞는지, 얼룩을 어떻게 알릴지, 옷장에서 무엇을 더하면 좋을지 정해 정해진 JSON 모양으로 돌려줍니다.
+6. agent가 그 안의 안내 문장을 돌려주면 앱이 읽어 줍니다.
+
+자세한 Gemini 입력·출력 모양은 [contracts/README.md 5절](contracts/README.md#5-기능-구분과-agent-처리-방법)에 있습니다.
 
 ## 시작 순서 (제안)
 
@@ -59,19 +65,23 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 | --- | --- | --- |
 | 11/4 – 11/5 | 0. 약속 정하기 | 앱 ↔ 게이트웨이 API 모양, MCP 도구 이름·입출력, JWT에 담을 값, Docker Compose 뼈대, 학습용 사진 찍기·라벨링 시작 |
 | 11/6 – 11/12 | 1. 데모 경로 | 게이트웨이 + account, agent + mcp-weather, clothes-state 모델 1차 학습 + MCP 서버, 앱 연결 주소를 게이트웨이로 |
-| 11/13 – 11/17 | 2. 기능 넓히기 | mcp-schedule(음성 일정 등록), mcp-closet RAG, face-check, 모델 2차 학습, 얼룩 위치 왼쪽·오른쪽 기준 |
+| 11/13 – 11/17 | 2. 기능 넓히기 | mcp-closet RAG(옷 추천에 붙이기), mcp-schedule 음성 일정 등록, 개별 기능(face-check, helper), 모델 2차 학습 |
 | 11/18 – 11/19 | 3. 리허설 | 실제 아이폰으로 처음부터 끝까지, 예비 서버 전환 확인, 발표 시나리오 녹화 |
 
 인터페이스는 [contracts/](contracts/README.md)에 정해 두었습니다(앱 API는 [openapi.yaml](contracts/openapi.yaml), MCP 도구는 [mcp-tools.md](contracts/mcp-tools.md), 전체 실행 뼈대는 [infra/](infra/docker-compose.yml)). 요약:
 
 ```
-POST /outfit-check   Authorization: Bearer <JWT>
-{ "utterance": "옷 검사해 줘", "image": "<base64 JPEG>" }
-→ { "speech": "면접이라 슬랙스가 좋아요. ...", "garments": [ ...ClothesScan... ], "needsHelper": false }
+POST /api/v1/agent/turn   Authorization: Bearer <JWT>
+{ "sessionId": "s_42", "imageKind": "outfit", "image": "<base64 JPEG>", "location": { "lat": 37.56, "lon": 126.97 } }
+→ { "speech": "…", "next": "done", "result": { "type": "outfit_check", "outfitCheck": { … } } }
 
-weather.today(lat, lon)          → { feelsLike, min, max, rainProb }
-schedule.today(uid)              → [{ title, time, placeType }]
-clothes_state.inspect(image)     → ClothesScan + source: model|gemini
-closet.recommend(uid, situation) → [{ garmentId, reason }]
-helper.ask(uid, imageRef, q)     → { requestId }
+옷 추천 흐름 (데이터 → Gemini 판단)
+clothes_inspect(image)                  → ClothesScan + source
+weather_today(lat, lon)                 → { apparentTemperature, dailyRange, precipitationProbability, … }
+schedule_list(userId, today)            → { events: [{ title, start, place, placeCategory, occasion }] }
+closet_search(userId, situation)        → { candidates, styleNotes }   (선택, RAG 검색)
+Gemini(위 JSON + 판단 기준)              → { schedule, weather, damage, recommendations, speech }
+
+개별 기능
+face_check(image) / schedule_add(…) / helper_ask(userId, contactId, image, question)
 ```

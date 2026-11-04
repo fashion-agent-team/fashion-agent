@@ -2,15 +2,17 @@
 
 agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Spring AI MCP Server(Streamable HTTP, `/mcp`)로 만들고, 메서드에 `@Tool`을 붙입니다. 도구 설명(`description`)은 Gemini가 읽고 고르는 근거라 **한국어로 언제 쓰는지까지** 적습니다.
 
+**MCP 서버는 데이터만 돌려줍니다.** "이 옷이 오늘 일정·날씨에 맞는가" 같은 판단과 추천은 agent가 Gemini에 맡깁니다(흐름과 Gemini 입출력은 [README.md 5절](README.md#5-기능-구분과-agent-처리-방법)).
+
 공통:
 
 - `userId`가 있는 도구는 agent가 `X-User-Id` 값으로 덮어써서 넣습니다. Gemini가 채운 값은 쓰지 않습니다.
 - 실패하면 도구 결과로 `{"error": {"code", "message"}}`를 돌려줍니다(예외를 그대로 던지지 않기). agent가 이걸 보고 사용자에게 안내합니다.
-- 사람에게 읽어 줄 문장(`notes`, `reason`)은 한국어 존댓말 한 문장씩. 판단 근거를 담습니다("체감 온도가 9도라 겉옷이 필요해요.").
+- 사람에게 읽어 줄 문장(`spokenSummary` 등)은 한국어 존댓말 한 문장씩.
 
 ## 공통 모양: Garment
 
-지금 앱의 `Garment`(lib/models/garment.dart)와 같은 모양입니다. clothes_inspect가 만들고, closet·weather·schedule이 입력으로 받습니다.
+지금 앱의 `Garment`(lib/models/garment.dart)와 같은 모양입니다. clothes_inspect가 만들고, closet이 저장하며, agent가 Gemini에 넘깁니다.
 
 ```json
 {
@@ -37,7 +39,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ## mcp-weather
 
 ### `weather_today`
-오늘 날씨를 물을 때, 옷차림을 정할 때 씁니다.
+옷 추천 흐름에서 agent가 부르고, "오늘 날씨 어때?"에도 씁니다. 판단하지 않고 숫자를 돌려줍니다(`needsOuter`, `needsUmbrella`, `clothingAdvice`는 날씨 묻기 기능에서 바로 읽어 주기 위한 참고값).
 
 입력 `{ "lat": 37.5665, "lon": 126.9780 }`
 
@@ -57,16 +59,9 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 }
 ```
 
-### `weather_check_outfit`
-옷 검사에서 이 옷들이 오늘 날씨에 맞는지 봅니다. 앱의 `lib/styling/weather_rules.dart` 규칙을 옮깁니다.
-
-입력 `{ "lat": 37.5, "lon": 127.0, "garments": [Garment, ...] }`
-
-출력 `{ "ok": false, "notes": ["일교차가 11도라 겉옷을 챙기세요."] }`
-
 ## mcp-schedule
 
-자리 종류(`occasion`)는 앱의 `lib/styling/schedule_rules.dart`와 같습니다: `mourning`(장례·조문) `wedding`(결혼식 하객) `formal`(면접·발표·상견례) `business`(회의·출근·수업) `active`(운동·등산) `casual`(그 밖).
+자리 종류(`occasion`)는 앱의 `lib/styling/schedule_rules.dart`와 같습니다. 일정의 데이터이고, 이 자리에 어떤 옷이 맞는지는 Gemini가 판단합니다: `mourning`(장례·조문) `wedding`(결혼식 하객) `formal`(면접·발표·상견례) `business`(회의·출근·수업) `active`(운동·등산) `casual`(그 밖).
 
 ### `schedule_add`
 "다음 주 토요일 두 시에 친구 결혼식" 같은 말을 Gemini가 나눠서 부릅니다.
@@ -82,26 +77,24 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 `place`가 있으면 카카오 로컬 API로 장소 종류를 찾아 `occasion`을 정하고, 없으면 제목 키워드로 정합니다. 일정 당일 아침 8시에 FCM 알림을 보냅니다(도구가 아니라 서버 스케줄러).
 
 ### `schedule_list`
-입력 `{ "userId": "…", "date": "2026-11-14" }` → 출력 `{ "events": [{ "eventId", "title", "start", "place", "occasion" }] }`
+옷 추천 흐름에서 agent가 오늘 날짜로 부르고, "오늘 일정 뭐야?"에도 씁니다.
+
+입력 `{ "userId": "…", "date": "2026-11-14" }`
+
+출력
+```json
+{ "events": [{ "eventId": "e_01", "title": "친구 결혼식", "start": "2026-11-14T14:00:00+09:00",
+               "place": "더채플앳청담", "placeCategory": "예식장", "occasion": "wedding" }] }
+```
+일정이 없으면 `{ "events": [] }`.
 
 ### `schedule_delete`
 입력 `{ "userId": "…", "eventId": "e_01" }` → 출력 `{ "deleted": true }`
 
-### `schedule_check_outfit`
-입력 `{ "userId": "…", "date": "2026-11-14", "garments": [Garment, ...] }`
-
-출력
-```json
-{ "event": { "eventId": "e_01", "title": "친구 결혼식", "start": "…", "occasion": "wedding" },
-  "ok": false,
-  "notes": ["결혼식에 흰색 상의는 신부와 겹칠 수 있어요."] }
-```
-그날 일정이 없으면 `{ "event": null, "ok": true, "notes": [] }`.
-
 ## mcp-clothes-state
 
 ### `clothes_inspect`
-옷 검사 사진을 분석합니다. agent가 정해진 순서로 직접 부르고, Gemini가 고르지 않습니다.
+옷 추천 흐름의 첫 단계입니다. agent가 직접 부르고, Gemini가 고르지 않습니다. 얼룩·찢어짐을 **찾는 것**까지 하고, 그걸 어떻게 말할지는 Gemini가 정합니다.
 
 입력 `{ "imageBase64": "<JPEG base64>" }`
 
@@ -120,6 +113,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ## mcp-face-check
 
 ### `face_check`
+개별 기능입니다("얼굴 확인해 줘"). 옷 추천 흐름에서는 부르지 않습니다.
+
 입력
 ```json
 { "imageBase64": "<JPEG base64>",
@@ -150,29 +145,34 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ### `closet_wear`
 입력 `{ "userId": "…", "garmentIds": ["c_17", "c_03"], "date": "2026-11-04" }` → 출력 `{ "recorded": 2 }`
 
-### `closet_recommend`
-"내일 면접인데 뭐 입지?"처럼 내 옷장에서 고를 때 씁니다. RAG로 내 옷과 코디 지식 문서를 찾고, 찾은 옷 안에서만 추천합니다.
+### `closet_search`
+RAG의 **검색 단계**입니다. 옷 추천 흐름에서 agent가 부르고(선택), 찾은 옷과 코디 지식을 Gemini에 넘기면 Gemini가 그 안에서만 골라 추천합니다(생성 단계).
 
 입력
 ```json
-{ "userId": "…", "situation": "내일 오전 면접", "occasion": "formal", "apparentTemperature": 9.5, "limit": 3 }
+{ "userId": "…", "situation": "오늘 오전 면접, 체감 9도", "occasion": "formal", "apparentTemperature": 9.5,
+  "excludeGarmentIds": ["c_17"], "limit": 8 }
 ```
-`occasion`, `apparentTemperature`는 있으면 검색 필터로 씁니다(agent가 schedule·weather 결과로 채움).
+`situation`은 agent가 일정·날씨로 만든 문장이고 임베딩 검색에 씁니다. `occasion`, `apparentTemperature`는 있으면 필터로 씁니다. `excludeGarmentIds`는 지금 사진에 이미 있는 옷입니다.
 
 출력
 ```json
 {
-  "items": [
-    { "garmentId": "c_03", "category": "bottom", "name": "슬랙스", "colorName": "남색",
-      "reason": "면접에는 청바지보다 슬랙스가 단정해 보여요.", "lastWorn": "2026-10-28" }
+  "candidates": [
+    { "garmentId": "c_21", "category": "outer", "name": "자켓", "colorName": "회색", "formality": "smart",
+      "lastWorn": "2026-10-28", "score": 0.83 }
   ],
-  "sources": ["style_docs/interview.md"],
+  "styleNotes": [
+    { "text": "면접에는 어두운 색 슬랙스와 셔츠, 단정한 자켓이 무난하다.", "source": "style_docs/interview.md" }
+  ],
   "empty": false
 }
 ```
-옷장이 비어 있으면 `{ "items": [], "empty": true }`이고 agent가 "옷 검사를 몇 번 하면 옷장이 채워져요"라고 안내합니다.
+옷장이 비어 있으면 `{ "candidates": [], "styleNotes": [...], "empty": true }`.
 
 ## mcp-helper
+
+개별 기능입니다. 사용자가 "엄마한테 물어봐 줘"라고 할 때만 씁니다. 옷 추천 흐름에서 자동으로 부르지 않습니다.
 
 ### `helper_contacts`
 입력 `{ "userId": "…" }` → 출력 `{ "contacts": [{ "contactId": "h_1", "name": "엄마", "relation": "가족" }] }`
@@ -180,7 +180,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ### `helper_ask`
 입력
 ```json
-{ "userId": "…", "contactId": "h_1", "imageBase64": "<JPEG base64>", "question": "오른쪽 소매에 얼룩 있는지 봐 줄래?" }
+{ "userId": "…", "contactId": "h_1", "imageBase64": "<JPEG base64>", "question": "이 옷 오늘 결혼식에 괜찮은지 봐 줄래?" }
 ```
 출력 `{ "requestId": "r_9", "expiresAt": "2026-11-05T09:00:00+09:00", "sentTo": "엄마" }`
 

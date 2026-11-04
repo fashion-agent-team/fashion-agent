@@ -144,7 +144,7 @@ paths:
                 옷 검사 결과:
                   value:
                     sessionId: "s_42"
-                    speech: "차콜 그레이 니트와 남색 슬랙스예요. 오늘 면접에 잘 맞아요. 일교차가 11도라 겉옷을 챙기세요. 얼룩이나 찢어진 곳은 보이지 않아요."
+                    speech: "차콜 그레이 니트와 남색 슬랙스예요. 오늘 면접에 잘 맞아요. 일교차가 11도라 옷장의 회색 자켓을 걸치면 좋겠어요. 얼룩이나 찢어진 곳은 보이지 않아요."
                     next: done
                     result:
                       type: outfit_check
@@ -154,7 +154,7 @@ paths:
                         weather: { ok: false, notes: ["일교차가 11도라 겉옷을 챙기세요."] }
                         damage: { ok: true, notes: [] }
                         retake: null
-                        askHelper: false
+                        recommendations: [{ garmentId: c_21, name: 자켓, colorName: 회색, reason: "옷장에 있는 회색 자켓을 걸치면 면접에도 맞고 따뜻해요." }]
                         source: model
         '400': { $ref: '#/components/responses/Error' }
         '413': { $ref: '#/components/responses/Error' }
@@ -291,7 +291,7 @@ components:
           type: object
           description: 화면·기록용 구조화 결과. 앱은 speech만 읽어도 동작해야 함
           properties:
-            type: { type: string, enum: [outfit_check, face_check, weather, schedule, recommend, helper] }
+            type: { type: string, enum: [outfit_check, face_check, weather, schedule, helper] }
             outfitCheck: { $ref: '#/components/schemas/OutfitCheck' }
 
     OutfitCheck:
@@ -307,7 +307,16 @@ components:
         weather: { $ref: '#/components/schemas/CheckPart' }
         damage: { $ref: '#/components/schemas/CheckPart' }
         retake: { type: string, nullable: true, description: "다시 찍어야 하는 이유 (어두움, 잘림)" }
-        askHelper: { type: boolean, description: 확신 없는 결함이 있어 가족에게 물을지 묻는 중 }
+        recommendations:
+          type: array
+          description: 옷장에서 고른 추천 (closet_search 후보 안에서만). 옷장이 비면 빈 배열
+          items:
+            type: object
+            properties:
+              garmentId: { type: string }
+              name: { type: string }
+              colorName: { type: string }
+              reason: { type: string }
         source: { type: string, enum: [model, gemini] }
 
     CheckPart:
