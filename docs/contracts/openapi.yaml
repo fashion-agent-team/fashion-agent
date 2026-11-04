@@ -1,0 +1,420 @@
+openapi: 3.0.3
+info:
+  title: Fashion Agent API (앱 ↔ 게이트웨이)
+  version: 0.1.0
+  description: |
+    앱이 부르는 곳은 게이트웨이 하나뿐입니다. 공통 규칙·오류 모양은 contracts/README.md를 보세요.
+    사진은 JPEG base64, 시간은 ISO-8601(+09:00), 사람에게 읽어 줄 문장은 한국어입니다.
+servers:
+  - url: http://localhost:8080
+    description: 로컬 / Docker Compose
+security:
+  - bearer: []
+tags:
+  - name: auth
+  - name: profile
+  - name: agent
+  - name: schedule
+  - name: helper
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Firebase ID 토큰으로 로그인 (Apple·구글)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken: { type: string, description: Firebase ID 토큰 }
+      responses:
+        '200': { $ref: '#/components/responses/Tokens' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /api/v1/auth/dev:
+    post:
+      tags: [auth]
+      summary: 개발용 로그인 (APP_ENV=dev에서만)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceId]
+              properties:
+                deviceId: { type: string, example: "sim-iphone-15" }
+      responses:
+        '200': { $ref: '#/components/responses/Tokens' }
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: 액세스 토큰 갱신
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Tokens' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /api/v1/me/profile:
+    get:
+      tags: [profile]
+      summary: 내 회원정보 (온보딩에서 받은 값)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+    put:
+      tags: [profile]
+      summary: 회원정보 저장 (건너뛴 항목은 null)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Profile' }
+      responses:
+        '200':
+          description: 저장된 값
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+
+  /api/v1/me/push-token:
+    put:
+      tags: [profile]
+      summary: FCM 토큰 등록 (일정 알림, 가족 답장 알림)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, platform]
+              properties:
+                token: { type: string }
+                platform: { type: string, enum: [ios, android] }
+      responses:
+        '204': { description: 저장됨 }
+
+  /api/v1/agent/turn:
+    post:
+      tags: [agent]
+      summary: 대화 한 번 (말 또는 자동 전송된 사진 한 장)
+      description: |
+        앱은 받은 speech를 읽어 주고, next에 따라 다음 동작을 합니다.
+        - listen: 바로 듣기 시작
+        - camera_outfit / camera_face: 카메라를 켜 둔 채로 유지. 앱이 ML Kit로 구도를 실시간 안내하고,
+          옷(얼굴)이 잘 들어와 1초 멈추면 한 장을 자동으로 같은 sessionId, image, imageKind로 보냄.
+          사용자는 버튼을 누르지 않음. 카메라가 켜진 동안에도 말하기("이걸로 할게", "됐어")는 받음
+        - done: 카메라를 끄고 대기 화면으로
+        옷 추천은 2단계입니다: 말로 추천(result.type=outfit_advice, next=camera_outfit) →
+        보여 준 옷마다 판단(result.type=outfit_check, next=camera_outfit) → "이걸로 할게"(next=done).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TurnRequest' }
+            examples:
+              1단계 말로 시작:
+                value: { utterance: "오늘 뭐 입지?", location: { lat: 37.5665, lon: 126.978, locationFallback: false } }
+              2단계 자동 전송:
+                value: { sessionId: "s_42", imageKind: outfit, image: "<base64 JPEG>", autoCaptured: true, location: { lat: 37.5665, lon: 126.978 } }
+              마무리:
+                value: { sessionId: "s_42", utterance: "이걸로 할게" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TurnResponse' }
+              examples:
+                1단계 추천:
+                  value:
+                    sessionId: "s_42"
+                    speech: "오늘은 체감 9도에 오전 면접이 있어요. 어두운 슬랙스에 셔츠, 겉옷으로 옷장의 회색 자켓을 추천드려요. 옷을 꺼내서 카메라에 보여 주세요."
+                    next: camera_outfit
+                    result:
+                      type: outfit_advice
+                      outfitAdvice:
+                        suggestions:
+                          - { category: top, text: "셔츠나 단정한 니트", reason: "면접이라 단정한 상의가 좋아요." }
+                          - { category: outer, text: "자켓", reason: "일교차가 11도라 겉옷이 필요해요." }
+                        closetPicks: [{ garmentId: c_21, reason: "옷장에 있는 회색 자켓이 잘 맞아요." }]
+                2단계 두 벌 비교:
+                  value:
+                    sessionId: "s_42"
+                    speech: "왼쪽 흰 셔츠가 오른쪽 체크 셔츠보다 면접에 더 단정해요. 겉옷도 보여 주세요."
+                    next: camera_outfit
+                    result:
+                      type: outfit_check
+                      outfitCheck:
+                        garments: []
+                        verdicts:
+                          - { inputId: g1, position: left, fit: good, notes: ["면접에 단정해 보여요."] }
+                          - { inputId: g2, position: right, fit: bad, notes: ["체크무늬는 면접에 조금 가벼워 보여요."] }
+                        comparison: { betterInputId: g1, reason: "흰 셔츠가 면접에 더 단정해요." }
+                        damage: []
+                        stillMissing: [outer]
+                        retake: null
+                        source: model
+        '400': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+
+  /api/v1/schedules:
+    get:
+      tags: [schedule]
+      summary: 날짜별 일정 (테스트·확인용, 평소엔 agent가 말로 처리)
+      parameters:
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events: { type: array, items: { $ref: '#/components/schemas/ScheduleEvent' } }
+
+  /api/v1/me/contacts:
+    get:
+      tags: [helper]
+      summary: 확인을 부탁할 가족·친구 목록
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contacts: { type: array, items: { $ref: '#/components/schemas/Contact' } }
+    post:
+      tags: [helper]
+      summary: 가족·친구 추가 (보호자가 대신 등록해도 됨)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Contact' }
+      responses:
+        '201':
+          description: 추가됨
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contact' }
+
+  /api/v1/me/contacts/{contactId}:
+    delete:
+      tags: [helper]
+      summary: 가족·친구 삭제
+      parameters:
+        - { name: contactId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: 삭제됨 }
+
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  responses:
+    Tokens:
+      description: 토큰 발급
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accessToken, refreshToken, expiresIn, isNewUser]
+            properties:
+              accessToken: { type: string }
+              refreshToken: { type: string }
+              expiresIn: { type: integer, example: 3600 }
+              isNewUser: { type: boolean, description: true면 앱이 음성 온보딩 시작 }
+    Error:
+      description: 오류
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: image_too_large }
+            message: { type: string }
+
+    Profile:
+      type: object
+      description: 모든 항목 null 가능 (온보딩에서 건너뛰기)
+      properties:
+        name: { type: string, nullable: true }
+        birthDate: { type: string, format: date, nullable: true }
+        gender: { type: string, nullable: true }
+        job: { type: string, nullable: true }
+        heightCm: { type: number, nullable: true }
+        weightKg: { type: number, nullable: true }
+        agentName: { type: string, nullable: true, description: null이면 온보딩 안 함 }
+
+    Location:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat: { type: number }
+        lon: { type: number }
+        locationFallback: { type: boolean, default: false, description: 위치 권한이 없어 서울로 보낸 경우 }
+
+    TurnRequest:
+      type: object
+      properties:
+        sessionId: { type: string, nullable: true, description: 첫 말이면 비움. 이어지는 대화는 받은 값 그대로 }
+        utterance: { type: string, nullable: true, description: STT 결과. 사진만 보낼 때는 비움 }
+        image: { type: string, format: byte, nullable: true, description: "JPEG base64, 최대 약 6MB" }
+        imageKind: { type: string, enum: [outfit, face], nullable: true }
+        autoCaptured: { type: boolean, default: true, description: 앱이 구도를 보고 자동으로 보낸 사진이면 true }
+        faceLandmarks: { type: object, nullable: true, description: imageKind=face일 때 ML Kit 윤곽점 (mcp-tools.md의 landmarks) }
+        location: { $ref: '#/components/schemas/Location' }
+
+    TurnResponse:
+      type: object
+      required: [sessionId, speech, next]
+      properties:
+        sessionId: { type: string }
+        speech: { type: string, description: 앱이 그대로 읽어 줄 한국어 }
+        next: { type: string, enum: [listen, camera_outfit, camera_face, done] }
+        result:
+          nullable: true
+          type: object
+          description: 화면·기록용 구조화 결과. 앱은 speech만 읽어도 동작해야 함
+          properties:
+            type: { type: string, enum: [outfit_advice, outfit_check, face_check, weather, schedule, helper] }
+            outfitAdvice: { $ref: '#/components/schemas/OutfitAdvice' }
+            outfitCheck: { $ref: '#/components/schemas/OutfitCheck' }
+
+    OutfitAdvice:
+      type: object
+      description: 1단계 말로 추천 (사진 없이 날씨·일정·옷장으로)
+      properties:
+        suggestions:
+          type: array
+          items:
+            type: object
+            properties:
+              category: { type: string, enum: [top, bottom, outer, dress, shoes, other] }
+              text: { type: string }
+              reason: { type: string }
+        closetPicks:
+          type: array
+          description: 옷장에서 고른 옷 (closet_search 후보 안에서만). 옷장이 비면 빈 배열
+          items:
+            type: object
+            properties:
+              garmentId: { type: string }
+              reason: { type: string }
+
+    OutfitCheck:
+      type: object
+      description: 2단계 자동 전송된 한 장에 대한 판단. 옷이 두 벌 이상이면 비교 포함
+      properties:
+        garments: { type: array, items: { $ref: '#/components/schemas/Garment' } }
+        verdicts:
+          type: array
+          items:
+            type: object
+            properties:
+              inputId: { type: string }
+              position: { type: string, enum: [left, center, right] }
+              fit: { type: string, enum: [good, ok, bad] }
+              notes: { type: array, items: { type: string } }
+        comparison:
+          type: object
+          nullable: true
+          properties:
+            betterInputId: { type: string }
+            reason: { type: string }
+        damage:
+          type: array
+          items:
+            type: object
+            properties:
+              inputId: { type: string }
+              kind: { type: string, enum: [stain, tear, lint, other] }
+              action: { type: string, enum: [wash, repair, change, ok, check], description: "할 일. 얼룩=wash, 찢어짐=repair, 보풀=ok, 확실하지 않음=check" }
+              where: { type: string, nullable: true, description: "바라보는 사람(사진) 기준 위치. 사용자가 물을 때만 말함" }
+              say: { type: string, description: "할 일 중심 안내 문장" }
+        stillMissing: { type: array, items: { type: string, enum: [top, bottom, outer, dress, shoes, other] }, description: 1단계 추천 중 아직 안 보여 준 것 }
+        retake: { type: string, nullable: true, description: "다시 보여 달라는 이유 (어두움, 잘림)" }
+        source: { type: string, enum: [model, gemini] }
+
+    Garment:
+      type: object
+      description: 앱 lib/models/garment.dart와 같은 모양. 자세한 설명은 mcp-tools.md
+      required: [id, category, name, colorName, colorFamily, tone]
+      properties:
+        id: { type: string }
+        category: { type: string, enum: [top, bottom, outer, dress, shoes, other] }
+        name: { type: string }
+        colorName: { type: string }
+        colorFamily: { type: string, enum: [black, white, gray, navy, beige, brown, khaki, blue, red, pink, orange, yellow, green, purple, unknown] }
+        tone: { type: string, enum: [light, mid, dark] }
+        pattern: { type: string, nullable: true }
+        material: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        formality: { type: string, enum: [formal, smart, casual, sporty, unknown] }
+        defects:
+          type: array
+          items:
+            type: object
+            required: [kind, confidence]
+            properties:
+              kind: { type: string, enum: [stain, tear, lint, other] }
+              where: { type: string, nullable: true, description: 바라보는 사람(사진) 기준 위치 }
+              confidence: { type: number }
+        box:
+          type: object
+          nullable: true
+          properties: { x: { type: number }, y: { type: number }, w: { type: number }, h: { type: number } }
+        position: { type: string, enum: [left, center, right], description: 사용자(사진) 기준 화면 위치 }
+        confidence: { type: number }
+
+    ScheduleEvent:
+      type: object
+      nullable: true
+      properties:
+        eventId: { type: string }
+        title: { type: string }
+        start: { type: string, format: date-time }
+        place: { type: string, nullable: true }
+        occasion: { type: string, enum: [mourning, wedding, formal, business, active, casual] }
+
+    Contact:
+      type: object
+      required: [name, phone]
+      properties:
+        contactId: { type: string, readOnly: true }
+        name: { type: string, example: 엄마 }
+        phone: { type: string, example: "010-0000-0000", writeOnly: true, description: 응답에는 내보내지 않음 }
+        relation: { type: string, nullable: true, example: 가족 }

@@ -66,13 +66,18 @@
 
 - 앱: Flutter (아이폰 우선, Android·웹은 이후)
 - 음성 안내: flutter_tts / 음성 인식: speech_to_text (iOS Speech, 한국어)
-- 카메라: camera
+- 카메라: camera (이미지 스트림) + ML Kit 물체 인식으로 구도 실시간 안내·자동 전송 (예정)
 - 날씨: Open-Meteo (API 키 없음)
-- 옷 분석: 비전 LLM (앱 → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) 서버 → Gemini)
+- 옷 분석: 지금은 비전 LLM (앱 → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) 서버 → Gemini). 자체 학습 모델로 바꾸는 중
 - 저장: shared_preferences (옷 설명만, 사진은 저장 안 함)
 - 백엔드 언어: **Java** (2026-11-04 확정)
 - API Gateway: **Spring Cloud Gateway** (2026-11-04 확정)
-- MCP 서버: Spring AI MCP 또는 MCP Java SDK (후보, 미확정)
+- agent · MCP 서버: Spring AI (ChatClient + MCP 클라이언트 / Spring AI MCP Server)
+- 옷 상태·얼굴 확인: **자체 학습 모델**(YOLO·분류 모델을 ONNX로 서버에서 실행), 애매할 때만 Gemini (2026-11-04 확정)
+- 옷장 추천: **RAG** (pgvector + 임베딩 + Gemini 답변) (2026-11-04 확정)
+- DB: PostgreSQL + pgvector / 배포: Docker Compose
+
+레포별 기술과 고른 이유는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 있습니다.
 
 ## 구조
 
@@ -106,17 +111,19 @@ flutter test
 
 이 레포는 **앱(프론트)** 입니다. 서버 쪽은 기능별 레포로 나뉘어 있습니다.
 
-| 레포 | 하는 일 |
-| --- | --- |
-| [fashion-agent](https://github.com/fashion-agent-team/fashion-agent) | 앱 (Flutter) |
-| [fashion-agent-gateway](https://github.com/fashion-agent-team/fashion-agent-gateway) | API Gateway (REST), 계정·회원정보 |
-| [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | agent, Gemini로 기능 고르기·맞춤 추천 |
-| [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 날씨, 날씨에 맞는 옷 두께·재질 |
-| [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 기록·알림, 일정에 맞는 옷차림 |
-| [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진으로 얼룩·찢어짐 확인 (옛 `server/`, 배포된 비전 서버) |
-| [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 사진으로 화장 대칭·이에 낀 것 확인 |
-| [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 찍은 옷을 DB에 기록해 옷장 만들기·추천 |
-| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | AI가 확실하지 않을 때 등록한 가족·친구에게 사진을 보내 확인 요청(지인 확인) |
+| 레포 | 하는 일 | 포트 | 기술 | 담당 |
+| --- | --- | --- | --- | --- |
+| [fashion-agent](https://github.com/fashion-agent-team/fashion-agent) | 앱 (Flutter) | - | Flutter, ML Kit, Firebase Auth, FCM | 미정 |
+| [fashion-agent-gateway](https://github.com/fashion-agent-team/fashion-agent-gateway) | 입구: 로그인 확인·JWT·사용량 제한, 계정·회원정보 | 8080 | Spring Cloud Gateway, Spring Security, Redis | 미정 |
+| [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | 대화, MCP에서 데이터 모아 Gemini로 판단·추천 | 8081 | Spring AI(ChatClient, MCP 클라이언트), Gemini | 이진행 |
+| [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 오늘 날씨·일교차 데이터 | 8091 | Spring AI MCP 서버, 기상청 API | 박창근 |
+| [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 저장·조회, 장소 종류 | 8092 | Spring AI MCP 서버, 카카오 로컬, PostgreSQL | 정지원 |
+| [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진에서 종류·색·얼룩·찢어짐 찾기 | 8093 | YOLO+FashionCLIP(ONNX Runtime Java), Gemini 폴백 | 미정 |
+| [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 화장 대칭·이에 낀 것 확인 | 8094 | ML Kit 윤곽점 규칙, 치아 분류 모델 | 미정 |
+| [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 내 옷 기록, 비슷한 옷·코디 찾기(RAG) | 8095 | pgvector, multilingual-e5 임베딩 | 미정 |
+| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | 사용자가 원할 때 가족·친구에게 사진 확인 요청 | 8096 | 문자 API, 웹 답장 링크, FCM | 미정 |
+
+1차는 agent·mcp-weather·mcp-schedule이고(2026-11-04), 끝나면 나머지를 다시 나눕니다. weather·schedule 담당은 임시 배정이라 서로 바꿔도 됩니다. 서버끼리 주고받는 약속은 [docs/contracts/](docs/contracts/README.md)에 있고, 팀이 정할 것은 [docs/contracts/README.md](docs/contracts/README.md)의 "아직 안 정한 것"에 모아 두었습니다.
 
 서버 레포는 모두 2026-11-03에 만들었고 public, `main`·`develop` 브랜치로 GitFlow를 씁니다. 아직 README와 할 일만 있고, 코드가 있는 곳은 mcp-clothes-state(옛 `server/`, 기록째 이전)뿐입니다.
 
@@ -130,14 +137,16 @@ flutter test
                └─ agent (Gemini가 어떤 기능을 쓸지 고름)
                     ├─ MCP weather       날씨, 옷 두께·재질
                     ├─ MCP schedule      일정, 장소 분위기
-                    ├─ MCP clothes_state 옷 이물질·이염·찢어짐
-                    ├─ MCP face_check    화장 대칭, 이에 낀 음식물
-                    ├─ MCP closet        전용 옷장
+                    ├─ MCP clothes_state 옷 이물질·이염·찢어짐 (자체 학습 YOLO, 애매하면 Gemini)
+                    ├─ MCP face_check    화장 대칭, 이에 낀 음식물 (윤곽점 규칙 + 치아 분류 모델)
+                    ├─ MCP closet        전용 옷장, RAG로 추천
                     └─ MCP helper        지인 확인 요청
-DB: 계정, 회원정보, 일정, 옷장
+DB: 계정, 회원정보, 일정, 옷장 (PostgreSQL + pgvector)
 ```
 
-자세한 그림은 [아키텍처 페이지](https://claude.ai/artifact/4VbiNaDHunmkHJ47PVML2T)를 보세요.
+레포별 기술 스택, 요청 흐름, 시작 순서는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)와 [docs/architecture.pdf](docs/architecture.pdf)를 보세요.
+
+서비스 간 약속(앱 API, MCP 도구 입출력, 인증, 오류, 포트, DB 스키마)은 [docs/contracts/](docs/contracts/README.md)에 있습니다. 각 레포는 이 약속대로 만들고, 바꿀 때는 이 문서를 먼저 고칩니다.
 
 ## 지금까지 진행 상황 (2026-11-04 기준)
 
@@ -149,8 +158,13 @@ DB: 계정, 회원정보, 일정, 옷장
 | 2026-11-03 | 기능별 MCP 구조로 가고, 기능마다 레포를 따로 나눔(위 [레포 구성](#레포-구성)) |
 | 2026-11-04 | API Gateway는 **Spring Cloud Gateway** |
 | 2026-11-04 | 백엔드 언어는 **Java** |
+| 2026-11-04 | 옷 상태·얼굴 확인은 비용 때문에 Gemini 직접 분석 대신 **자체 학습/사전 학습 모델**로 (10-27 결정 변경, Gemini는 폴백) |
+| 2026-11-04 | 옷장 추천(mcp-closet)은 **RAG**로 |
+| 2026-11-04 | 한 명이 레포 하나씩 맡아 진행 |
+| 2026-11-04 | 중심 기능은 옷 추천: MCP 서버(옷 상태·날씨·일정·옷장)가 데이터를 주고 Gemini가 판단·추천. 얼굴 확인과 가족 확인 요청은 개별 기능 |
+| 2026-11-04 | 옷 추천은 2단계: 날씨·일정으로 먼저 말로 추천 → 사용자가 꺼낸 옷을 카메라에 보여 주면 자동 판단(사진 찍기 버튼 없음, 폰이 구도를 실시간 안내하고 잘 들어오면 한 장 자동 전송). 두 벌을 나란히 놓으면 "왼쪽이 더 나아요"처럼 비교 |
 
-아직 안 정한 것: 날씨 API를 Open-Meteo로 계속 쓸지(지금 코드는 Open-Meteo), MCP 서버 라이브러리(Spring AI MCP / MCP Java SDK), 역할 분담.
+아직 안 정한 것: 담당자 배정, 레포별 추천 기술 최종 확인([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)의 추천 기준), 학습 데이터 수집 방법.
 
 ### develop에 머지된 PR
 
@@ -169,9 +183,10 @@ DB: 계정, 회원정보, 일정, 옷장
 
 ### 다음 할 일
 
-- Spring Cloud Gateway(Java)로 fashion-agent-gateway 뼈대 만들기, 계정·회원정보 API
-- fashion-agent-agent와 MCP 서버들을 Java로 시작
+- 첫날: [docs/contracts/](docs/contracts/README.md) 약속 같이 읽고 확정, 버전·담당자 정하기, 학습용 옷 사진 찍기·라벨링 시작
+- 데모 경로 먼저: fashion-agent-gateway, fashion-agent-agent(+mcp-weather), mcp-clothes-state(모델 학습 + Spring AI MCP)
 - 앱이 비전 서버를 직접 부르던 것을 Gateway → agent 경유로 바꾸기
+- 그다음 mcp-schedule, mcp-closet(RAG), mcp-face-check, mcp-helper
 
 ## 브랜치 전략
 
