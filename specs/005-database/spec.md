@@ -94,7 +94,7 @@ mcp-closet 담당자가 `docs/infra/db/closet/V1__init.sql`을 레포에 복사�
 - 계정 연결(Apple로 가입 → 구글 연결)은 Firebase가 같은 uid로 묶는다. 서버는 `firebase_uid`로만 찾으므로 표를 바꿀 일이 없다. `provider`는 처음 가입한 방법으로만 남는다.
 - 장소를 못 찾은 일정은 `place_category`가 null이고 자리 종류는 제목 또는 `casual`.
 - 옷 임베딩을 만들기 전(모델 준비 전)에도 옷 저장은 된다(`embedding` null 허용). 그 옷은 검색 후보에서 빠진다.
-- 탈퇴는 발표 범위에서 뺀다(FR-X5).
+- 탈퇴 기능은 만들지 않는다(FR-X5).
 
 ## Requirements *(mandatory)*
 
@@ -105,7 +105,7 @@ mcp-closet 담당자가 `docs/infra/db/closet/V1__init.sql`을 레포에 복사�
 - **FR-X2**: System MUST 사용자 데이터 표마다 `user_id uuid NOT NULL`을 두어야 한다. 예외는 `account.users` 자신과 공용 코디 지식 `closet.style_docs`뿐이다.
 - **FR-X3**: System MUST 시각은 모두 `timestamp with time zone`으로 저장하고, 날짜 경계는 Asia/Seoul로 계산해야 한다.
 - **FR-X4**: System MUST 사진 원본을 DB에 저장하지 않아야 한다.
-- **FR-X5**: 탈퇴 시 다른 스키마 데이터 삭제는 발표 범위에서 뺀다. 나중에 하려면 gateway가 각 서비스에 삭제를 요청하고, 각 서비스는 `user_id` 인덱스로 지운다. [NEEDS CLARIFICATION: 발표 범위에서 빼도 되는지 팀 확인]
+- **FR-X5**: 탈퇴 시 다른 스키마 데이터 삭제는 발표 범위에서 뺀다. 나중에 하려면 gateway가 각 서비스에 삭제를 요청하고, 각 서비스는 `user_id` 인덱스로 지운다. (2026-11-04 진행 님 확정: 탈퇴 기능은 만들지 않음)
 - **FR-F1**: System MUST 표 변경을 서비스별 Flyway 마이그레이션으로만 하고, 머지된 파일은 고치지 않아야 한다.
 
 계정(account) · 근거 001

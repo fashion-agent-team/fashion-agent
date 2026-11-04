@@ -12,7 +12,7 @@
 
 ## Requirement Completeness
 
-- [ ] [NEEDS CLARIFICATION] 하나 남음: FR-X5 탈퇴 범위 (팀 확인)
+- [x] [NEEDS CLARIFICATION] 없음 (FR-X5 탈퇴는 만들지 않기로 확정, 2026-11-04)
 - [x] 요구사항마다 `checks.sql`의 검사 이름(FR 번호)으로 확인할 수 있다
 - [x] 성공 기준이 숫자로 잴 수 있다(SC-001~005)
 - [x] Edge case(계정 연결, 장소 못 찾음, 임베딩 없음, 탈퇴)를 적었다
@@ -25,4 +25,4 @@
 
 ## Notes
 
-- 탈퇴 범위가 정해지면 FR-X5와 research R7을 고친다. 표 설계는 어느 쪽이든 그대로다.
+- 탈퇴는 만들지 않기로 했다. 나중에 만들더라도 표 설계는 그대로다.

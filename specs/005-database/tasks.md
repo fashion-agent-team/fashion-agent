@@ -38,7 +38,7 @@
 
 ## Phase 6: Polish
 
-- [ ] T018 팀 확인: 탈퇴를 발표 범위에서 빼는지(FR-X5, research R7)
+- [x] T018 탈퇴는 만들지 않기로 확정(FR-X5, research R7, 2026-11-04)
 - [ ] T019 모든 서비스가 붙은 뒤 docker compose DB에서 `checks.sql` 다시 돌리기(quickstart)
 - [ ] T020 예비 옷 분석 서버(Cloudflare Worker)를 Gemini에서 GPT 비전으로 옮기기(구조 변경의 남은 부분, DB와 무관)
 
