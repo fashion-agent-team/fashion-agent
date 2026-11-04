@@ -30,16 +30,19 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
     { "kind": "stain", "where": "오른쪽 소매 끝", "confidence": 0.85 }   // stain | tear | lint | other
   ],
   "box": { "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4 },
+  "position": "left",           // left | center | right (사진 기준 = 사용자 기준). clothes_inspect가 box로 계산
   "confidence": 0.96
 }
 ```
 
-**왼쪽·오른쪽 기준**: `where`의 왼쪽·오른쪽은 **옷을 입었을 때 입은 사람 기준**입니다(펼쳐 놓은 옷을 위에서 찍으면 사진의 왼쪽이 옷의 오른쪽). clothes_inspect가 바꿔서 돌려줍니다.
+**왼쪽·오른쪽 기준이 두 가지입니다.**
+- `position`(옷이 화면 어디에 있나): 사용자가 선 자리 기준 = 사진 기준. 폰 뒷면 카메라가 옷을 향하므로 사진 왼쪽이 사용자 왼쪽입니다. box 중심 x가 0.4 미만이면 left, 0.6 초과면 right, 그 사이는 center.
+- `where`(옷 한 벌 안의 얼룩 위치): **옷을 입었을 때 입은 사람 기준**입니다(펼쳐 놓은 옷을 앞면이 위로 오게 찍으면 사진의 왼쪽이 옷의 오른쪽). clothes_inspect가 바꿔서 돌려줍니다.
 
 ## mcp-weather
 
 ### `weather_today`
-옷 추천 흐름에서 agent가 부르고, "오늘 날씨 어때?"에도 씁니다. 판단하지 않고 숫자를 돌려줍니다(`needsOuter`, `needsUmbrella`, `clothingAdvice`는 날씨 묻기 기능에서 바로 읽어 주기 위한 참고값).
+옷 추천 1단계에서 agent가 부르고, "오늘 날씨 어때?"에도 씁니다. 판단하지 않고 숫자를 돌려줍니다(`needsOuter`, `needsUmbrella`, `clothingAdvice`는 날씨 묻기 기능에서 바로 읽어 주기 위한 참고값).
 
 입력 `{ "lat": 37.5665, "lon": 126.9780 }`
 
@@ -77,7 +80,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 `place`가 있으면 카카오 로컬 API로 장소 종류를 찾아 `occasion`을 정하고, 없으면 제목 키워드로 정합니다. 일정 당일 아침 8시에 FCM 알림을 보냅니다(도구가 아니라 서버 스케줄러).
 
 ### `schedule_list`
-옷 추천 흐름에서 agent가 오늘 날짜로 부르고, "오늘 일정 뭐야?"에도 씁니다.
+옷 추천 1단계에서 agent가 오늘 날짜로 부르고, "오늘 일정 뭐야?"에도 씁니다.
 
 입력 `{ "userId": "…", "date": "2026-11-14" }`
 
@@ -94,7 +97,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ## mcp-clothes-state
 
 ### `clothes_inspect`
-옷 추천 흐름의 첫 단계입니다. agent가 직접 부르고, Gemini가 고르지 않습니다. 얼룩·찢어짐을 **찾는 것**까지 하고, 그걸 어떻게 말할지는 Gemini가 정합니다.
+옷 추천 2단계에서 앱이 자동으로 보낸 한 장마다 agent가 직접 부릅니다(Gemini가 고르지 않음). 한 장에 옷이 두 벌 이상 있을 수 있습니다(비교). 얼룩·찢어짐을 **찾는 것**까지 하고, 그걸 어떻게 말할지는 Gemini가 정합니다.
 
 입력 `{ "imageBase64": "<JPEG base64>" }`
 
@@ -136,7 +139,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ## mcp-closet
 
 ### `closet_save`
-옷 검사 때마다 agent가 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다(임베딩 유사도 + 종류·색 일치).
+옷 추천을 마칠 때("이걸로 할게") agent가 2단계에서 본 옷을 모아 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다(임베딩 유사도 + 종류·색 일치).
 
 입력 `{ "userId": "…", "garments": [Garment, ...] }`
 
@@ -146,14 +149,14 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 입력 `{ "userId": "…", "garmentIds": ["c_17", "c_03"], "date": "2026-11-04" }` → 출력 `{ "recorded": 2 }`
 
 ### `closet_search`
-RAG의 **검색 단계**입니다. 옷 추천 흐름에서 agent가 부르고(선택), 찾은 옷과 코디 지식을 Gemini에 넘기면 Gemini가 그 안에서만 골라 추천합니다(생성 단계).
+RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(선택), 찾은 옷과 코디 지식을 Gemini에 넘기면 Gemini가 그 안에서만 골라 추천합니다(생성 단계).
 
 입력
 ```json
 { "userId": "…", "situation": "오늘 오전 면접, 체감 9도", "occasion": "formal", "apparentTemperature": 9.5,
   "excludeGarmentIds": ["c_17"], "limit": 8 }
 ```
-`situation`은 agent가 일정·날씨로 만든 문장이고 임베딩 검색에 씁니다. `occasion`, `apparentTemperature`는 있으면 필터로 씁니다. `excludeGarmentIds`는 지금 사진에 이미 있는 옷입니다.
+`situation`은 agent가 일정·날씨로 만든 문장이고 임베딩 검색에 씁니다. `occasion`, `apparentTemperature`는 있으면 필터로 씁니다. `excludeGarmentIds`는 빼고 싶은 옷(예: 어제 입은 옷)입니다.
 
 출력
 ```json

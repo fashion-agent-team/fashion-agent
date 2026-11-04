@@ -87,72 +87,102 @@ MCP 서버는 Streamable HTTP로 `http://<서비스>:<포트>/mcp`를 엽니다.
 
 | 구분 | 기능 | 쓰는 MCP 서버 | 부르는 방법 |
 | --- | --- | --- | --- |
-| 중심 기능 | 옷 추천 (옷 검사) | clothes-state, weather, schedule, closet(선택) | "옷 검사해 줘" → 사진 |
+| 중심 기능 | 옷 추천 (말로 추천 → 카메라로 확인) | clothes-state, weather, schedule, closet(선택) | "오늘 뭐 입지?" → 추천을 듣고 옷을 카메라에 보여 줌 |
 | 개별 기능 | 날씨 묻기 | weather | "오늘 날씨 어때?" |
 | 개별 기능 | 일정 등록·확인 | schedule | "토요일 두 시에 결혼식 넣어 줘" |
 | 개별 기능 | 얼굴 확인 | face-check | "얼굴 확인해 줘" → 사진 |
 | 개별 기능 | 가족·친구에게 확인 요청 | helper | "엄마한테 이 옷 괜찮은지 물어봐 줘" → 사진 |
 
-**MCP 서버는 데이터만 돌려주고, 판단과 추천은 agent가 Gemini에 맡깁니다.** 옷 검사 사진의 얼룩·찢어짐을 찾는 것(clothes-state 모델)까지는 데이터이고, "이 옷이 오늘 결혼식·날씨에 맞는가, 무엇을 바꾸면 좋은가"는 Gemini가 판단합니다.
+**MCP 서버는 데이터만 돌려주고, 판단과 추천은 agent가 Gemini에 맡깁니다.** 얼룩·찢어짐을 찾는 것(clothes-state 모델)까지는 데이터이고, "이 옷이 오늘 결혼식·날씨에 맞는가, 두 벌 중 무엇이 나은가"는 Gemini가 판단합니다. 데이터를 모으는 순서는 코드로 정해져 있어서(Gemini가 도구를 고르지 않음) 발표 때 매번 같게 동작합니다.
 
-### 5-1. 옷 추천 흐름
+### 5-1. 옷 추천 흐름 (2단계)
 
-사진이 오면 agent가 **정해진 순서(코드)로** 데이터를 모읍니다. 어떤 도구를 부를지 Gemini가 고르지 않아서, 발표 때 매번 같은 순서로 동작합니다.
+사용자는 사진을 찍지 않습니다. **먼저 말로 추천을 듣고, 꺼낸 옷을 카메라에 보여 주면 알아서 판단해 줍니다.**
 
 ```
-1. clothes_inspect(image)                         옷 종류·색·격식·얼룩/찢어짐 위치
-   └─ 어둡거나 잘렸으면 여기서 바로 "다시 찍어 주세요" (next: camera_outfit)
-2. 동시에 부르기
-   ├─ weather_today(lat, lon)                     오늘 기온·체감·일교차·강수
-   ├─ schedule_list(userId, 오늘)                  오늘 일정과 장소 종류(occasion)
-   └─ closet_search(userId, 상황)   ※ 선택          내 옷장에서 상황에 맞는 옷 후보 + 코디 지식
-3. closet_save(userId, garments)                  본 옷을 옷장에 기록 (응답을 기다리지 않음)
-4. Gemini 한 번 호출: 1~2의 JSON + 판단 기준 → 아래 출력 모양(구조화 출력)
-5. 앱에 speech와 결과를 돌려줌
+[1단계: 말로 추천]  "오늘 뭐 입지?" / "옷 추천해 줘"
+  agent ─ 동시에 ─┬─ weather_today(lat, lon)
+                  ├─ schedule_list(userId, 오늘)
+                  └─ closet_search(userId, 상황)      ※ 선택, 옷장에 옷이 쌓인 뒤
+  agent → Gemini(추천 모드) → "오늘은 체감 9도에 오전 면접이 있어요. 어두운 슬랙스에 셔츠, 겉옷을 추천드려요.
+                               옷을 꺼내서 카메라에 한 벌씩 보여 주시거나, 두 벌을 나란히 놓아 주세요."
+  agent: 날씨·일정·추천 내용을 세션(Redis)에 저장, 응답 next = camera_live
+
+[2단계: 카메라 켜 두면 자동 판단]
+  앱(폰 안, 실시간): ML Kit 물체 인식으로 매 순간 확인
+     ├─ 옷이 없거나 잘림 → 앱이 바로 말함 "옷이 안 보여요. 폰을 조금 왼쪽으로"  (서버 안 감)
+     └─ 옷이 잘 들어오고 1초 멈춤 → 그 순간 한 장을 자동 전송 (사용자는 버튼 안 누름)
+  agent: clothes_inspect(image)
+     └─ 어둡거나 잘렸으면 바로 다시 안내
+  agent → Gemini(확인 모드): 세션의 날씨·일정·추천 + 지금 본 옷 + 앞서 본 옷들
+     → 한 벌: "이 남색 셔츠는 면접에 좋아요. 겉옷도 보여 주세요."
+     → 두 벌: "왼쪽 흰 셔츠가 오른쪽 체크 셔츠보다 면접에 더 단정해요."
+  응답 next = camera_live (계속) … 사용자가 "이걸로 할게" / "됐어"
+  agent: closet_save + closet_wear (입은 옷 기록) → 마무리 안내, next = done
 ```
 
-`closet_search`는 옷장에 옷이 쌓인 뒤에 의미가 있어서 선택입니다. 결과가 비어 있으면 Gemini에 넘기지 않습니다.
+**앱의 자동 전송 규칙** (서버 비용과 말 겹침을 막기 위해)
+- 옷 박스가 화면 안에 다 들어오고 1초 동안 거의 움직이지 않을 때만 보냅니다.
+- 보낸 뒤에는 서버 답을 다 읽어 줄 때까지 보내지 않고, 화면이 바뀐 뒤(옷이 빠지거나 다른 옷이 들어옴)에만 다음 장을 보냅니다. 최소 3초 간격.
+- 사진은 저장하지 않습니다. 보낸 한 장도 판단이 끝나면 버립니다.
 
-**Gemini 입력** (agent가 만들어 보냄, 사진은 넣지 않음)
+**왼쪽·오른쪽 기준** (두 가지를 헷갈리지 않기)
+- **옷끼리 비교할 때(어느 옷이 왼쪽에 있나)**: 사용자가 선 자리에서 본 왼쪽·오른쪽. 폰 뒷면 카메라가 옷을 향하므로 **사진의 왼쪽 = 사용자의 왼쪽**입니다. `clothes_inspect`가 옷마다 `position`(left·center·right)을 줍니다.
+- **옷 한 벌 안의 얼룩 위치(`where`)**: 그 옷을 **입은 사람 기준**("오른쪽 소매 끝").
+- 비교할 때는 위치만 말하지 않고 색·종류를 붙입니다("왼쪽 흰 셔츠"). 사용자가 만져 보고 한 번 더 확인할 수 있게 하기 위해서입니다.
 
-```json
-{
-  "garments": [Garment, ...],
-  "weather": { "apparentTemperature": 9.5, "minTemperature": 6, "maxTemperature": 17, "dailyRange": 11, "precipitationProbability": 10, "condition": "맑음" },
-  "events": [{ "title": "면접", "start": "2026-11-04T10:00:00+09:00", "place": "OO빌딩", "placeCategory": "회사", "occasion": "formal" }],
-  "closetCandidates": [{ "garmentId": "c_03", "category": "bottom", "name": "슬랙스", "colorName": "남색", "formality": "smart", "lastWorn": "2026-10-28" }],
-  "styleNotes": ["면접에는 어두운 색 슬랙스와 셔츠가 무난하다", "..."],
-  "profile": { "gender": null, "job": "대학생" }
-}
-```
-
-**판단 기준** (시스템 프롬프트에 넣음, 앱의 `lib/styling/` 규칙을 옮긴 것)
-
+**Gemini 판단 기준** (두 모드 공통, 시스템 프롬프트, 앱의 `lib/styling/` 규칙을 옮긴 것)
 - 자리: 장례(검정·무채색, 화려한 무늬 피하기), 결혼식(흰색 상의 피하기, 단정하게), 면접·발표(formal·smart), 회의·출근(sporty 피하기), 운동(sporty).
 - 날씨: 체감 20도 미만이면 겉옷, 일교차 10도 이상이면 겉옷 챙기기, 강수 50% 이상이면 우산, 더운 날 두꺼운 소재 주의.
-- 얼룩·찢어짐: 확신도 0.7 이상만 위치와 함께 말하고, 그보다 낮으면 "손으로 한번 확인해 보세요"라고만 말하기.
-- 추천은 `closetCandidates` 안의 옷만. 없는 옷을 지어내지 않기.
-- 말투: 존댓말, 이유를 붙여서, 전체 4문장 이내(음성으로 듣기 때문).
+- 얼룩·찢어짐: 확신도 0.7 이상만 위치와 함께 말하고, 그보다 낮으면 "손으로 한번 확인해 보세요"라고만.
+- 옷장 추천은 `closetCandidates` 안의 옷만. 없는 옷을 지어내지 않기.
+- 말투: 존댓말, 이유를 붙여서, 3문장 이내(듣는 중에 옷을 바꾸므로 짧게).
+- 구조화 출력(responseSchema)으로 받고 `temperature`는 0.2.
 
-**Gemini 출력** (responseSchema로 강제, `temperature` 0.2)
+**1단계 Gemini 입력 → 출력 (추천 모드)**
 
 ```json
-{
-  "schedule": { "ok": true,  "notes": ["면접에 남색 슬랙스와 셔츠는 단정해 보여요."] },
-  "weather":  { "ok": false, "notes": ["일교차가 11도라 겉옷을 챙기세요."] },
-  "damage":   { "ok": true,  "notes": [] },
-  "recommendations": [{ "garmentId": "c_21", "reason": "옷장에 있는 회색 자켓을 걸치면 면접에도 맞고 따뜻해요." }],
-  "speech": "남색 셔츠와 슬랙스예요. 면접에 잘 맞아요. 일교차가 11도라 옷장의 회색 자켓을 걸치면 좋겠어요. 얼룩이나 찢어진 곳은 보이지 않아요."
-}
+// 입력 (사진 없음)
+{ "weather": { "apparentTemperature": 9.5, "dailyRange": 11, "precipitationProbability": 10, "condition": "맑음" },
+  "events": [{ "title": "면접", "start": "2026-11-04T10:00:00+09:00", "placeCategory": "회사", "occasion": "formal" }],
+  "closetCandidates": [{ "garmentId": "c_21", "category": "outer", "name": "자켓", "colorName": "회색", "formality": "smart" }],
+  "styleNotes": ["면접에는 어두운 색 슬랙스와 셔츠, 단정한 자켓이 무난하다"],
+  "profile": { "job": "대학생" } }
+
+// 출력
+{ "suggestions": [
+    { "category": "top",    "text": "셔츠나 단정한 니트",  "reason": "면접이라 단정한 상의가 좋아요." },
+    { "category": "bottom", "text": "어두운 색 슬랙스",    "reason": "청바지보다 격식 있어 보여요." },
+    { "category": "outer",  "text": "자켓",               "reason": "일교차가 11도라 겉옷이 필요해요." } ],
+  "closetPicks": [{ "garmentId": "c_21", "reason": "옷장에 있는 회색 자켓이 잘 맞아요." }],
+  "speech": "오늘은 체감 9도에 오전 면접이 있어요. 어두운 슬랙스에 셔츠, 겉옷으로 옷장의 회색 자켓을 추천드려요. 옷을 꺼내서 카메라에 보여 주세요." }
 ```
 
-Gemini가 실패하거나 25초 안에 답이 없으면 agent는 1~2의 데이터만으로 짧게 안내합니다("니트 한 벌이 보여요. 지금은 판단을 못 했어요. 다시 해 볼까요?").
+**2단계 Gemini 입력 → 출력 (확인 모드)**
+
+```json
+// 입력: 세션에 저장한 1단계 입력·출력 + 아래
+{ "now": [Garment(position 포함), ...],
+  "seenBefore": [{ "garmentId": "g_s1", "name": "슬랙스", "colorName": "남색", "verdict": "good" }] }
+
+// 출력
+{ "verdicts": [
+    { "inputId": "g1", "position": "left",  "fit": "good", "notes": ["면접에 단정해 보여요."] },
+    { "inputId": "g2", "position": "right", "fit": "bad",  "notes": ["체크무늬는 면접에 조금 가벼워 보여요."] } ],
+  "comparison": { "betterInputId": "g1", "reason": "흰 셔츠가 면접에 더 단정해요." },
+  "damage": [{ "inputId": "g1", "say": "오른쪽 소매 끝에 얼룩이 있어요." }],
+  "stillMissing": ["outer"],
+  "speech": "왼쪽 흰 셔츠가 오른쪽 체크 셔츠보다 면접에 더 단정해요. 다만 흰 셔츠 오른쪽 소매 끝에 얼룩이 있어요. 겉옷도 보여 주세요." }
+```
+`fit`: good | ok | bad. 한 벌만 보이면 `comparison`은 null.
+
+Gemini가 실패하거나 25초 안에 답이 없으면 agent는 `clothes_inspect` 결과만으로 짧게 말합니다("흰 셔츠가 보여요. 지금은 판단을 못 했어요. 다시 보여 주세요.").
 
 ### 5-2. 개별 기능
 
-- 사진이 오는 얼굴 확인은 `face_check` → Gemini가 안내 문장만 작성.
+- 얼굴 확인도 같은 방식(카메라 켜 두면 앱이 얼굴 구도를 실시간 안내, 잘 들어오면 한 장 자동 전송) → `face_check` → Gemini가 안내 문장 작성.
 - 그 밖의 말(날씨 묻기, 일정 등록, 가족에게 묻기)은 **Gemini가 도구를 고릅니다.** 옷 추천 흐름과 섞지 않습니다.
-- 가족에게 묻기는 사용자가 원할 때만 합니다. 사진은 직전 옷 검사나 얼굴 확인 사진을 agent가 Redis에 10분 들고 있다가 넘기거나, 새로 찍습니다.
+- 가족에게 묻기는 사용자가 원할 때만 합니다. 사진은 직전에 자동 전송된 한 장을 agent가 Redis에 10분 들고 있다가 넘깁니다.
 
 ### 5-3. 공통
 
@@ -164,14 +194,14 @@ Gemini가 실패하거나 25초 안에 답이 없으면 agent는 1~2의 데이�
 
 | 서버 | 도구 | 한 줄 설명 | 쓰는 곳 |
 | --- | --- | --- | --- |
-| mcp-clothes-state | `clothes_inspect` | 사진 → 옷 종류·색·격식·얼룩/찢어짐 위치 | 옷 추천 |
-| mcp-weather | `weather_today` | 오늘 기온·체감·일교차·강수 | 옷 추천, 날씨 묻기 |
-| mcp-schedule | `schedule_list` | 날짜별 일정과 장소 종류 | 옷 추천, 일정 |
+| mcp-clothes-state | `clothes_inspect` | 사진 → 옷 종류·색·격식·위치(left·center·right)·얼룩/찢어짐 | 옷 추천 2단계 |
+| mcp-weather | `weather_today` | 오늘 기온·체감·일교차·강수 | 옷 추천 1단계, 날씨 묻기 |
+| mcp-schedule | `schedule_list` | 날짜별 일정과 장소 종류 | 옷 추천 1단계, 일정 |
 | | `schedule_add` | 일정 추가 (장소 종류를 카카오 로컬로 찾음) | 일정 |
 | | `schedule_delete` | 일정 삭제 | 일정 |
-| mcp-closet | `closet_search` | 상황에 맞는 내 옷 후보 + 코디 지식 검색 (RAG의 검색 단계) | 옷 추천(선택) |
-| | `closet_save` | 본 옷을 옷장에 기록 (같은 옷이면 합침) | 옷 추천 |
-| | `closet_wear` | 입은 날 기록 | 옷 추천 후 "이거 입을게" |
+| mcp-closet | `closet_search` | 상황에 맞는 내 옷 후보 + 코디 지식 검색 (RAG의 검색 단계) | 옷 추천 1단계(선택) |
+| | `closet_save` | 본 옷을 옷장에 기록 (같은 옷이면 합침) | 옷 추천 마무리 |
+| | `closet_wear` | 입은 날 기록 | 옷 추천 마무리 ("이걸로 할게") |
 | mcp-face-check | `face_check` | 사진 → 화장 대칭, 이에 낀 것 | 얼굴 확인 |
 | mcp-helper | `helper_contacts` | 등록한 가족·친구 목록 | 가족에게 묻기 |
 | | `helper_ask` | 사진과 질문을 문자로 보내기 | 가족에게 묻기 |

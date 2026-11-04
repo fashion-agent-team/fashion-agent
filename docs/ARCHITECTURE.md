@@ -23,7 +23,7 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 
 | 구성요소 | 레포 | 기술 스택 | 고른 이유 | 대안 |
 | --- | --- | --- | --- | --- |
-| 앱 | fashion-agent | Flutter, speech_to_text, flutter_tts, camera, Firebase Auth SDK, FCM, ML Kit 얼굴 인식 | 이미 동작 중. 기기 음성은 무료이고 VoiceOver 목소리와 같음 | Google Cloud STT/TTS, 네이버 CLOVA |
+| 앱 | fashion-agent | Flutter, speech_to_text, flutter_tts, camera(이미지 스트림), ML Kit 물체 인식(옷 구도 실시간 안내·자동 전송)·얼굴 인식, Firebase Auth SDK, FCM | 이미 동작 중. 기기 음성은 무료이고 VoiceOver 목소리와 같음 | Google Cloud STT/TTS, 네이버 CLOVA |
 | API Gateway | fashion-agent-gateway | Spring Cloud Gateway, Redis 사용량 제한 | 라우팅·JWT 필터·사용량 제한을 설정으로 처리 | Nginx, 발표 전엔 agent에 Spring Security만 |
 | account · 회원정보 | fashion-agent-gateway | Spring Security, Firebase Admin(ID 토큰 검증), Spring Data JPA | Apple·구글 로그인과 기기 이전용 계정 연결은 Firebase가, 서버는 확인만 ([ACCOUNT.md](ACCOUNT.md)) | OAuth2 + 자체 JWT, Keycloak |
 | agent | fashion-agent-agent | Spring AI ChatClient, MCP 클라이언트, Gemini 3.5 Flash, ChatMemory | MCP 서버와 같은 프레임워크, 서버 목록만 적으면 도구가 붙음 | LangChain4j, Google Gen AI Java SDK |
@@ -44,18 +44,26 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 
 ## 기능 구분
 
-중심 기능은 **옷 추천(옷 검사)** 하나입니다. MCP 서버들은 데이터만 돌려주고, agent가 모은 데이터를 Gemini에 넘겨 판단과 추천을 맡깁니다. 날씨 묻기, 일정 등록, 얼굴 확인(face-check), 가족·친구에게 확인 요청(helper)은 따로 부르는 개별 기능입니다.
+중심 기능은 **옷 추천** 하나입니다. MCP 서버들은 데이터만 돌려주고, agent가 모은 데이터를 Gemini에 넘겨 판단과 추천을 맡깁니다. 날씨 묻기, 일정 등록, 얼굴 확인(face-check), 가족·친구에게 확인 요청(helper)은 따로 부르는 개별 기능입니다.
 
-## "옷 검사해 줘" 요청 흐름
+## 옷 추천 흐름 (2단계)
 
-1. 앱이 말을 글자로 바꾸고(STT), 펼쳐 놓은 옷을 찍습니다.
-2. `POST /api/v1/agent/turn`으로 사진·위치·토큰을 보내면 게이트웨이가 토큰과 사용량을 확인하고 agent로 넘깁니다.
-3. agent가 `clothes_inspect`로 옷 종류·색·격식·얼룩/찢어짐 위치를 받습니다. 어둡거나 잘렸으면 다시 찍어 달라고 합니다.
-4. agent가 동시에 데이터를 모읍니다: 오늘 날씨(`weather_today`), 오늘 일정과 장소 종류(`schedule_list`), (선택) 내 옷장 후보와 코디 지식(`closet_search`, RAG 검색).
-5. 모은 JSON과 판단 기준을 Gemini에 한 번 넘기면, Gemini가 일정·날씨에 맞는지, 얼룩을 어떻게 알릴지, 옷장에서 무엇을 더하면 좋을지 정해 정해진 JSON 모양으로 돌려줍니다.
-6. agent가 그 안의 안내 문장을 돌려주면 앱이 읽어 줍니다.
+사용자는 사진을 찍지 않습니다. 먼저 말로 추천을 듣고, 자기 방식대로 꺼낸 옷을 카메라에 보여 주면 알아서 판단해 줍니다.
 
-자세한 Gemini 입력·출력 모양은 [contracts/README.md 5절](contracts/README.md#5-기능-구분과-agent-처리-방법)에 있습니다.
+**1단계: 말로 추천** ("오늘 뭐 입지?")
+1. agent가 동시에 데이터를 모읍니다: 오늘 날씨(`weather_today`), 오늘 일정과 장소 종류(`schedule_list`), (선택) 내 옷장 후보와 코디 지식(`closet_search`, RAG 검색).
+2. Gemini가 "오늘은 체감 9도에 오전 면접이 있어요. 어두운 슬랙스에 셔츠, 겉옷을 추천드려요."처럼 추천하고, 앱은 카메라를 켭니다.
+
+**2단계: 카메라 켜 두면 자동 판단**
+1. 앱이 폰 안에서 ML Kit로 매 순간 옷이 잘 보이는지 확인하고 "조금 왼쪽으로" 같은 구도 안내를 바로 합니다(서버 안 감, 비용 없음).
+2. 옷이 잘 들어와 1초 멈추면 그 순간 한 장을 자동으로 보냅니다. 사용자는 버튼을 누르지 않고, 사진은 저장하지 않습니다.
+3. agent가 `clothes_inspect`로 옷 종류·색·격식·위치·얼룩을 받고, 1단계 추천과 앞서 본 옷까지 Gemini에 넘깁니다.
+4. Gemini가 한 벌이면 "이 남색 셔츠는 면접에 좋아요. 겉옷도 보여 주세요.", 두 벌을 나란히 놓으면 "왼쪽 흰 셔츠가 더 단정해요."처럼 답합니다.
+5. "이걸로 할게"라고 하면 본 옷과 입은 날을 옷장에 기록(`closet_save`, `closet_wear`)하고 마칩니다.
+
+왼쪽·오른쪽은 두 기준을 씁니다. 옷끼리 비교할 때는 사용자가 선 자리 기준(= 사진 기준), 옷 한 벌 안의 얼룩 위치는 입은 사람 기준입니다. Gemini 입력·출력 모양은 [contracts/README.md 5절](contracts/README.md#5-기능-구분과-agent-처리-방법)에 있습니다.
+
+**나중에(발표 후)**: 학습한 얼룩 모델을 Core ML로 바꿔 폰 안에서 돌리면 얼룩 찾기까지 실시간이 됩니다.
 
 ## 시작 순서 (제안)
 
@@ -72,15 +80,13 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 
 ```
 POST /api/v1/agent/turn   Authorization: Bearer <JWT>
-{ "sessionId": "s_42", "imageKind": "outfit", "image": "<base64 JPEG>", "location": { "lat": 37.56, "lon": 126.97 } }
-→ { "speech": "…", "next": "done", "result": { "type": "outfit_check", "outfitCheck": { … } } }
+1단계 { "utterance": "오늘 뭐 입지?", "location": {…} }
+      → { "speech": "…추천드려요…", "next": "camera_outfit", "result": { "type": "outfit_advice", … } }
+2단계 { "sessionId": "s_42", "imageKind": "outfit", "image": "<자동 전송 한 장>", "autoCaptured": true }
+      → { "speech": "왼쪽 흰 셔츠가…", "next": "camera_outfit", "result": { "type": "outfit_check", … } }
 
-옷 추천 흐름 (데이터 → Gemini 판단)
-clothes_inspect(image)                  → ClothesScan + source
-weather_today(lat, lon)                 → { apparentTemperature, dailyRange, precipitationProbability, … }
-schedule_list(userId, today)            → { events: [{ title, start, place, placeCategory, occasion }] }
-closet_search(userId, situation)        → { candidates, styleNotes }   (선택, RAG 검색)
-Gemini(위 JSON + 판단 기준)              → { schedule, weather, damage, recommendations, speech }
+1단계 데이터: weather_today, schedule_list, closet_search(선택) → Gemini(추천 모드) → { suggestions, closetPicks, speech }
+2단계 데이터: clothes_inspect(한 장)                         → Gemini(확인 모드) → { verdicts, comparison, damage, stillMissing, speech }
 
 개별 기능
 face_check(image) / schedule_add(…) / helper_ask(userId, contactId, image, question)

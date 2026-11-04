@@ -66,7 +66,7 @@
 
 - 앱: Flutter (아이폰 우선, Android·웹은 이후)
 - 음성 안내: flutter_tts / 음성 인식: speech_to_text (iOS Speech, 한국어)
-- 카메라: camera
+- 카메라: camera (이미지 스트림) + ML Kit 물체 인식으로 구도 실시간 안내·자동 전송 (예정)
 - 날씨: Open-Meteo (API 키 없음)
 - 옷 분석: 지금은 비전 LLM (앱 → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) 서버 → Gemini). 자체 학습 모델로 바꾸는 중
 - 저장: shared_preferences (옷 설명만, 사진은 저장 안 함)
@@ -160,6 +160,7 @@ DB: 계정, 회원정보, 일정, 옷장 (PostgreSQL + pgvector)
 | 2026-11-04 | 옷장 추천(mcp-closet)은 **RAG**로 |
 | 2026-11-04 | 한 명이 레포 하나씩 맡아 진행 |
 | 2026-11-04 | 중심 기능은 옷 추천: MCP 서버(옷 상태·날씨·일정·옷장)가 데이터를 주고 Gemini가 판단·추천. 얼굴 확인과 가족 확인 요청은 개별 기능 |
+| 2026-11-04 | 옷 추천은 2단계: 날씨·일정으로 먼저 말로 추천 → 사용자가 꺼낸 옷을 카메라에 보여 주면 자동 판단(사진 찍기 버튼 없음, 폰이 구도를 실시간 안내하고 잘 들어오면 한 장 자동 전송). 두 벌을 나란히 놓으면 "왼쪽이 더 나아요"처럼 비교 |
 
 아직 안 정한 것: 담당자 배정, 레포별 추천 기술 최종 확인([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)의 추천 기준), 학습 데이터 수집 방법.
 

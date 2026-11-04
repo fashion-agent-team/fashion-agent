@@ -116,22 +116,28 @@ paths:
   /api/v1/agent/turn:
     post:
       tags: [agent]
-      summary: 대화 한 번 (말 + 선택적으로 사진)
+      summary: 대화 한 번 (말 또는 자동 전송된 사진 한 장)
       description: |
         앱은 받은 speech를 읽어 주고, next에 따라 다음 동작을 합니다.
         - listen: 바로 듣기 시작
-        - camera_outfit / camera_face: 카메라를 켜고 찍으면 같은 sessionId로 image와 imageKind를 보냄
-        - done: 대기 화면으로
+        - camera_outfit / camera_face: 카메라를 켜 둔 채로 유지. 앱이 ML Kit로 구도를 실시간 안내하고,
+          옷(얼굴)이 잘 들어와 1초 멈추면 한 장을 자동으로 같은 sessionId, image, imageKind로 보냄.
+          사용자는 버튼을 누르지 않음. 카메라가 켜진 동안에도 말하기("이걸로 할게", "됐어")는 받음
+        - done: 카메라를 끄고 대기 화면으로
+        옷 추천은 2단계입니다: 말로 추천(result.type=outfit_advice, next=camera_outfit) →
+        보여 준 옷마다 판단(result.type=outfit_check, next=camera_outfit) → "이걸로 할게"(next=done).
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/TurnRequest' }
             examples:
-              말로 시작:
-                value: { utterance: "옷 검사해 줘", location: { lat: 37.5665, lon: 126.978, locationFallback: false } }
-              사진 보내기:
-                value: { sessionId: "s_42", imageKind: outfit, image: "<base64 JPEG>", location: { lat: 37.5665, lon: 126.978 } }
+              1단계 말로 시작:
+                value: { utterance: "오늘 뭐 입지?", location: { lat: 37.5665, lon: 126.978, locationFallback: false } }
+              2단계 자동 전송:
+                value: { sessionId: "s_42", imageKind: outfit, image: "<base64 JPEG>", autoCaptured: true, location: { lat: 37.5665, lon: 126.978 } }
+              마무리:
+                value: { sessionId: "s_42", utterance: "이걸로 할게" }
       responses:
         '200':
           description: OK
@@ -139,22 +145,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/TurnResponse' }
               examples:
-                카메라 켜기:
-                  value: { sessionId: "s_42", speech: "입을 옷을 펼쳐 놓고 폰을 위에서 비춰 주세요. 준비되면 위쪽 버튼을 누르세요.", next: camera_outfit, result: null }
-                옷 검사 결과:
+                1단계 추천:
                   value:
                     sessionId: "s_42"
-                    speech: "차콜 그레이 니트와 남색 슬랙스예요. 오늘 면접에 잘 맞아요. 일교차가 11도라 옷장의 회색 자켓을 걸치면 좋겠어요. 얼룩이나 찢어진 곳은 보이지 않아요."
-                    next: done
+                    speech: "오늘은 체감 9도에 오전 면접이 있어요. 어두운 슬랙스에 셔츠, 겉옷으로 옷장의 회색 자켓을 추천드려요. 옷을 꺼내서 카메라에 보여 주세요."
+                    next: camera_outfit
+                    result:
+                      type: outfit_advice
+                      outfitAdvice:
+                        suggestions:
+                          - { category: top, text: "셔츠나 단정한 니트", reason: "면접이라 단정한 상의가 좋아요." }
+                          - { category: outer, text: "자켓", reason: "일교차가 11도라 겉옷이 필요해요." }
+                        closetPicks: [{ garmentId: c_21, reason: "옷장에 있는 회색 자켓이 잘 맞아요." }]
+                2단계 두 벌 비교:
+                  value:
+                    sessionId: "s_42"
+                    speech: "왼쪽 흰 셔츠가 오른쪽 체크 셔츠보다 면접에 더 단정해요. 겉옷도 보여 주세요."
+                    next: camera_outfit
                     result:
                       type: outfit_check
                       outfitCheck:
                         garments: []
-                        schedule: { ok: true, notes: [], event: { title: "면접", start: "2026-11-04T10:00:00+09:00", occasion: formal } }
-                        weather: { ok: false, notes: ["일교차가 11도라 겉옷을 챙기세요."] }
-                        damage: { ok: true, notes: [] }
+                        verdicts:
+                          - { inputId: g1, position: left, fit: good, notes: ["면접에 단정해 보여요."] }
+                          - { inputId: g2, position: right, fit: bad, notes: ["체크무늬는 면접에 조금 가벼워 보여요."] }
+                        comparison: { betterInputId: g1, reason: "흰 셔츠가 면접에 더 단정해요." }
+                        damage: []
+                        stillMissing: [outer]
                         retake: null
-                        recommendations: [{ garmentId: c_21, name: 자켓, colorName: 회색, reason: "옷장에 있는 회색 자켓을 걸치면 면접에도 맞고 따뜻해요." }]
                         source: model
         '400': { $ref: '#/components/responses/Error' }
         '413': { $ref: '#/components/responses/Error' }
@@ -276,6 +294,7 @@ components:
         utterance: { type: string, nullable: true, description: STT 결과. 사진만 보낼 때는 비움 }
         image: { type: string, format: byte, nullable: true, description: "JPEG base64, 최대 약 6MB" }
         imageKind: { type: string, enum: [outfit, face], nullable: true }
+        autoCaptured: { type: boolean, default: true, description: 앱이 구도를 보고 자동으로 보낸 사진이면 true }
         faceLandmarks: { type: object, nullable: true, description: imageKind=face일 때 ML Kit 윤곽점 (mcp-tools.md의 landmarks) }
         location: { $ref: '#/components/schemas/Location' }
 
@@ -291,39 +310,61 @@ components:
           type: object
           description: 화면·기록용 구조화 결과. 앱은 speech만 읽어도 동작해야 함
           properties:
-            type: { type: string, enum: [outfit_check, face_check, weather, schedule, helper] }
+            type: { type: string, enum: [outfit_advice, outfit_check, face_check, weather, schedule, helper] }
+            outfitAdvice: { $ref: '#/components/schemas/OutfitAdvice' }
             outfitCheck: { $ref: '#/components/schemas/OutfitCheck' }
 
-    OutfitCheck:
+    OutfitAdvice:
       type: object
+      description: 1단계 말로 추천 (사진 없이 날씨·일정·옷장으로)
       properties:
-        garments: { type: array, items: { $ref: '#/components/schemas/Garment' } }
-        schedule:
-          type: object
-          properties:
-            ok: { type: boolean }
-            notes: { type: array, items: { type: string } }
-            event: { $ref: '#/components/schemas/ScheduleEvent' }
-        weather: { $ref: '#/components/schemas/CheckPart' }
-        damage: { $ref: '#/components/schemas/CheckPart' }
-        retake: { type: string, nullable: true, description: "다시 찍어야 하는 이유 (어두움, 잘림)" }
-        recommendations:
+        suggestions:
           type: array
-          description: 옷장에서 고른 추천 (closet_search 후보 안에서만). 옷장이 비면 빈 배열
+          items:
+            type: object
+            properties:
+              category: { type: string, enum: [top, bottom, outer, dress, shoes, other] }
+              text: { type: string }
+              reason: { type: string }
+        closetPicks:
+          type: array
+          description: 옷장에서 고른 옷 (closet_search 후보 안에서만). 옷장이 비면 빈 배열
           items:
             type: object
             properties:
               garmentId: { type: string }
-              name: { type: string }
-              colorName: { type: string }
               reason: { type: string }
-        source: { type: string, enum: [model, gemini] }
 
-    CheckPart:
+    OutfitCheck:
       type: object
+      description: 2단계 자동 전송된 한 장에 대한 판단. 옷이 두 벌 이상이면 비교 포함
       properties:
-        ok: { type: boolean }
-        notes: { type: array, items: { type: string } }
+        garments: { type: array, items: { $ref: '#/components/schemas/Garment' } }
+        verdicts:
+          type: array
+          items:
+            type: object
+            properties:
+              inputId: { type: string }
+              position: { type: string, enum: [left, center, right] }
+              fit: { type: string, enum: [good, ok, bad] }
+              notes: { type: array, items: { type: string } }
+        comparison:
+          type: object
+          nullable: true
+          properties:
+            betterInputId: { type: string }
+            reason: { type: string }
+        damage:
+          type: array
+          items:
+            type: object
+            properties:
+              inputId: { type: string }
+              say: { type: string }
+        stillMissing: { type: array, items: { type: string, enum: [top, bottom, outer, dress, shoes, other] }, description: 1단계 추천 중 아직 안 보여 준 것 }
+        retake: { type: string, nullable: true, description: "다시 보여 달라는 이유 (어두움, 잘림)" }
+        source: { type: string, enum: [model, gemini] }
 
     Garment:
       type: object
@@ -353,6 +394,7 @@ components:
           type: object
           nullable: true
           properties: { x: { type: number }, y: { type: number }, w: { type: number }, h: { type: number } }
+        position: { type: string, enum: [left, center, right], description: 사용자(사진) 기준 화면 위치 }
         confidence: { type: number }
 
     ScheduleEvent:
