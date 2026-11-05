@@ -1,6 +1,10 @@
 <!--
 Sync Impact Report
-- Version: (template) → 1.0.0
+- Version: 1.0.0 → 1.1.0 (2026-11-04)
+  - 기술 제약: AI를 Gemini에서 GPT(OpenAI)로 바꿈 (원칙 III·IV·V의 "Gemini" → "GPT")
+  - 기술 제약: DB 마이그레이션 규칙 추가 (specs/005-database)
+  - 원칙 IV: agent Redis 세션의 직전 사진(10분)을 예외로 명시 (contracts 5-2절에서 이미 합의한 동작)
+- 이전: (template) → 1.0.0
 - Added: 원칙 I~V, 기술 제약, 작업 방식, 거버넌스 (모두 새로 작성)
 - Source: docs/contracts/README.md (PR #12), docs/GITFLOW.md, docs/infra/DB.md
 - Templates: plan/spec/tasks 템플릿은 그대로 사용 (수정 불필요)
@@ -26,26 +30,27 @@ Sync Impact Report
 ### III. 서비스 경계를 지킨다
 
 - 서비스마다 DB 스키마 하나를 가진다. 다른 서비스의 스키마를 직접 읽지 않고, 그 서비스의 API나 MCP 도구를 부른다.
-- MCP 서버는 데이터만 돌려준다. "이 옷이 오늘 맞는가" 같은 판단과 추천은 agent가 Gemini에 맡긴다.
+- MCP 서버는 데이터만 돌려준다. "이 옷이 오늘 맞는가" 같은 판단과 추천은 agent가 GPT에 맡긴다.
 - 앱이 부르는 곳은 게이트웨이 하나뿐이다. 뒤쪽 서비스는 밖에 포트를 열지 않는다.
 
 ### IV. 개인정보를 최소로 다룬다
 
-- 사진은 어떤 서비스도 저장하지 않는다. 유일한 예외는 가족 확인 요청 사진을 24시간 동안만 두는 것이다.
-- 사용자 id는 게이트웨이가 확인한 값만 쓴다. Gemini나 앱이 보낸 값을 믿지 않는다(남의 일정·옷장 접근 차단).
+- 사진은 어떤 서비스도 저장하지 않는다. 예외는 둘뿐이다: 가족 확인 요청 사진을 R2에 24시간, 그리고 agent가 "가족에게 물어봐 줘"용으로 직전 사진 한 장을 Redis 대화 세션에 두는 것(10분만 쓰고 세션과 함께 30분 안에 사라짐, Redis는 디스크에 저장하지 않음).
+- 사용자 id는 게이트웨이가 확인한 값만 쓴다. GPT나 앱이 보낸 값을 믿지 않는다(남의 일정·옷장 접근 차단).
 - 로그에 사진, 토큰, 전화번호를 남기지 않는다. 비밀 값은 레포에 넣지 않는다.
 
 ### V. 발표에서 매번 같게 동작한다
 
 - 발표(2026-11-20)까지 범위를 지킨다. 새 기능보다 정해진 흐름이 안정적으로 도는 것이 먼저다.
-- 데이터를 모으는 순서는 코드로 정한다(옷 추천 흐름에서는 Gemini가 도구를 고르지 않는다).
+- 데이터를 모으는 순서는 코드로 정한다(옷 추천 흐름에서는 GPT가 도구를 고르지 않는다).
 - 가장 단순한 방법을 먼저 쓴다. 필요가 증명되기 전에는 서비스·테이블·설정을 늘리지 않는다.
 
 ## 기술 제약
 
 - 서버: Java 21, Spring Boot 4.0.9, Spring Cloud Gateway 2025.1.4, Spring AI 2.0.2(MCP 서버는 Streamable HTTP `/mcp`).
-- 저장소: PostgreSQL 16 + pgvector 하나(서비스마다 스키마), Redis(사용량 제한, 대화 상태). 설계는 `docs/infra/DB.md`.
-- AI: Gemini(구조화 출력, temperature 0.2). 앱: Flutter(iOS·Android).
+- 저장소: PostgreSQL 16 + pgvector 하나(서비스마다 스키마), Redis(사용량 제한, 대화 상태). 설계는 `docs/infra/DB.md`와 `specs/005-database/data-model.md`.
+- DB 변경은 서비스마다 Flyway 마이그레이션(`V<n>__<설명>.sql`)으로만 한다. 머지된 마이그레이션 파일은 고치지 않고 새 버전을 더한다. 팀이 합의한 설계본은 `docs/infra/db/<서비스>/`에 두고, 각 서비스 레포의 `db/migration/`과 내용이 같아야 한다.
+- AI: GPT(OpenAI, Spring AI OpenAI, 구조화 출력, temperature 0.2). Gemini는 쓰지 않는다(2026-11-04 결정). 앱: Flutter(iOS·Android).
 - 시간은 시간대까지 적은 ISO-8601, 서버 기본 시간대 Asia/Seoul. 오류 응답은 `{"error":{"code","message"}}`.
 
 ## 작업 방식
@@ -60,4 +65,4 @@ Sync Impact Report
 - 버전: 원칙을 빼거나 뜻을 바꾸면 MAJOR, 원칙·절을 더하면 MINOR, 문구만 고치면 PATCH.
 - 리뷰할 때 spec과 코드가 원칙 I~V를 어기지 않는지 확인한다.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-04 | **Last Amended**: 2026-11-04
+**Version**: 1.1.0 | **Ratified**: 2026-11-04 | **Last Amended**: 2026-11-04

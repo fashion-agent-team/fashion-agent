@@ -89,7 +89,7 @@ MCP 서버는 Streamable HTTP로 `http://<서비스>:<포트>/mcp`를 엽니다.
 | 404 | `not_found` | 없는 일정·옷·요청 |
 | 413 | `image_too_large` | 사진이 약 6MB 넘음 |
 | 429 | `rate_limited` | 사용량 제한 (사용자당 분당 30회, 사진 요청은 분당 10회로 시작) |
-| 502 | `upstream_failed` | GPT·카카오·문자 등 바깥 서비스 실패 |
+| 502 | `upstream_failed` | OpenAI·카카오·문자 등 바깥 서비스 실패 |
 | 504 | `upstream_timeout` | 25초 안에 답 없음 |
 
 앱은 200이 아니면 `message`를 읽지 않고, 정해진 한국어 안내("지금은 분석하지 못했어요. 다시 해 볼까요?")를 말합니다. `message`는 개발자용입니다.
@@ -155,7 +155,7 @@ MCP 서버는 Streamable HTTP로 `http://<서비스>:<포트>/mcp`를 엽니다.
 - 얼룩·찢어짐: 확신도 0.7 이상은 할 일(빨기·수선·바꾸기)과 대신 입을 옷을 말하고, 0.7 미만은 `check`(확실하지 않으니 중요한 자리면 바꾸기). 위치는 묻기 전엔 말하지 않기.
 - 옷장 추천은 `closetCandidates` 안의 옷만. 없는 옷을 지어내지 않기.
 - 말투: 존댓말, 이유를 붙여서, 3문장 이내(듣는 중에 옷을 바꾸므로 짧게).
-- 구조화 출력(responseSchema)으로 받고 `temperature`는 0.2.
+- JSON Schema 구조화 출력(Structured Outputs)으로 받고 `temperature`는 0.2.
 
 **1단계 GPT 입력 → 출력 (추천 모드)**
 
@@ -227,16 +227,16 @@ GPT가 실패하거나 25초 안에 답이 없으면 agent는 위 판단 기준�
 
 ## 7. DB 나누기
 
-PostgreSQL 하나에 **서비스마다 스키마 하나**를 둡니다. 다른 서비스 스키마를 직접 읽지 않습니다. 필요하면 그 서비스의 도구나 API를 부릅니다. 모든 테이블에 `user_id uuid`, `created_at`, `updated_at`을 둡니다.
+PostgreSQL 하나에 **서비스마다 스키마 하나**를 둡니다. 다른 서비스 스키마를 직접 읽지 않습니다. 필요하면 그 서비스의 도구나 API를 부릅니다. 사용자 데이터 표마다 `user_id uuid`, 모든 표에 `created_at`, `updated_at`을 둡니다(공용 코디 지식 `closet.style_docs`는 Spring AI 표 모양이라 둘 다 없음). 설계는 [specs/005-database](../../specs/005-database/data-model.md), 서비스별 Flyway 마이그레이션은 [docs/infra/db/](../infra/db/README.md)에 있습니다.
 
 | 스키마 | 주인 | 테이블 (초안) |
 | --- | --- | --- |
-| `account` | gateway | `users`(id, firebase_uid, provider), `profiles`(이름·생년월일·성별·직업·키·몸무게·agent_name, 모두 null 가능), `push_tokens` |
+| `account` | gateway | `users`(id, firebase_uid, provider), `profiles`(이름·생년월일·성별·직업·키·몸무게·agent_name, 모두 null 가능), `push_tokens`, `refresh_tokens` |
 | `schedule` | mcp-schedule | `events`(title, start_at, place, place_category, occasion, notified_at) |
-| `closet` | mcp-closet | `garments`(설명 JSONB, embedding vector(384), first_seen, last_seen), `wears`(garment_id, worn_on), `style_docs`(코디 지식 문서, embedding) |
+| `closet` | mcp-closet | `garments`(설명 JSONB, embedding vector(384), first_seen, last_seen), `wears`(garment_id, worn_on), `style_docs`(코디 지식, Spring AI PgVectorStore 모양: content, metadata, embedding) |
 | `helper` | mcp-helper | `contacts`(name, phone, relation), `requests`(contact_id, question, image_key, token, status, answer, expires_at) |
 
-agent는 DB를 쓰지 않고, 대화 상태(직전 질문, 직전 사진 10분 등)를 Redis에 30분 둡니다.
+agent는 DB를 쓰지 않고, 대화 상태(직전 질문, 직전 사진 10분 등)를 Redis에 30분 둡니다(키: [redis-keys.md](../../specs/005-database/contracts/redis-keys.md)).
 
 ## 8. 첫날 체크리스트
 
