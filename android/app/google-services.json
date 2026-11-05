@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "156130892918",
+    "project_id": "fashion-agent-7631d",
+    "storage_bucket": "fashion-agent-7631d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:156130892918:android:0b8a1f7278b18c5dc61357",
+        "android_client_info": {
+          "package_name": "com.fashionagent.fashion_agent"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "156130892918-58g62rvfnbu8l3ul8kve778s4thv6vdk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsVYtEBl7g1CwkMi4J1DgV8Zw6ZczAYJE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "156130892918-58g62rvfnbu8l3ul8kve778s4thv6vdk.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "156130892918-5v0e3nr35atra7clpu1b1rbksdrk1aeo.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.fashionagent.fashionAgent"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
