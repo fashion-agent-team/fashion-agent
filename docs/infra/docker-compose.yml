@@ -29,6 +29,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]   # 세션의 사진이 디스크에 남지 않게
     ports: ["6379:6379"]
 
   gateway:
