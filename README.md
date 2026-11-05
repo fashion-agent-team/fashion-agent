@@ -68,13 +68,14 @@
 - 음성 안내: flutter_tts / 음성 인식: speech_to_text (iOS Speech, 한국어)
 - 카메라: camera (이미지 스트림) + ML Kit 물체 인식으로 구도 실시간 안내·자동 전송 (예정)
 - 날씨: Open-Meteo (API 키 없음)
-- 옷 분석: 지금은 비전 LLM (앱 → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) 서버 → Gemini). 자체 학습 모델로 바꾸는 중
+- 옷 분석: 지금은 비전 LLM (앱 → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) 서버 → Gemini). 자체 학습 모델로 바꾸는 중이고, 예비 서버의 Gemini도 GPT로 옮길 예정
 - 저장: shared_preferences (옷 설명만, 사진은 저장 안 함)
 - 백엔드 언어: **Java** (2026-11-04 확정)
 - API Gateway: **Spring Cloud Gateway** (2026-11-04 확정)
 - agent · MCP 서버: Spring AI (ChatClient + MCP 클라이언트 / Spring AI MCP Server)
-- 옷 상태·얼굴 확인: **자체 학습 모델**(YOLO·분류 모델을 ONNX로 서버에서 실행), 애매할 때만 Gemini (2026-11-04 확정)
-- 옷장 추천: **RAG** (pgvector + 임베딩 + Gemini 답변) (2026-11-04 확정)
+- 판단·추천 LLM: **GPT (OpenAI)**, Gemini는 쓰지 않음 (2026-11-04 확정)
+- 옷 상태·얼굴 확인: **자체 학습 모델**(YOLO·분류 모델을 ONNX로 서버에서 실행), 애매할 때만 GPT 비전 (2026-11-04 확정)
+- 옷장 추천: **RAG** (pgvector + 임베딩 + GPT 답변) (2026-11-04 확정)
 - DB: PostgreSQL + pgvector / 배포: Docker Compose
 
 레포별 기술과 고른 이유는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 있습니다.
@@ -115,10 +116,10 @@ flutter test
 | --- | --- | --- | --- | --- |
 | [fashion-agent](https://github.com/fashion-agent-team/fashion-agent) | 앱 (Flutter) | - | Flutter, ML Kit, Firebase Auth, FCM | 미정 |
 | [fashion-agent-gateway](https://github.com/fashion-agent-team/fashion-agent-gateway) | 입구: 로그인 확인·JWT·사용량 제한, 계정·회원정보 | 8080 | Spring Cloud Gateway, Spring Security, Redis | 미정 |
-| [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | 대화, MCP에서 데이터 모아 Gemini로 판단·추천 | 8081 | Spring AI(ChatClient, MCP 클라이언트), Gemini | 이진행 |
+| [fashion-agent-agent](https://github.com/fashion-agent-team/fashion-agent-agent) | 대화, MCP에서 데이터 모아 GPT로 판단·추천 | 8081 | Spring AI(ChatClient, MCP 클라이언트), GPT(OpenAI) | 이진행 |
 | [mcp-weather](https://github.com/fashion-agent-team/mcp-weather) | 오늘 날씨·일교차 데이터 | 8091 | Spring AI MCP 서버, Open-Meteo | 박창근 |
 | [mcp-schedule](https://github.com/fashion-agent-team/mcp-schedule) | 일정 저장·조회, 장소 종류 | 8092 | Spring AI MCP 서버, 카카오 로컬, PostgreSQL | 정지원 |
-| [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진에서 종류·색·얼룩·찢어짐 찾기 | 8093 | YOLO+FashionCLIP(ONNX Runtime Java), Gemini 폴백 | 미정 |
+| [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진에서 종류·색·얼룩·찢어짐 찾기 | 8093 | YOLO+FashionCLIP(ONNX Runtime Java), GPT 비전 폴백 | 미정 |
 | [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 화장 대칭·이에 낀 것 확인 | 8094 | ML Kit 윤곽점 규칙, 치아 분류 모델 | 미정 |
 | [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 내 옷 기록, 비슷한 옷·코디 찾기(RAG) | 8095 | pgvector, multilingual-e5 임베딩 | 미정 |
 | [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | 사용자가 원할 때 가족·친구에게 사진 확인 요청 | 8096 | 문자 API, 웹 답장 링크, FCM | 미정 |
@@ -134,10 +135,10 @@ flutter test
   └─ REST ─▶ API Gateway (Spring Cloud Gateway)
                ├─ account: 기존 회원 / Apple·구글 로그인
                ├─ 회원정보: 이름·생년월일·성별·직업·키·몸무게 (건너뛰기 가능)
-               └─ agent (Gemini가 어떤 기능을 쓸지 고름)
+               └─ agent (GPT가 어떤 기능을 쓸지 고름)
                     ├─ MCP weather       날씨, 옷 두께·재질
                     ├─ MCP schedule      일정, 장소 분위기
-                    ├─ MCP clothes_state 옷 이물질·이염·찢어짐 (자체 학습 YOLO, 애매하면 Gemini)
+                    ├─ MCP clothes_state 옷 이물질·이염·찢어짐 (자체 학습 YOLO, 애매하면 GPT 비전)
                     ├─ MCP face_check    화장 대칭, 이에 낀 음식물 (윤곽점 규칙 + 치아 분류 모델)
                     ├─ MCP closet        전용 옷장, RAG로 추천
                     └─ MCP helper        지인 확인 요청
@@ -162,6 +163,8 @@ DB: 계정, 회원정보, 일정, 옷장 (PostgreSQL + pgvector)
 | 2026-11-04 | 옷장 추천(mcp-closet)은 **RAG**로 |
 | 2026-11-04 | 한 명이 레포 하나씩 맡아 진행 |
 | 2026-11-04 | 중심 기능은 옷 추천: MCP 서버(옷 상태·날씨·일정·옷장)가 데이터를 주고 Gemini가 판단·추천. 얼굴 확인과 가족 확인 요청은 개별 기능 |
+| 2026-11-04 | 판단·추천 LLM을 Gemini에서 **GPT**(OpenAI)로 전부 바꿈: agent 판단·도구 선택, closet 답변, 옷 상태 폴백. 이유: Gemini 무료 등급 하루 20회 한도, 이미 충전한 OpenAI 크레딧 |
+| 2026-11-04 | DB 설계를 Spec Kit으로 통합([specs/005-database](specs/005-database/spec.md)): 서비스별 스키마 4개, 서비스별 Flyway V1 마이그레이션([docs/infra/db/](docs/infra/db/README.md)) |
 | 2026-11-04 | 옷 추천은 2단계: 날씨·일정으로 먼저 말로 추천 → 사용자가 꺼낸 옷을 카메라에 보여 주면 자동 판단(사진 찍기 버튼 없음, 폰이 구도를 실시간 안내하고 잘 들어오면 한 장 자동 전송). 두 벌을 나란히 놓으면 "왼쪽이 더 나아요"처럼 비교 |
 
 아직 안 정한 것: 담당자 배정, 레포별 추천 기술 최종 확인([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)의 추천 기준), 학습 데이터 수집 방법.

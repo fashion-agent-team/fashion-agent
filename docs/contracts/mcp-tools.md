@@ -1,18 +1,18 @@
 # MCP 도구 입출력
 
-agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Spring AI MCP Server(Streamable HTTP, `/mcp`)로 만들고, 메서드에 `@Tool`을 붙입니다. 도구 설명(`description`)은 Gemini가 읽고 고르는 근거라 **한국어로 언제 쓰는지까지** 적습니다.
+agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Spring AI MCP Server(Streamable HTTP, `/mcp`)로 만들고, 메서드에 `@Tool`을 붙입니다. 도구 설명(`description`)은 GPT가 읽고 고르는 근거라 **한국어로 언제 쓰는지까지** 적습니다.
 
-**MCP 서버는 데이터만 돌려줍니다.** "이 옷이 오늘 일정·날씨에 맞는가" 같은 판단과 추천은 agent가 Gemini에 맡깁니다(흐름과 Gemini 입출력은 [README.md 5절](README.md#5-기능-구분과-agent-처리-방법)).
+**MCP 서버는 데이터만 돌려줍니다.** "이 옷이 오늘 일정·날씨에 맞는가" 같은 판단과 추천은 agent가 GPT에 맡깁니다(흐름과 GPT 입출력은 [README.md 5절](README.md#5-기능-구분과-agent-처리-방법)).
 
 공통:
 
-- `userId`가 있는 도구는 agent가 `X-User-Id` 값으로 덮어써서 넣습니다. Gemini가 채운 값은 쓰지 않습니다.
+- `userId`가 있는 도구는 agent가 `X-User-Id` 값으로 덮어써서 넣습니다. GPT가 채운 값은 쓰지 않습니다.
 - 실패하면 도구 결과로 `{"error": {"code", "message"}}`를 돌려줍니다(예외를 그대로 던지지 않기). agent가 이걸 보고 사용자에게 안내합니다.
 - 사람에게 읽어 줄 문장(`spokenSummary` 등)은 한국어 존댓말 한 문장씩.
 
 ## 공통 모양: Garment
 
-지금 앱의 `Garment`(lib/models/garment.dart)와 같은 모양입니다. clothes_inspect가 만들고, closet이 저장하며, agent가 Gemini에 넘깁니다.
+지금 앱의 `Garment`(lib/models/garment.dart)와 같은 모양입니다. clothes_inspect가 만들고, closet이 저장하며, agent가 GPT에 넘깁니다.
 
 ```json
 {
@@ -64,10 +64,10 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 
 ## mcp-schedule
 
-자리 종류(`occasion`)는 앱의 `lib/styling/schedule_rules.dart`와 같습니다. 일정의 데이터이고, 이 자리에 어떤 옷이 맞는지는 Gemini가 판단합니다: `mourning`(장례·조문) `wedding`(결혼식 하객) `formal`(면접·발표·상견례) `business`(회의·출근·수업) `active`(운동·등산) `casual`(그 밖).
+자리 종류(`occasion`)는 앱의 `lib/styling/schedule_rules.dart`와 같습니다. 일정의 데이터이고, 이 자리에 어떤 옷이 맞는지는 GPT가 판단합니다: `mourning`(장례·조문) `wedding`(결혼식 하객) `formal`(면접·발표·상견례) `business`(회의·출근·수업) `active`(운동·등산) `casual`(그 밖).
 
 ### `schedule_add`
-"다음 주 토요일 두 시에 친구 결혼식" 같은 말을 Gemini가 나눠서 부릅니다.
+"다음 주 토요일 두 시에 친구 결혼식" 같은 말을 GPT가 나눠서 부릅니다.
 
 입력
 ```json
@@ -97,7 +97,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ## mcp-clothes-state
 
 ### `clothes_inspect`
-옷 추천 2단계에서 앱이 자동으로 보낸 한 장마다 agent가 직접 부릅니다(Gemini가 고르지 않음). 한 장에 옷이 두 벌 이상 있을 수 있습니다(비교). 얼룩·찢어짐을 **찾는 것**까지 하고, 그걸 어떻게 말할지는 Gemini가 정합니다.
+옷 추천 2단계에서 앱이 자동으로 보낸 한 장마다 agent가 직접 부릅니다(GPT가 고르지 않음). 한 장에 옷이 두 벌 이상 있을 수 있습니다(비교). 얼룩·찢어짐을 **찾는 것**까지 하고, 그걸 어떻게 말할지는 GPT가 정합니다.
 
 입력 `{ "imageBase64": "<JPEG base64>" }`
 
@@ -107,11 +107,11 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "garments": [Garment, ...],
   "framing": null,              // 구도가 안 맞으면 "옷이 오른쪽에 잘렸어요. 폰을 오른쪽으로 조금 옮겨 주세요."
   "lighting": "ok",             // ok | dark
-  "source": "model",            // model(우리 모델) | gemini(폴백)
+  "source": "model",            // model(우리 모델) | gpt(폴백)
   "modelVersion": "yolo-defect-v1"
 }
 ```
-판단 기준: 우리 모델의 결함 확신도가 0.5~0.7 사이인 것이 있으면 그 사진만 Gemini에 다시 묻고 `source: "gemini"`. 0.7 이상은 그대로, 0.5 미만은 버립니다(첫 기준, 학습 후 조정).
+판단 기준: 우리 모델의 결함 확신도가 0.5~0.7 사이인 것이 있으면 그 사진만 GPT에 다시 묻고 `source: "gpt"`. 0.7 이상은 그대로, 0.5 미만은 버립니다(첫 기준, 학습 후 조정).
 
 ## mcp-face-check
 
@@ -149,7 +149,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 입력 `{ "userId": "…", "garmentIds": ["c_17", "c_03"], "date": "2026-11-04" }` → 출력 `{ "recorded": 2 }`
 
 ### `closet_search`
-RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(선택), 찾은 옷과 코디 지식을 Gemini에 넘기면 Gemini가 그 안에서만 골라 추천합니다(생성 단계).
+RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(선택), 찾은 옷과 코디 지식을 GPT에 넘기면 GPT가 그 안에서만 골라 추천합니다(생성 단계).
 
 입력
 ```json
