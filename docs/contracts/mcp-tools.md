@@ -187,9 +187,22 @@ RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(�
 ```
 출력 `{ "requestId": "r_9", "expiresAt": "2026-11-05T09:00:00+09:00", "sentTo": "엄마" }`
 
-사진을 R2에 24시간 두고, `https://<도메인>/h/<token>` 링크를 문자로 보냅니다. 가족이 웹 페이지에서 "괜찮아 / 얼룩 있어 / 직접 쓰기"로 답하면 저장하고 사용자에게 FCM 알림을 보냅니다.
+사진을 R2에 24시간 두고, `옷 확인 부탁해요 https://<도메인>/h/<token>` 한 줄을 SMS(90바이트 이하)로 보냅니다(솔라피). 질문은 문자에 넣지 않고 답장 페이지에서 보여 줍니다. 가족이 웹 페이지에서 "괜찮아 / 얼룩 있어 / 직접 쓰기"로 답하면 저장하고, 사진은 그때 바로 지웁니다. 답이 오지 않아도 24시간 뒤에 지웁니다.
+
+- 사진은 JPEG만, 약 6MB까지. 질문은 200자까지. 한 사용자가 한 시간에 10번까지 보낼 수 있습니다.
+- 오류 `code`: `bad_request`(userId·질문이 틀림), `no_image`, `bad_image`(JPEG 아님), `image_too_large`, `not_found`(등록하지 않은 contactId), `rate_limited`, `upstream_failed`(문자·R2 실패. 이때는 요청을 남기지 않음).
+- 답이 왔을 때 사용자에게 보내는 FCM 알림은 gateway가 생긴 뒤에 붙입니다(푸시 토큰이 gateway의 `account` 스키마에 있음). 그 전까지는 사용자가 "답 왔어?"라고 물으면 agent가 `helper_answer`로 확인합니다.
 
 ### `helper_answer`
 입력 `{ "userId": "…", "requestId": "r_9" }`
 
-출력 `{ "status": "answered", "answer": "얼룩 없어, 그림자야.", "answeredBy": "엄마", "answeredAt": "…" }` (`status`: pending | answered | expired)
+출력
+```json
+// 답이 왔을 때
+{ "requestId": "r_9", "status": "answered", "answer": "얼룩 없어, 그림자야.", "answeredBy": "엄마",
+  "answeredAt": "2026-11-04T14:20:00+09:00", "sentTo": "엄마", "expiresAt": "2026-11-05T09:00:00+09:00" }
+// 아직일 때
+{ "requestId": "r_9", "status": "pending", "answer": null, "answeredBy": null, "answeredAt": null,
+  "sentTo": "엄마", "expiresAt": "2026-11-05T09:00:00+09:00" }
+```
+`status`: pending | answered | expired. `answer`·`answeredBy`·`answeredAt`은 answered일 때만 값이 있고 나머지는 null입니다. `sentTo`·`expiresAt`은 항상 있어서, agent가 "엄마가 아직 답하지 않았어요. 내일 오전 9시까지 기다릴게요"처럼 말할 수 있습니다. 다른 사용자의 requestId면 `not_found`.
