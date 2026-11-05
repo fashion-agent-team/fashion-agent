@@ -122,7 +122,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 사진은 앱이 카메라 영상에서 구도가 맞는 순간 한 장면만 꺼내 보낸 것이고, 서버는 판단에만 쓰고 남기지 않습니다.
 
 ### `face_makeup_check`
-"얼굴 볼래" → 얼굴 전체가 들어오게 안내한 한 장. 화장 대칭(눈썹, 입술 선, 볼·입술 색 좌우)을 봅니다.
+"얼굴 볼래" → 앱이 얼굴을 실시간으로 비추며 구도를 안내하고, 잘 잡혀 1초 멈추면 그동안 찍은 3~5장을 보냅니다(2026-11-05 결정). 화장 대칭(눈썹, 입술 선, 볼·입술 색 좌우)을 장마다 재고 항목별 중간값으로 판단합니다. GPT는 쓰지 않습니다.
 
 입력
 ```json
@@ -131,9 +131,10 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
                  "leftEyebrowTop": [...], "leftEyebrowBottom": [...], "rightEyebrowTop": [...], "rightEyebrowBottom": [...],
                  "upperLipTop": [...], "upperLipBottom": [...], "lowerLipTop": [...], "lowerLipBottom": [...],
                  "face": [...], "noseBridge": [...], "noseBottom": [...], "leftCheek": [[x,y]], "rightCheek": [[x,y]],
-                 "yaw": 3.5, "roll": -2.0 } }
+                 "yaw": 3.5, "roll": -2.0 },
+  "frames": [ { "imageBase64": "…", "landmarks": { … } }, … ] }   // 같은 1초의 나머지 장면(최대 4개)
 ```
-`landmarks`는 앱 ML Kit 얼굴 인식 **윤곽(contour) 모드** 결과입니다. 키는 ML Kit `FaceContour` 상수 이름을 camelCase로(LEFT_EYEBROW_TOP → `leftEyebrowTop`), 점은 사진 크기를 1로 본 비율이고 셀카 방향으로 뒤집은 뒤 좌표입니다. `yaw`, `roll`은 `headEulerAngleY`, `headEulerAngleZ`(도). 꼭 필요한 것은 `leftEye`, `rightEye`, `leftEyebrowTop`, `rightEyebrowTop`, `upperLipTop`, `lowerLipBottom`이고, 나머지는 있으면 더 정확합니다. 서버는 이름의 left/right를 믿지 않고 두 눈의 x 위치로 왼쪽을 다시 정합니다. 필수 윤곽이 없으면 서버가 사진만으로(GPT 비전, `source: "gpt"`) 봅니다.
+`landmarks`는 앱 ML Kit 얼굴 인식 **윤곽(contour) 모드** 결과입니다. 키는 ML Kit `FaceContour` 상수 이름을 camelCase로(LEFT_EYEBROW_TOP → `leftEyebrowTop`), 점은 사진 크기를 1로 본 비율이고 셀카 방향으로 뒤집은 뒤 좌표입니다. `yaw`, `roll`은 `headEulerAngleY`, `headEulerAngleZ`(도). 꼭 필요한 것은 `leftEye`, `rightEye`, `leftEyebrowTop`, `rightEyebrowTop`, `upperLipTop`, `lowerLipBottom`이고, 나머지는 있으면 더 정확합니다. 서버는 이름의 left/right를 믿지 않고 두 눈의 x 위치로 왼쪽을 다시 정합니다. 필수 윤곽이 없으면 `{"error": {"code": "no_landmarks"}}`(다시 찍기)입니다. 윤곽점은 위치를 잡는 데만 쓰고, 그려진 눈썹·입술 모양과 색은 사진 픽셀에서 잽니다(윤곽점은 그린 화장선을 따라가지 않음). "얼마나 다르면 비대칭인가" 기준값은 라벨 붙인 셀카로 학습합니다(mcp-face-check `training/`).
 
 출력
 ```json
@@ -144,12 +145,13 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
     "ok": false,
     "notes": ["왼쪽 눈썹이 오른쪽보다 조금 짧게 그려졌어요."],   // 차이가 큰 순서로 최대 3개, agent가 그대로 읽음
     "checks": [{ "name": "browLength", "side": "right", "value": 0.21, "limit": 0.15, "ok": false }, ...],  // 기준값 맞추기용
-    "skipped": []               // 한쪽이 그늘져 건너뛴 색 비교: cheekColor, lipColor
+    "skipped": [],              // 한쪽이 그늘져 건너뛴 색 비교: cheekColor, lipColor
+    "frames": 3                 // 판단에 쓴 장 수
   },
-  "source": "model"             // model | gpt
+  "source": "model"
 }
 ```
-`framing`이 있거나 `lighting`이 `dark`면 `symmetry`는 `null`입니다. 비교 항목과 기준값은 mcp-face-check `docs/DEVELOPMENT.md`에 있습니다.
+`framing`이 있거나 `lighting`이 `dark`면(절반 넘는 장이 그러면) `symmetry`는 `null`입니다. 비교 항목과 기준값은 mcp-face-check `docs/DEVELOPMENT.md`에 있습니다.
 
 ### `teeth_check`
 "이 확인해 줘" → 폰을 입 가까이 대고 "'이~' 해 주세요" 안내. 앱이 ML Kit 입술 윤곽으로 입이 벌어진 걸 확인한 뒤 한 장. 이 사이에 낀 것을 봅니다.
@@ -170,7 +172,6 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "source": "model"             // model | gpt
 }
 ```
-치아 분류 모델이 들어오기 전까지는 `{"error": {"code": "not_ready"}}`를 돌려줍니다.
 
 ## mcp-closet
 
