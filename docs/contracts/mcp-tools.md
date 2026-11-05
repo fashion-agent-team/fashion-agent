@@ -127,19 +127,29 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 입력
 ```json
 { "imageBase64": "<JPEG base64>",
-  "landmarks": { "leftEyebrow": [[x,y], ...], "rightEyebrow": [...], "upperLip": [...], "lowerLip": [...] } }
+  "landmarks": { "leftEye": [[x,y], ...], "rightEye": [...],
+                 "leftEyebrowTop": [...], "leftEyebrowBottom": [...], "rightEyebrowTop": [...], "rightEyebrowBottom": [...],
+                 "upperLipTop": [...], "upperLipBottom": [...], "lowerLipTop": [...], "lowerLipBottom": [...],
+                 "face": [...], "noseBridge": [...], "noseBottom": [...], "leftCheek": [[x,y]], "rightCheek": [[x,y]],
+                 "yaw": 3.5, "roll": -2.0 } }
 ```
-`landmarks`는 앱 ML Kit 윤곽점(사진 크기를 1로 본 비율, 셀카 방향으로 뒤집은 뒤 좌표)이고 없으면 서버가 사진만으로 봅니다.
+`landmarks`는 앱 ML Kit 얼굴 인식 **윤곽(contour) 모드** 결과입니다. 키는 ML Kit `FaceContour` 상수 이름을 camelCase로(LEFT_EYEBROW_TOP → `leftEyebrowTop`), 점은 사진 크기를 1로 본 비율이고 셀카 방향으로 뒤집은 뒤 좌표입니다. `yaw`, `roll`은 `headEulerAngleY`, `headEulerAngleZ`(도). 꼭 필요한 것은 `leftEye`, `rightEye`, `leftEyebrowTop`, `rightEyebrowTop`, `upperLipTop`, `lowerLipBottom`이고, 나머지는 있으면 더 정확합니다. 서버는 이름의 left/right를 믿지 않고 두 눈의 x 위치로 왼쪽을 다시 정합니다. 필수 윤곽이 없으면 서버가 사진만으로(GPT 비전, `source: "gpt"`) 봅니다.
 
 출력
 ```json
 {
   "framing": null,              // "얼굴이 화면 위쪽에 잘렸어요. 폰을 조금 내려 주세요."
   "lighting": "ok",
-  "symmetry": { "ok": false, "notes": ["왼쪽 눈썹이 오른쪽보다 조금 짧게 그려졌어요."] },
+  "symmetry": {
+    "ok": false,
+    "notes": ["왼쪽 눈썹이 오른쪽보다 조금 짧게 그려졌어요."],   // 차이가 큰 순서로 최대 3개, agent가 그대로 읽음
+    "checks": [{ "name": "browLength", "side": "right", "value": 0.21, "limit": 0.15, "ok": false }, ...],  // 기준값 맞추기용
+    "skipped": []               // 한쪽이 그늘져 건너뛴 색 비교: cheekColor, lipColor
+  },
   "source": "model"             // model | gpt
 }
 ```
+`framing`이 있거나 `lighting`이 `dark`면 `symmetry`는 `null`입니다. 비교 항목과 기준값은 mcp-face-check `docs/DEVELOPMENT.md`에 있습니다.
 
 ### `teeth_check`
 "이 확인해 줘" → 폰을 입 가까이 대고 "'이~' 해 주세요" 안내. 앱이 ML Kit 입술 윤곽으로 입이 벌어진 걸 확인한 뒤 한 장. 이 사이에 낀 것을 봅니다.
@@ -160,6 +170,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "source": "model"             // model | gpt
 }
 ```
+치아 분류 모델이 들어오기 전까지는 `{"error": {"code": "not_ready"}}`를 돌려줍니다.
 
 ## mcp-closet
 
