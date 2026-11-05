@@ -1,4 +1,0 @@
-# 이 파일을 .dev.vars로 복사하고 값을 채운다. .dev.vars는 커밋하지 않는다.
-GEMINI_API_KEY=여기에_Gemini_API_키
-# 비워 두면 토큰 검사를 하지 않는다. 채우면 앱이 X-App-Token 헤더로 같은 값을 보내야 한다.
-APP_TOKEN=

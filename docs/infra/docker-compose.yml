@@ -1,0 +1,81 @@
+# 전체 서비스를 한 번에 띄우는 뼈대입니다.
+# 각 레포가 자기 Dockerfile로 이미지를 만들어 ghcr.io/fashion-agent-team/<레포>:dev 로 올리는 것을 전제로 합니다.
+# 내 서비스만 로컬에서 고칠 때는 그 서비스를 주석 처리하고 IDE로 같은 포트에 띄우세요.
+#   cp .env.example .env   # 값 채우기 (커밋 금지)
+#   docker compose up -d
+name: fashion-agent
+
+x-spring: &spring
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    TZ: Asia/Seoul
+    SPRING_PROFILES_ACTIVE: ${APP_ENV:-dev}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fashion
+      POSTGRES_USER: fashion
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Asia/Seoul
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-schemas.sql:/docker-entrypoint-initdb.d/01-schemas.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]   # 세션의 사진이 디스크에 남지 않게
+    ports: ["6379:6379"]
+
+  gateway:
+    <<: *spring
+    image: ghcr.io/fashion-agent-team/fashion-agent-gateway:dev
+    ports: ["8080:8080"]          # 밖으로 여는 건 게이트웨이 하나
+    depends_on: [postgres, redis]
+
+  agent:
+    <<: *spring
+    image: ghcr.io/fashion-agent-team/fashion-agent-agent:dev
+    expose: ["8081"]
+    depends_on: [redis, mcp-weather, mcp-schedule, mcp-clothes-state, mcp-face-check, mcp-closet, mcp-helper]
+
+  mcp-weather:
+    <<: *spring
+    image: ghcr.io/fashion-agent-team/mcp-weather:dev
+    expose: ["8091"]
+
+  mcp-schedule:
+    <<: *spring
+    image: ghcr.io/fashion-agent-team/mcp-schedule:dev
+    expose: ["8092"]
+    depends_on: [postgres]
+
+  mcp-clothes-state:
+    <<: *spring
+    image: ghcr.io/fashion-agent-team/mcp-clothes-state:dev
+    expose: ["8093"]
+
+  mcp-face-check:
+    <<: *spring
+    image: ghcr.io/fashion-agent-team/mcp-face-check:dev
+    expose: ["8094"]
+
+  mcp-closet:
+    <<: *spring
+    image: ghcr.io/fashion-agent-team/mcp-closet:dev
+    expose: ["8095"]
+    depends_on: [postgres]
+
+  mcp-helper:
+    <<: *spring
+    image: ghcr.io/fashion-agent-team/mcp-helper:dev
+    expose: ["8096"]
+    depends_on: [postgres]
+
+volumes:
+  pgdata:
