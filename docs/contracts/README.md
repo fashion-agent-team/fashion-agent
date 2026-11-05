@@ -62,7 +62,7 @@ MCP 서버는 Streamable HTTP로 `http://<서비스>:<포트>/mcp`를 엽니다.
 ## 3. 인증
 
 ```
-앱 ──Firebase 로그인(Apple·구글)──▶ Firebase ID 토큰
+앱 ──Firebase 로그인(구글. Apple은 유료 개발자 계정이 생기면, 2026-11-05)──▶ Firebase ID 토큰
 앱 ──POST /api/v1/auth/login {idToken}──▶ gateway: Firebase Admin으로 확인 → 우리 JWT 발급
 앱 ──Authorization: Bearer <JWT>──▶ gateway: JWT 확인 → X-User-Id 헤더를 붙여 agent 등으로 전달
 ```
