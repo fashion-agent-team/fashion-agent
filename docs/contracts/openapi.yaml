@@ -120,8 +120,8 @@ paths:
       description: |
         앱은 받은 speech를 읽어 주고, next에 따라 다음 동작을 합니다.
         - listen: 바로 듣기 시작
-        - camera_outfit / camera_face: 카메라를 켜 둔 채로 유지. 앱이 ML Kit로 구도를 실시간 안내하고,
-          옷(얼굴)이 잘 들어와 1초 멈추면 한 장을 자동으로 같은 sessionId, image, imageKind로 보냄.
+        - camera_outfit / camera_face / camera_teeth: 카메라를 켜 둔 채로 유지. 앱이 ML Kit로 구도를 실시간 안내하고,
+          옷(얼굴, 입)이 잘 들어와 1초 멈추면 한 장을 자동으로 같은 sessionId, image, imageKind로 보냄.
           사용자는 버튼을 누르지 않음. 카메라가 켜진 동안에도 말하기("이걸로 할게", "됐어")는 받음
         - done: 카메라를 끄고 대기 화면으로
         옷 추천은 2단계입니다: 말로 추천(result.type=outfit_advice, next=camera_outfit) →
@@ -293,9 +293,10 @@ components:
         sessionId: { type: string, nullable: true, description: 첫 말이면 비움. 이어지는 대화는 받은 값 그대로 }
         utterance: { type: string, nullable: true, description: STT 결과. 사진만 보낼 때는 비움 }
         image: { type: string, format: byte, nullable: true, description: "JPEG base64, 최대 약 6MB" }
-        imageKind: { type: string, enum: [outfit, face], nullable: true }
+        imageKind: { type: string, enum: [outfit, face, teeth], nullable: true, description: "face·teeth 사진은 셀카 화면 방향으로 좌우를 맞춰서 보냄 (사진 왼쪽 = 사용자 왼쪽)" }
         autoCaptured: { type: boolean, default: true, description: 앱이 구도를 보고 자동으로 보낸 사진이면 true }
         faceLandmarks: { type: object, nullable: true, description: imageKind=face일 때 ML Kit 윤곽점 (mcp-tools.md의 landmarks) }
+        mouthBox: { type: object, nullable: true, description: imageKind=teeth일 때 ML Kit 입술 윤곽으로 구한 입 영역 (mcp-tools.md의 mouthBox) }
         location: { $ref: '#/components/schemas/Location' }
 
     TurnResponse:
@@ -304,13 +305,13 @@ components:
       properties:
         sessionId: { type: string }
         speech: { type: string, description: 앱이 그대로 읽어 줄 한국어 }
-        next: { type: string, enum: [listen, camera_outfit, camera_face, done] }
+        next: { type: string, enum: [listen, camera_outfit, camera_face, camera_teeth, done] }
         result:
           nullable: true
           type: object
           description: 화면·기록용 구조화 결과. 앱은 speech만 읽어도 동작해야 함
           properties:
-            type: { type: string, enum: [outfit_advice, outfit_check, face_check, weather, schedule, helper] }
+            type: { type: string, enum: [outfit_advice, outfit_check, face_makeup_check, teeth_check, weather, schedule, helper] }
             outfitAdvice: { $ref: '#/components/schemas/OutfitAdvice' }
             outfitCheck: { $ref: '#/components/schemas/OutfitCheck' }
 

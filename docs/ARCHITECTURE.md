@@ -31,7 +31,7 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 | weather | mcp-weather | Open-Meteo, RestClient, Caffeine 캐시 | 키 없음, 앱에서 이미 검증 | 기상청 단기예보 API, OpenWeatherMap |
 | schedule | mcp-schedule | 카카오 로컬 API, FCM, `@Scheduled` | 국내 장소 카테고리(예식장·장례식장)가 정확, 알림 무료 | 네이버 지역 검색 + 폰 로컬 알림, Google Places |
 | clothes_state | mcp-clothes-state | 얼룩·찢어짐·보풀: YOLO 파인튜닝 / 종류·격식: FashionCLIP / 색: 픽셀 평균 → 색 이름 규칙 / 실행: ONNX Runtime Java / 폴백: GPT 비전 | 호출 비용 없이 서버 CPU로 동작, 결함 위치가 박스로 나옴 | Python FastAPI 추론 서버, 앱 안 Core ML·TFLite |
-| face_check | mcp-face-check | 앱 ML Kit 윤곽점 → 대칭 규칙(눈썹·입술 위치, 볼·입술 색 좌우 비교) + 치아 이물질 분류(MobileNet 파인튜닝, ONNX) | 대칭은 계산, 학습은 치아 분류 하나 | MediaPipe Face Landmarker(Python), 전부 앱 안 TFLite |
+| face_makeup_check, teeth_check (얼굴/치아 나눠 물음) | mcp-face-check | 앱 ML Kit 윤곽점 → 대칭 규칙(눈썹·입술 위치, 볼·입술 색 좌우 비교) + 치아 이물질 분류(MobileNet 파인튜닝, ONNX) | 대칭은 계산, 학습은 치아 분류 하나 | MediaPipe Face Landmarker(Python), 전부 앱 안 TFLite |
 | closet | mcp-closet | RAG: Spring AI VectorStore + pgvector, multilingual-e5-small(ONNX) 임베딩, GPT 답변. 검색 대상은 내 옷 설명 + 코디 지식 문서 | 가진 옷 안에서만, 근거를 붙여 추천. 같은 옷 중복 찾기도 같은 벡터로 | OpenAI 임베딩 API, Qdrant·Chroma |
 | helper | mcp-helper | 문자(NHN Cloud SMS 또는 솔라피), 답장용 웹 링크, Cloudflare R2(24시간 뒤 삭제) | 가족은 앱 설치 없이 링크로 답함, 카카오 심사 불필요 | 카카오 알림톡, 같은 앱 도우미 모드 + FCM |
 | 모델 학습 | 각 mcp 레포 `training/` | Python, Ultralytics YOLO, Roboflow 라벨링, Google Colab GPU, ONNX 내보내기 | 학습은 Python이 표준, ONNX면 Java에서 그대로 실행 | 개인 GPU, SageMaker |
@@ -89,5 +89,5 @@ POST /api/v1/agent/turn   Authorization: Bearer <JWT>
 2단계 데이터: clothes_inspect(한 장)                         → GPT(확인 모드) → { verdicts, comparison, damage, stillMissing, speech }
 
 개별 기능
-face_check(image) / schedule_add(…) / helper_ask(userId, contactId, image, question)
+face_makeup_check(image, landmarks) 또는 teeth_check(image, mouthBox) / schedule_add(…) / helper_ask(userId, contactId, image, question)
 ```
