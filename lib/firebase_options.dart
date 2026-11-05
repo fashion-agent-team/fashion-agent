@@ -31,7 +31,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '156130892918',
     projectId: 'fashion-agent-7631d',
     storageBucket: 'fashion-agent-7631d.firebasestorage.app',
-    iosClientId: '156130892918-5v0e3nr35atra7clpu1b1rbksdrk1aeo.apps.googleusercontent.com',
+    iosClientId:
+        '156130892918-5v0e3nr35atra7clpu1b1rbksdrk1aeo.apps.googleusercontent.com',
     iosBundleId: 'com.fashionagent.fashionAgent',
   );
 

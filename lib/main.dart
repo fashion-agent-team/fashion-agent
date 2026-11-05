@@ -11,6 +11,7 @@ import 'services/fake_vision_service.dart';
 import 'services/firebase_account_service.dart';
 import 'services/gateway_auth.dart';
 import 'services/listen_service.dart';
+import 'services/permission_service.dart';
 import 'services/profile_store.dart';
 import 'services/schedule_store.dart';
 import 'services/speech_service.dart';
@@ -40,13 +41,15 @@ const _gatewayUrl = String.fromEnvironment('GATEWAY_URL');
 Future<AccountService> _account() async {
   if (_gatewayUrl.isEmpty) return DeviceOnlyAccountService();
   try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
   } on Object catch (e) {
     debugPrint('Firebase 시작 실패, 이 폰에만 저장합니다: $e');
     return DeviceOnlyAccountService();
   }
   return FirebaseAccountService(
-    gateway: GatewayAuth(baseUrl: Uri.parse(_gatewayUrl), tokens: SecureTokenStore()),
+    gateway: GatewayAuth(
+        baseUrl: Uri.parse(_gatewayUrl), tokens: SecureTokenStore()),
   );
 }
 
@@ -55,6 +58,7 @@ Future<void> main() async {
   final account = await _account();
   final speech = SpeechService();
   final listen = DeviceListenService();
+  final capture = _fakeCamera ? FakeCaptureService() : CameraCaptureService();
   final profiles = LocalProfileStore();
   final weather = WeatherService();
   runApp(FashionAgentApp(
@@ -68,13 +72,16 @@ Future<void> main() async {
         listen: listen,
         profiles: profiles,
         account: account,
+        permissions: _fakeCamera
+            ? FakePermissionService()
+            : DevicePermissionService(listen: listen, camera: capture),
       ),
     ),
     outfitCheck: SessionController(
       speech: speech,
       weatherService: weather,
       schedule: LocalScheduleStore(),
-      capture: _fakeCamera ? FakeCaptureService() : CameraCaptureService(),
+      capture: capture,
       vision: _fakeVision || _visionUrl.isEmpty
           ? FakeVisionService()
           : HttpVisionService(Uri.parse(_visionUrl)),

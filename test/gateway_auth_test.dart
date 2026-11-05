@@ -18,7 +18,12 @@ class FakeGateway {
   Map<String, dynamic> _issue() {
     n++;
     valid.add('a$n');
-    return {'accessToken': 'a$n', 'refreshToken': 'r$n', 'expiresIn': 3600, 'isNewUser': n == 1};
+    return {
+      'accessToken': 'a$n',
+      'refreshToken': 'r$n',
+      'expiresIn': 3600,
+      'isNewUser': n == 1
+    };
   }
 
   late final client = MockClient((req) async {
@@ -29,19 +34,25 @@ class FakeGateway {
       case '/api/v1/auth/refresh':
         refreshCalls++;
         final r = (jsonDecode(req.body) as Map)['refreshToken'] as String;
-        if (!usedRefresh.add(r)) return _json(401, {'code': 'unauthorized', 'message': 'reused'});
+        if (!usedRefresh.add(r)) {
+          return _json(401, {'code': 'unauthorized', 'message': 'reused'});
+        }
         return _json(200, _issue());
       default:
-        final bearer = req.headers['authorization']?.replaceFirst('Bearer ', '');
-        if (!valid.contains(bearer)) return _json(401, {'code': 'unauthorized', 'message': 'x'});
+        final bearer =
+            req.headers['authorization']?.replaceFirst('Bearer ', '');
+        if (!valid.contains(bearer)) {
+          return _json(401, {'code': 'unauthorized', 'message': 'x'});
+        }
         if (req.method == 'PUT') return http.Response('', 204);
-        return _json(200, {'name': '진행', 'birthDate': '1996-02-09', 'agentName': '코디'});
+        return _json(
+            200, {'name': '진행', 'birthDate': '1996-02-09', 'agentName': '코디'});
     }
   });
 
-  static http.Response _json(int status, Object body) => http.Response(
-      jsonEncode(body), status,
-      headers: {'content-type': 'application/json; charset=utf-8'});
+  static http.Response _json(int status, Object body) =>
+      http.Response(jsonEncode(body), status,
+          headers: {'content-type': 'application/json; charset=utf-8'});
 }
 
 void main() {
@@ -55,7 +66,10 @@ void main() {
     store = MemoryTokenStore();
     now = DateTime(2026, 11, 5, 12);
     auth = GatewayAuth(
-        baseUrl: Uri.parse('http://gw:8080'), tokens: store, client: gw.client, now: () => now);
+        baseUrl: Uri.parse('http://gw:8080'),
+        tokens: store,
+        client: gw.client,
+        now: () => now);
   });
 
   test('로그인하면 토큰을 저장하고 새 가입 여부를 돌려준다', () async {
@@ -88,30 +102,42 @@ void main() {
     await auth.login('x');
     now = now.add(const Duration(minutes: 59, seconds: 30));
     await auth.send('GET', '/api/v1/me/profile');
-    expect(gw.calls, ['POST /api/v1/auth/login', 'POST /api/v1/auth/refresh', 'GET /api/v1/me/profile']);
+    expect(gw.calls, [
+      'POST /api/v1/auth/login',
+      'POST /api/v1/auth/refresh',
+      'GET /api/v1/me/profile'
+    ]);
   });
 
   test('갱신도 거절되면 토큰을 지우고 unauthorized를 던진다', () async {
     await auth.login('x');
     gw.valid.clear();
     gw.usedRefresh.add('r1');
-    await expectLater(auth.send('GET', '/api/v1/me/profile'),
-        throwsA(isA<GatewayException>().having((e) => e.code, 'code', 'unauthorized')));
+    await expectLater(
+        auth.send('GET', '/api/v1/me/profile'),
+        throwsA(isA<GatewayException>()
+            .having((e) => e.code, 'code', 'unauthorized')));
     expect(await auth.isSignedIn, isFalse);
   });
 
   test('로그인 전에는 보내지 않는다', () async {
-    await expectLater(auth.send('GET', '/api/v1/me/profile'), throwsA(isA<GatewayException>()));
+    await expectLater(auth.send('GET', '/api/v1/me/profile'),
+        throwsA(isA<GatewayException>()));
     expect(gw.calls, isEmpty);
   });
 
   test('회원정보는 게이트웨이 모양으로 주고받는다', () {
-    final p = UserProfile(name: '진행', birthDate: DateTime(1996, 2, 9), heightCm: 175, agentName: '코디');
+    final p = UserProfile(
+        name: '진행',
+        birthDate: DateTime(1996, 2, 9),
+        heightCm: 175,
+        agentName: '코디');
     final out = profileToGateway(p);
     expect(out['birthDate'], '1996-02-09');
     expect(out.containsKey('accountId'), isFalse);
 
-    final back = profileFromGateway({'name': '진행', 'birthDate': '1996-02-09', 'agentName': '코디'}, 'uid-1');
+    final back = profileFromGateway(
+        {'name': '진행', 'birthDate': '1996-02-09', 'agentName': '코디'}, 'uid-1');
     expect(back.birthDate, DateTime(1996, 2, 9));
     expect(back.accountId, 'uid-1');
     expect(back.isOnboarded, isTrue);

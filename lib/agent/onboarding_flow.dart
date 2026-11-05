@@ -1,6 +1,7 @@
 import '../models/user_profile.dart';
 import '../services/account_service.dart';
 import '../services/listen_service.dart';
+import '../services/permission_service.dart';
 import '../services/profile_store.dart';
 import '../services/speech_service.dart';
 import '../styling/korean.dart';
@@ -9,7 +10,7 @@ import 'answer_parsing.dart';
 
 /// 처음 설치했을 때의 음성 대화. 버튼 없이 묻고 듣기만 한다.
 ///
-/// 순서: 인사 → 다른 폰에서 쓰던 계정 확인 → 에이전트 이름 짓기 → 사용자 정보 → 재확인
+/// 순서: 인사 → 권한 창(마이크·음성 인식·카메라·위치를 한 번에) → 다른 폰에서 쓰던 계정 확인 → 에이전트 이름 짓기 → 사용자 정보 → 재확인
 /// → 계정 연결 → 기능 설명.
 class OnboardingFlow {
   OnboardingFlow({
@@ -17,6 +18,7 @@ class OnboardingFlow {
     required this.listen,
     required this.profiles,
     required this.account,
+    this.permissions,
     this.onSay,
   });
 
@@ -24,6 +26,9 @@ class OnboardingFlow {
   final ListenService listen;
   final ProfileStore profiles;
   final AccountService account;
+
+  /// 권한 창을 처음에 한 번에 띄운다. null이면 건너뛴다(테스트).
+  final PermissionService? permissions;
 
   /// 화면에 마지막 안내를 보여 주려고 쓴다. [AgentController]가 채운다.
   void Function(String text)? onSay;
@@ -33,6 +38,7 @@ class OnboardingFlow {
 
   Future<UserProfile> run() async {
     await _say(firstGreeting);
+    await _askPermissions();
 
     final restored = await _restoreFromOtherPhone();
     if (restored != null) return restored;
@@ -53,6 +59,19 @@ class OnboardingFlow {
 
     await _say('$featureIntro $askFeature');
     return profile;
+  }
+
+  /// 말로 미리 알린 뒤 권한 창을 차례로 띄운다. 마이크를 막으면 들을 수 없다고 알려 준다.
+  Future<void> _askPermissions() async {
+    final p = permissions;
+    if (p == null) return;
+    await _say(permissionIntro);
+    final result = await p.requestAll();
+    if (!result.canListen) {
+      await _say(permissionDeniedListen);
+    } else {
+      await _say('고마워요.');
+    }
   }
 
   Future<UserProfile?> _restoreFromOtherPhone() async {

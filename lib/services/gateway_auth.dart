@@ -84,7 +84,8 @@ class GatewayException implements Exception {
   final String? message;
 
   @override
-  String toString() => 'GatewayException($status $code${message == null ? '' : ': $message'})';
+  String toString() =>
+      'GatewayException($status $code${message == null ? '' : ': $message'})';
 }
 
 /// 게이트웨이 로그인과 토큰 관리.
@@ -133,7 +134,9 @@ class GatewayAuth {
   /// 토큰을 붙여 [method] [path]를 부른다. 2xx가 아니면 [GatewayException].
   Future<http.Response> send(String method, String path, {Object? json}) async {
     var current = await tokens.read();
-    if (current == null) throw GatewayException(401, 'unauthorized', '로그인하지 않았어요');
+    if (current == null) {
+      throw GatewayException(401, 'unauthorized', '로그인하지 않았어요');
+    }
     if (!_now().isBefore(current.expiresAt.subtract(_skew))) {
       current = await _refresh(current);
     }
@@ -148,13 +151,15 @@ class GatewayAuth {
   }
 
   /// [send] 후 JSON 본문을 돌려준다. 본문이 없으면 null.
-  Future<Map<String, dynamic>?> sendJson(String method, String path, {Object? json}) async {
+  Future<Map<String, dynamic>?> sendJson(String method, String path,
+      {Object? json}) async {
     final res = await send(method, path, json: json);
     if (res.body.isEmpty) return null;
     return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
   }
 
-  Future<http.Response> _sendOnce(String method, String path, Object? json, String access) {
+  Future<http.Response> _sendOnce(
+      String method, String path, Object? json, String access) {
     final req = http.Request(method, _url(path))
       ..headers['authorization'] = 'Bearer $access';
     if (json != null) {
@@ -165,13 +170,16 @@ class GatewayAuth {
   }
 
   Future<GatewayTokens> _refresh(GatewayTokens stale) {
-    return _refreshing ??= _doRefresh(stale).whenComplete(() => _refreshing = null);
+    return _refreshing ??=
+        _doRefresh(stale).whenComplete(() => _refreshing = null);
   }
 
   Future<GatewayTokens> _doRefresh(GatewayTokens stale) async {
     // 다른 요청이 이미 갱신했으면 그 토큰을 쓴다.
     final latest = await tokens.read();
-    if (latest != null && latest.refreshToken != stale.refreshToken) return latest;
+    if (latest != null && latest.refreshToken != stale.refreshToken) {
+      return latest;
+    }
 
     final res = await _client.post(
       _url('/api/v1/auth/refresh'),
@@ -189,7 +197,8 @@ class GatewayAuth {
   GatewayTokens _tokensFrom(Map<String, dynamic> body) => GatewayTokens(
         accessToken: body['accessToken'] as String,
         refreshToken: body['refreshToken'] as String,
-        expiresAt: _now().add(Duration(seconds: (body['expiresIn'] as num).toInt())),
+        expiresAt:
+            _now().add(Duration(seconds: (body['expiresIn'] as num).toInt())),
       );
 
   Map<String, dynamic> _decode(http.Response res) {
