@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 개발 중에는 노트북에서 띄운 게이트웨이(http://192.168.x.x:8080)에 붙는다. 릴리스에는 들어가지 않는다. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>
