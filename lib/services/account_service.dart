@@ -2,8 +2,7 @@ import '../models/user_profile.dart';
 
 /// 폰을 바꿔도 정보를 이어 쓰게 해 주는 계정.
 ///
-/// 아이폰은 Apple 로그인, 안드로이드는 구글 로그인을 쓰고, Firebase로 두 로그인을 한 사용자로 묶는다.
-/// 설정 방법은 `docs/ACCOUNT.md`를 보라.
+/// 구글 로그인 → Firebase → 게이트웨이 로그인(`FirebaseAccountService`). 설정은 `docs/ACCOUNT.md`.
 abstract class AccountService {
   /// 로그인하고 계정 id를 돌려준다. 취소하거나 실패하면 null.
   Future<String?> signIn();
@@ -15,9 +14,7 @@ abstract class AccountService {
   Future<void> upload(String accountId, UserProfile profile);
 }
 
-/// Firebase를 연결하기 전까지 쓰는 구현. 로그인하지 않고 이 폰에만 저장한다.
-///
-/// TODO(계정 담당): FirebaseAccountService로 교체 (sign_in_with_apple, google_sign_in, firebase_auth, cloud_firestore).
+/// 게이트웨이 주소가 없을 때(`GATEWAY_URL` 미지정) 쓰는 구현. 로그인하지 않고 이 폰에만 저장한다.
 class DeviceOnlyAccountService implements AccountService {
   @override
   Future<String?> signIn() async => null;

@@ -15,11 +15,13 @@ class DeviceListenService implements ListenService {
   Completer<String?>? _pending;
   String _heard = '';
 
+  /// 음성 인식을 준비한다. 처음 부르면 iOS가 마이크·음성 인식 허용 창을 띄운다. 들을 수 있으면 true.
+  Future<bool> prepare() async => _ready ??=
+      await _stt.initialize(onStatus: _onStatus, onError: (_) => _finish());
+
   @override
   Future<String?> listen() async {
-    _ready ??=
-        await _stt.initialize(onStatus: _onStatus, onError: (_) => _finish());
-    if (!_ready!) return null;
+    if (!await prepare()) return null;
 
     _heard = '';
     final done = _pending = Completer<String?>();

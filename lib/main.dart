@@ -1,12 +1,17 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'agent/agent_controller.dart';
 import 'agent/onboarding_flow.dart';
+import 'firebase_options.dart';
 import 'screens/agent_screen.dart';
 import 'services/account_service.dart';
 import 'services/capture_service.dart';
 import 'services/fake_vision_service.dart';
+import 'services/firebase_account_service.dart';
+import 'services/gateway_auth.dart';
 import 'services/listen_service.dart';
+import 'services/permission_service.dart';
 import 'services/profile_store.dart';
 import 'services/schedule_store.dart';
 import 'services/speech_service.dart';
@@ -28,9 +33,32 @@ const _fakeVision = bool.fromEnvironment('FAKE_VISION');
 /// 카메라 없는 시뮬레이터에서 돌릴 때: `--dart-define=FAKE_CAMERA=true`
 const _fakeCamera = bool.fromEnvironment('FAKE_CAMERA');
 
-void main() {
+/// 게이트웨이 주소. 비우면 로그인 없이 이 폰에만 저장한다.
+/// 노트북에서 띄운 게이트웨이: `flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080`
+const _gatewayUrl = String.fromEnvironment('GATEWAY_URL');
+
+/// 게이트웨이와 Firebase가 준비되면 구글 로그인, 아니면 이 폰에만 저장.
+Future<AccountService> _account() async {
+  if (_gatewayUrl.isEmpty) return DeviceOnlyAccountService();
+  try {
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
+  } on Object catch (e) {
+    debugPrint('Firebase 시작 실패, 이 폰에만 저장합니다: $e');
+    return DeviceOnlyAccountService();
+  }
+  return FirebaseAccountService(
+    gateway: GatewayAuth(
+        baseUrl: Uri.parse(_gatewayUrl), tokens: SecureTokenStore()),
+  );
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final account = await _account();
   final speech = SpeechService();
   final listen = DeviceListenService();
+  final capture = _fakeCamera ? FakeCaptureService() : CameraCaptureService();
   final profiles = LocalProfileStore();
   final weather = WeatherService();
   runApp(FashionAgentApp(
@@ -43,15 +71,17 @@ void main() {
         speech: speech,
         listen: listen,
         profiles: profiles,
-        // TODO(계정 담당): docs/ACCOUNT.md대로 Firebase를 붙인 뒤 FirebaseAccountService로 바꾼다.
-        account: DeviceOnlyAccountService(),
+        account: account,
+        permissions: _fakeCamera
+            ? FakePermissionService()
+            : DevicePermissionService(listen: listen, camera: capture),
       ),
     ),
     outfitCheck: SessionController(
       speech: speech,
       weatherService: weather,
       schedule: LocalScheduleStore(),
-      capture: _fakeCamera ? FakeCaptureService() : CameraCaptureService(),
+      capture: capture,
       vision: _fakeVision || _visionUrl.isEmpty
           ? FakeVisionService()
           : HttpVisionService(Uri.parse(_visionUrl)),
