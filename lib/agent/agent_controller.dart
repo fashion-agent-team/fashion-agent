@@ -13,6 +13,7 @@ import '../styling/weather_rules.dart';
 import 'agent_speech.dart';
 import 'intent_router.dart';
 import 'onboarding_flow.dart';
+import 'small_talk.dart';
 import 'wake_word.dart';
 
 /// 앱의 첫 화면 뒤에서 도는 에이전트. 처음이면 온보딩을, 아니면 인사를 하고 원하는 기능을 듣는다.
@@ -126,7 +127,8 @@ class AgentController extends ChangeNotifier {
         final started = DateTime.now();
         final heard = await listen.listen(
           listenFor: const Duration(seconds: 60),
-          pauseFor: const Duration(seconds: 2),
+          // "코디야 … 오늘 뭐 입지"처럼 이름 뒤에 잠깐 쉬어도 이어 듣게.
+          pauseFor: const Duration(seconds: 3),
         );
         if (_paused || busy) continue;
         if (heard == null) {
@@ -260,7 +262,7 @@ class AgentController extends ChangeNotifier {
       case Intent.help:
         await _say(featureIntro);
       case Intent.unknown:
-        await _say('잘 이해하지 못했어요. 일정, 날씨, 얼굴 확인, 옷 검사 중에서 말씀해 주세요.');
+        await _say(smallTalk(text) ?? unknownSpeech);
     }
     await _say(_nextHint);
   }

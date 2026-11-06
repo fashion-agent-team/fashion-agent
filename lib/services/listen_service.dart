@@ -2,14 +2,20 @@ import 'dart:async';
 
 import 'package:speech_to_text/speech_to_text.dart';
 
+/// 한 번에 듣는 가장 긴 시간.
+const defaultListenFor = Duration(seconds: 30);
+
+/// 말이 끊긴 뒤 끝낼 때까지 기다리는 시간. 2026-11-06 진행 님 폰 확인: 3초는 생각할 틈 없이 끊겨서 5초로.
+const defaultPauseFor = Duration(seconds: 5);
+
 /// 사용자의 말을 한 번 듣고 글자로 돌려준다.
 abstract class ListenService {
   /// 아무 말도 듣지 못하면 null. [cancel]해도 null.
   ///
   /// [listenFor]는 한 번에 듣는 가장 긴 시간, [pauseFor]는 말이 끊긴 뒤 끝낼 때까지 기다리는 시간.
   Future<String?> listen({
-    Duration listenFor = const Duration(seconds: 15),
-    Duration pauseFor = const Duration(seconds: 3),
+    Duration listenFor = defaultListenFor,
+    Duration pauseFor = defaultPauseFor,
   });
 
   /// 듣던 것을 멈춘다. 안내를 읽기 전에 불러서, 폰이 자기 목소리를 듣지 않게 한다.
@@ -29,8 +35,8 @@ class DeviceListenService implements ListenService {
 
   @override
   Future<String?> listen({
-    Duration listenFor = const Duration(seconds: 15),
-    Duration pauseFor = const Duration(seconds: 3),
+    Duration listenFor = defaultListenFor,
+    Duration pauseFor = defaultPauseFor,
   }) async {
     if (!await prepare()) return null;
     await cancel();
