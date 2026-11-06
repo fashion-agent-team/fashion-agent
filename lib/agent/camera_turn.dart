@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../services/auto_capture.dart';
 import '../services/capture_service.dart';
+import '../services/framing.dart';
 import '../services/listen_service.dart';
 import '../services/speech_service.dart';
 import '../services/turn_api.dart';
@@ -156,7 +157,16 @@ class CameraTurnController extends ChangeNotifier {
     if (!running) return;
     final round = ++_round;
     unawaited(() async {
-      final shot = await camera.nextStill(timeout: stillTimeout, onHint: _hint);
+      final shot = await camera.nextStill(
+        timeout: stillTimeout,
+        onHint: _hint,
+        subject: switch (kind) {
+          ImageKind.outfit => Subject.garment,
+          ImageKind.worn => Subject.body,
+          _ => Subject.any,
+        },
+        onGuide: (speech) => unawaited(_say(speech)),
+      );
       if (round != _round || !running) return;
       if (shot == null) {
         if (++_timeouts >= maxTimeouts) {

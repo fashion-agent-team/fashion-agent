@@ -7,6 +7,7 @@ import 'package:fashion_agent/agent/agent_speech.dart';
 import 'package:fashion_agent/agent/camera_turn.dart';
 import 'package:fashion_agent/models/user_profile.dart';
 import 'package:fashion_agent/services/auto_capture.dart';
+import 'package:fashion_agent/services/framing.dart';
 import 'package:fashion_agent/services/gateway_auth.dart';
 import 'package:fashion_agent/services/profile_store.dart';
 import 'package:fashion_agent/services/turn_api.dart';
@@ -405,6 +406,8 @@ void main() {
       final end = await c.run('s_1', ImageKind.outfit);
 
       expect(camera.opened, [false]);
+      // 내려놓은 옷은 폰 안에서 옷을 찾아 화면에 들어왔을 때만 찍는다
+      expect(camera.subjects, [Subject.garment, Subject.garment]);
       expect(turns.sent, ['show:outfit:3', 'show:outfit:3']);
       expect(turns.locations.first?.lat, 35.1);
       expect(end?.speech, '자켓도 좋아요. 이걸로 하시겠어요?');
