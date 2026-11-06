@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'gateway_auth.dart';
+import 'mouth_finder.dart';
 
 /// agent가 정한 다음 동작. 계약 `docs/contracts/openapi.yaml`의 `TurnResponse.next`.
 enum TurnNext {
@@ -145,9 +146,9 @@ abstract class TurnApi {
   Future<TurnReply> say(String? sessionId, String utterance,
       {TurnLocation? location});
 
-  /// 자동으로 찍은 사진 한 장(JPEG)을 보낸다.
+  /// 자동으로 찍은 사진 한 장(JPEG)을 보낸다. 이 사진이면 [mouthBox]를 같이 보낼 수 있다.
   Future<TurnReply> show(String? sessionId, ImageKind kind, Uint8List jpeg,
-      {TurnLocation? location});
+      {TurnLocation? location, MouthBox? mouthBox});
 }
 
 class GatewayTurnApi implements TurnApi {
@@ -179,9 +180,13 @@ class GatewayTurnApi implements TurnApi {
 
   @override
   Future<TurnReply> show(String? sessionId, ImageKind kind, Uint8List jpeg,
-          {TurnLocation? location}) =>
+          {TurnLocation? location, MouthBox? mouthBox}) =>
       _post(turnRequestJson(
-          sessionId: sessionId, kind: kind, jpeg: jpeg, location: location));
+          sessionId: sessionId,
+          kind: kind,
+          jpeg: jpeg,
+          location: location,
+          mouthBox: mouthBox));
 
   Future<TurnReply> _post(Map<String, dynamic> body) async {
     final json =
@@ -205,6 +210,7 @@ Map<String, dynamic> turnRequestJson({
   Uint8List? jpeg,
   TurnLocation? location,
   OutfitMode? outfitMode,
+  MouthBox? mouthBox,
 }) =>
     {
       if (sessionId != null) 'sessionId': sessionId,
@@ -213,6 +219,7 @@ Map<String, dynamic> turnRequestJson({
         'image': base64Encode(jpeg),
         'imageKind': (kind ?? ImageKind.outfit).name,
         'autoCaptured': true,
+        if (mouthBox != null) 'mouthBox': mouthBox.toJson(),
       },
       if (location != null) 'location': location.toJson(),
       if (outfitMode != null) 'outfitMode': outfitMode.name,

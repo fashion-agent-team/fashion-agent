@@ -6,6 +6,7 @@ import '../services/auto_capture.dart';
 import '../services/capture_service.dart';
 import '../services/framing.dart';
 import '../services/listen_service.dart';
+import '../services/mouth_finder.dart';
 import '../services/speech_service.dart';
 import '../services/turn_api.dart';
 
@@ -24,6 +25,7 @@ class CameraTurnController extends ChangeNotifier {
     required this.turns,
     required this.camera,
     LocationProvider? location,
+    this.mouths,
     this.stillTimeout = const Duration(seconds: 30),
     this.maxTimeouts = 3,
     this.handsFree = false,
@@ -34,6 +36,9 @@ class CameraTurnController extends ChangeNotifier {
   final TurnApi turns;
   final AutoCaptureCamera camera;
   final LocationProvider location;
+
+  /// 이 사진에서 입 박스(`mouthBox`)를 찾는다. null이거나 못 찾으면 박스 없이 보낸다.
+  final MouthFinder? mouths;
 
   /// 이만큼 기다려도 멈추지 않으면 다시 안내한다.
   final Duration stillTimeout;
@@ -184,12 +189,26 @@ class CameraTurnController extends ChangeNotifier {
         // 찍혔다는 걸 바로 알린다. 답을 기다리는 동안 읽는다.
         final saying = _say('찍었어요. 확인하고 있어요.');
         final loc = await location.current();
-        await _handle(() => turns.show(_sessionId, kind, shot, location: loc),
+        final box = kind == ImageKind.teeth ? await _findMouth(shot) : null;
+        await _handle(
+            () => turns.show(_sessionId, kind, shot,
+                location: loc, mouthBox: box),
             before: saying);
       } finally {
         _setBusy(false);
       }
     }());
+  }
+
+  Future<MouthBox?> _findMouth(Uint8List shot) async {
+    final finder = mouths;
+    if (finder == null) return null;
+    try {
+      return await finder.find(shot);
+    } on Object catch (e) {
+      debugPrint('입 찾기 실패: $e');
+      return null;
+    }
   }
 
   Future<void> _handle(Future<TurnReply> Function() send,

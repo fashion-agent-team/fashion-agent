@@ -1,0 +1,35 @@
+# PR과 develop·main에 올라온 앱 코드를 자동으로 검사합니다. 실패하면 PR에 빨간 X가 뜹니다.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: 형식 (dart format)
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: 정적 분석 (flutter analyze)
+        run: flutter analyze
+
+      - name: 테스트 (flutter test)
+        run: flutter test

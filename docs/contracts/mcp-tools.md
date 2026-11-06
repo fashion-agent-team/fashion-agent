@@ -125,6 +125,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 
 사진은 앱이 카메라 영상에서 구도가 맞는 순간 한 장면만 꺼내 보낸 것이고, 서버는 판단에만 쓰고 남기지 않습니다.
 
+**얼굴·치아 사진은 GPT 같은 외부 AI로 보내지 않습니다**(개인정보, 2026-11-06 결정). 대칭은 윤곽점 계산으로, 치아는 우리가 학습한 모델(ONNX)을 이 서버에서 돌려서 봅니다. 그래서 두 도구에는 `source` 값이 없습니다. 모델이 애매하면 지어내지 않고 "잘 모르겠다"고 돌려주고, agent가 가족·친구에게 물어볼지(helper) 제안합니다.
+
 ### `face_makeup_check`
 "얼굴 볼래" → 얼굴 전체가 들어오게 안내한 한 장. 화장 대칭(눈썹, 입술 선, 볼·입술 색 좌우)을 봅니다.
 
@@ -140,8 +142,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 {
   "framing": null,              // "얼굴이 화면 위쪽에 잘렸어요. 폰을 조금 내려 주세요."
   "lighting": "ok",
-  "symmetry": { "ok": false, "notes": ["왼쪽 눈썹이 오른쪽보다 조금 짧게 그려졌어요."] },
-  "source": "model"             // model | gpt
+  "symmetry": { "ok": false, "notes": ["왼쪽 눈썹이 오른쪽보다 조금 짧게 그려졌어요."] }
 }
 ```
 
@@ -153,17 +154,18 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 { "imageBase64": "<JPEG base64>",
   "mouthBox": { "x": 0.3, "y": 0.55, "w": 0.4, "h": 0.2 } }
 ```
-`mouthBox`는 앱이 입술 윤곽으로 구한 입 영역(비율)이고, 서버는 이 부분을 잘라서 봅니다. 없으면 서버가 사진에서 찾습니다.
+`mouthBox`는 앱이 ML Kit 입술 윤곽 `UPPER_LIP_BOTTOM`과 `LOWER_LIP_TOP` 점으로 구한 입 안쪽 박스(비율)입니다. 서버는 이 박스의 긴 변 × 1.36 정사각형으로 잘라(학습 때와 같은 규칙) 모델에 넣습니다. 없으면 서버가 사진에서 찾습니다.
 
 출력
 ```json
 {
   "framing": null,              // "입이 다 보이지 않아요. 입을 조금 더 벌려 주세요."
   "lighting": "ok",
-  "teeth": { "foreignObject": true, "confidence": 0.82, "note": "앞니 사이에 뭔가 낀 것 같아요." },
-  "source": "model"             // model | gpt
+  "teeth": { "foreignObject": true, "confidence": 0.82, "note": "앞니 사이에 뭔가 낀 것 같아요." }
 }
 ```
+`foreignObject`는 모델 확률로 정합니다. 0.7 이상이면 `true`, 0.3 이하면 `false`, 그 사이는 `null`(애매함)입니다(첫 기준, 실제 사진으로 평가한 뒤 조정).
+애매하면 `{"foreignObject": null, "confidence": 0.5, "note": "잘 보이지 않아서 확실하지 않아요."}`를 돌려주고, agent는 note를 읽은 뒤 "가족에게 사진 보내서 물어볼까요?"라고 묻습니다. 사용자가 원할 때만 `helper_ask`로 넘깁니다.
 
 ## mcp-closet
 
