@@ -93,7 +93,7 @@ class CameraTurnController extends ChangeNotifier {
       final started = DateTime.now();
       final heard = await listen.listen(
         listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 2),
+        pauseFor: const Duration(seconds: 3),
       );
       if (!running) break;
       if (heard == null || heard.trim().length < 2) {
