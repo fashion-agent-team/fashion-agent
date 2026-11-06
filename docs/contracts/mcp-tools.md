@@ -166,7 +166,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ## mcp-closet
 
 ### `closet_save`
-옷 추천을 마칠 때("이걸로 할게") agent가 2단계에서 본 옷을 모아 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다(임베딩 유사도 + 종류·색 일치).
+옷 추천을 마칠 때("이걸로 할게") agent가 2단계에서 본 옷을 모아 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다: 종류·색 계열이 같고, 임베딩 유사도 0.90 이상이고, 이름이 같은 묶음(니트=스웨터, 운동화=스니커즈 …)일 때. e5는 같은 색 비슷한 옷(니트와 가디건)을 유사도만으로 못 가려서 이름 조건을 더했습니다(mcp-closet `docs/DEVELOPMENT.md`).
 
 입력 `{ "userId": "…", "garments": [Garment, ...] }`
 
@@ -174,6 +174,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 
 ### `closet_wear`
 입력 `{ "userId": "…", "garmentIds": ["c_17", "c_03"], "date": "2026-11-04" }` → 출력 `{ "recorded": 2 }`
+
+`date`가 없으면 서울 기준 오늘. 같은 날 함께 기록한 옷이 그날의 조합이 됩니다(`closet_outfits`). 남의 옷이나 없는 id가 섞이면 `not_found`이고 아무것도 기록하지 않습니다.
 
 ### `closet_search`
 RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(선택), 찾은 옷과 코디 지식을 GPT에 넘기면 GPT가 그 안에서만 골라 추천합니다(생성 단계).
@@ -183,7 +185,9 @@ RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(�
 { "userId": "…", "situation": "오늘 오전 면접, 체감 9도", "occasion": "formal", "apparentTemperature": 9.5,
   "excludeGarmentIds": ["c_17"], "limit": 8 }
 ```
-`situation`은 agent가 일정·날씨로 만든 문장이고 임베딩 검색에 씁니다. `occasion`, `apparentTemperature`는 있으면 필터로 씁니다. `excludeGarmentIds`는 빼고 싶은 옷(예: 어제 입은 옷)입니다.
+`situation`은 agent가 일정·날씨로 만든 문장이고 임베딩 검색에 씁니다. `occasion`, `apparentTemperature`는 있으면 필터로 씁니다(앱 `schedule_rules`·`weather_rules`가 "맞지 않아요"라고 하는 옷만 뺌, 예: 면접에 운동복, 체감 23도 이상에 겉옷). `excludeGarmentIds`는 꼭 빼고 싶은 옷입니다.
+
+`score`는 임베딩 유사도에 자리에 맞는 격식이면 최대 0.06을 더하고, 최근에 입은 옷이면 뺀 값입니다(어제 0.06, 그제 0.04, 일주일 안 0.02). 최근 입은 옷은 빼지 않고 뒤로만 보냅니다(옷이 적은 사람도 추천을 받게). 후보는 종류(상의·하의·겉옷·신발)를 돌아가며 골라 한 종류로 몰리지 않습니다.
 
 출력
 ```json
@@ -199,6 +203,22 @@ RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(�
 }
 ```
 옷장이 비어 있으면 `{ "candidates": [], "styleNotes": [...], "empty": true }`.
+
+### `closet_outfits`
+예전에 입은 조합입니다. 같은 날 `closet_wear`로 기록한 옷을 한 벌로 묶어 최근 날부터 줍니다. 개별 기능("지난번 면접 때 뭐 입었지?", "이 셔츠 전에 뭐랑 입었어?", "요즘 뭐 입었지?")에 쓰고, 옷 추천 흐름에서 자동으로 부르지 않습니다. "면접 때"처럼 일정으로 물으면 agent가 `schedule_list`로 날짜를 찾아 `from`·`to`에 넣습니다.
+
+입력 `{ "userId": "…", "from": "2026-10-01", "to": "2026-11-04", "garmentId": "c_17", "limit": 5 }` (userId 말고는 선택. `to` 기본 오늘, `from` 기본 `to`의 90일 전, `limit` 기본 5·최대 30)
+
+출력
+```json
+{ "outfits": [
+  { "date": "2026-10-28",
+    "garments": [
+      { "garmentId": "c_21", "category": "outer", "name": "자켓", "colorName": "남색", "formality": "smart" },
+      { "garmentId": "c_17", "category": "top", "name": "셔츠", "colorName": "흰색", "formality": "smart" },
+      { "garmentId": "c_05", "category": "bottom", "name": "슬랙스", "colorName": "검은색", "formality": "formal" } ] } ] }
+```
+한 날 안의 옷은 겉옷·상의·원피스·하의·신발 순입니다. 기록이 없으면 `{ "outfits": [] }`. 남의 옷 `garmentId`는 `not_found`. 하루에 두 번 갈아입어도 한 벌로 묶입니다(표를 바꾸지 않으려고 `wears`만 씀).
 
 ## mcp-helper
 

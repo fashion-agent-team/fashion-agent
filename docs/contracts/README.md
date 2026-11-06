@@ -220,6 +220,7 @@ GPT가 실패하거나 25초 안에 답이 없으면 agent는 위 판단 기준�
 | mcp-closet | `closet_search` | 상황에 맞는 내 옷 후보 + 코디 지식 검색 (RAG의 검색 단계) | 옷 추천 1단계(선택) |
 | | `closet_save` | 본 옷을 옷장에 기록 (같은 옷이면 합침) | 옷 추천 마무리 |
 | | `closet_wear` | 입은 날 기록 | 옷 추천 마무리 ("이걸로 할게") |
+| | `closet_outfits` | 예전에 입은 조합 (같은 날 입은 옷을 한 벌로) | 개별 기능 ("지난번 면접 때 뭐 입었지?") |
 | mcp-face-check | `face_makeup_check` | 얼굴 사진 + 윤곽점 → 화장 대칭 | 얼굴 확인 (얼굴) |
 | | `teeth_check` | 입 근접 사진 → 이에 낀 것 | 얼굴 확인 (치아) |
 | mcp-helper | `helper_contacts` | 등록한 가족·친구 목록 | 가족에게 묻기 |
