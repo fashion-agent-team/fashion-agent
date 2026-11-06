@@ -16,7 +16,12 @@ import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
 
 import 'agent_test.dart'
-    show FakeSpeech, ScriptedListen, FakeWeatherService, onboardingWith;
+    show
+        FakeAccount,
+        FakeSpeech,
+        ScriptedListen,
+        FakeWeatherService,
+        onboardingWith;
 
 TurnReply reply(String speech, TurnNext next, {String id = 's_1'}) =>
     TurnReply(sessionId: id, speech: speech, next: next);
@@ -26,7 +31,7 @@ class FakeTurnApi implements TurnApi {
   FakeTurnApi(this.replies, {this.signedIn = true});
 
   final List<Object> replies;
-  final bool signedIn;
+  bool signedIn;
   final sent = <String>[];
   final sessions = <String?>[];
   final locations = <TurnLocation?>[];
@@ -299,6 +304,49 @@ void main() {
       expect(speech.spoken.first, featureIntro);
     });
 
+    test('로그인이 풀린 채 다시 켜면 먼저 다시 로그인하고 agent로 보낸다', () async {
+      final speech = FakeSpeech();
+      final turns =
+          FakeTurnApi([reply('네, 말씀하세요.', TurnNext.done)], signedIn: false);
+      final store = InMemoryProfileStore();
+      await store.save(const UserProfile(name: '진행', agentName: '코디'));
+      final account = _SigningAccount(() => turns.signedIn = true);
+      final agent = AgentController(
+        speech: speech,
+        listen: ScriptedListen(['안녕']),
+        profiles: store,
+        onboarding: onboardingWith(speech, const [], account: account),
+        weatherService: FakeWeatherService(),
+        turns: turns,
+        location: here,
+      );
+      await agent.start();
+      expect(speech.spoken.first, contains('다시 로그인'));
+      expect(turns.sent, ['say:안녕']);
+      expect((await store.load())!.accountId, 'acc-1');
+      expect(account.uploaded?.name, '진행');
+    });
+
+    test('다시 로그인을 취소하면 폰 안 기능으로', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([], signedIn: false);
+      final store = InMemoryProfileStore();
+      await store.save(const UserProfile(name: '진행', agentName: '코디'));
+      final agent = AgentController(
+        speech: speech,
+        listen: ScriptedListen(['기능 알려 줘']),
+        profiles: store,
+        onboarding: onboardingWith(speech, const []),
+        weatherService: FakeWeatherService(),
+        turns: turns,
+        location: here,
+      );
+      await agent.start();
+      expect(speech.spoken, contains('로그인하지 못해서 지금은 폰 안의 기능만 쓸게요.'));
+      expect(speech.spoken, contains(featureIntro));
+      expect(turns.sent, isEmpty);
+    });
+
     test('온보딩한 사용자도 첫 말부터 agent로 보낸다', () async {
       final speech = FakeSpeech();
       final turns = FakeTurnApi([reply('네, 말씀하세요.', TurnNext.done)]);
@@ -516,4 +564,17 @@ void main() {
       expect(left.b, greaterThan(left.r));
     });
   });
+}
+
+/// 로그인하면 게이트웨이 토큰이 생기는 것처럼 [onSignIn]을 부른다.
+class _SigningAccount extends FakeAccount {
+  _SigningAccount(this.onSignIn) : super(id: 'acc-1');
+
+  final void Function() onSignIn;
+
+  @override
+  Future<String?> signIn() async {
+    onSignIn();
+    return id;
+  }
 }
