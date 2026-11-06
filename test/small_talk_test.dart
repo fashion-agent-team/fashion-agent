@@ -9,6 +9,8 @@ void main() {
     expect(routeIntent('뭘 해 줄 수 있어?'), Intent.help);
     expect(routeIntent('사용법 알려 줘'), Intent.help);
     expect(routeIntent('날씨 어때'), Intent.weather);
+    expect(routeIntent('오늘 뭐입지'), Intent.outfitCheck);
+    expect(routeIntent('뭐 입을까'), Intent.outfitCheck);
   });
 
   test('인사·고맙다·시간에는 대화하듯 답한다', () {

@@ -75,11 +75,34 @@ class AgentController extends ChangeNotifier {
           await _say('앞으로는 화면을 누르지 않아도 돼요. "$wakeName" 하고 부르면 언제든 대답할게요.');
         }
       } else {
+        await _reconnect();
         await _say(returningGreeting(profile!.agentName!));
       }
       await _listenAndHandle();
     });
     unawaited(_wakeLoop());
+  }
+
+  /// 게이트웨이 주소가 있는데 로그인이 풀려 있으면 다시 로그인한다.
+  /// 2026-11-06 폰 확인: 서버 DB를 새로 만들자 로그인이 풀렸고, 로그인은 온보딩에서만 해서
+  /// 다시 깔아도 계속 폰 안 기능으로만 돌았다(agent·GPT에 말이 안 감).
+  Future<void> _reconnect() async {
+    final api = turns;
+    if (api == null || await api.available) return;
+    await _say('에이전트 서버에 다시 로그인할게요.');
+    final id = await onboarding.account.signIn();
+    if (id == null || !await api.available) {
+      await _say('로그인하지 못해서 지금은 폰 안의 기능만 쓸게요.');
+      return;
+    }
+    final linked = profile!.copyWith(accountId: id);
+    try {
+      await onboarding.account.upload(id, linked);
+    } catch (_) {
+      // 회원정보 올리기는 다음에 다시 해도 된다. 대화는 이어 간다.
+    }
+    await profiles.save(linked);
+    profile = linked;
   }
 
   /// 화면 위쪽 큰 버튼: 말하기. 이름을 부르지 않아도 된다.
