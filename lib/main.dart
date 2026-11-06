@@ -36,6 +36,9 @@ const _fakeVision = bool.fromEnvironment('FAKE_VISION');
 /// 카메라 없는 시뮬레이터에서 돌릴 때: `--dart-define=FAKE_CAMERA=true`
 const _fakeCamera = bool.fromEnvironment('FAKE_CAMERA');
 
+/// 화면을 누르지 않고 에이전트 이름을 불러 말하기. 끄려면 `--dart-define=HANDS_FREE=false`
+const _handsFree = bool.fromEnvironment('HANDS_FREE', defaultValue: true);
+
 /// 게이트웨이 주소. 비우면 로그인 없이 이 폰에만 저장한다.
 /// 노트북에서 띄운 게이트웨이: `flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080`
 const _gatewayUrl = String.fromEnvironment('GATEWAY_URL');
@@ -73,6 +76,7 @@ Future<void> main() async {
             listen: listen,
             turns: turns,
             location: location,
+            handsFree: _handsFree,
             camera: _fakeCamera
                 ? FakeAutoCaptureCamera()
                 : DeviceAutoCaptureCamera(),
@@ -84,6 +88,7 @@ Future<void> main() async {
       weatherService: weather,
       turns: turns,
       location: location,
+      handsFree: _handsFree,
       onboarding: OnboardingFlow(
         speech: speech,
         listen: listen,

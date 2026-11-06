@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../agent/agent_controller.dart';
 import '../agent/camera_turn.dart';
@@ -29,12 +30,14 @@ class AgentScreen extends StatefulWidget {
   State<AgentScreen> createState() => _AgentScreenState();
 }
 
-class _AgentScreenState extends State<AgentScreen> {
+class _AgentScreenState extends State<AgentScreen> with WidgetsBindingObserver {
   AgentController get _a => widget.agent;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _keepAwake(true);
     _a.openOutfitCheck = _openOutfitCheck;
     if (widget.cameraTurn != null) _a.openCamera = _openCamera;
     WidgetsBinding.instance.addPostFrameCallback((_) => _a.start());
@@ -48,6 +51,38 @@ class _AgentScreenState extends State<AgentScreen> {
       builder: (_) => SessionScreen(controller: session),
     ));
     session.onFinished = null;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _keepAwake(false);
+    super.dispose();
+  }
+
+  /// 앱이 화면에 있는 동안만 이름을 듣는다. 잠그거나 다른 앱으로 가면 멈춘다.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_a.handsFree) return;
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _keepAwake(true);
+        _a.resumeHandsFree();
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        _keepAwake(false);
+        unawaited(_a.pauseHandsFree());
+      default:
+        break;
+    }
+  }
+
+  /// 폰을 세워 두고 쓰므로, 이름을 듣는 동안은 화면이 꺼지지 않게 한다.
+  void _keepAwake(bool on) {
+    if (!_a.handsFree) return;
+    unawaited(WakelockPlus.toggle(enable: on).catchError((Object e) {
+      debugPrint('화면 켜 두기 실패: $e');
+    }));
   }
 
   /// 카메라 화면을 띄우고 카메라 대화가 끝나면 닫는다.
