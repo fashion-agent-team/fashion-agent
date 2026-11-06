@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'agent/agent_controller.dart';
@@ -13,6 +14,7 @@ import 'services/fake_vision_service.dart';
 import 'services/firebase_account_service.dart';
 import 'services/gateway_auth.dart';
 import 'services/listen_service.dart';
+import 'services/mouth_finder.dart';
 import 'services/permission_service.dart';
 import 'services/profile_store.dart';
 import 'services/schedule_store.dart';
@@ -77,6 +79,7 @@ Future<void> main() async {
             turns: turns,
             location: location,
             handsFree: _handsFree,
+            mouths: _fakeCamera || kIsWeb ? null : MlKitMouthFinder(),
             camera: _fakeCamera
                 ? FakeAutoCaptureCamera()
                 : DeviceAutoCaptureCamera(),
