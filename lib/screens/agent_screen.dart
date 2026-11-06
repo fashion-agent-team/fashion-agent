@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../agent/agent_controller.dart';
+import '../agent/camera_turn.dart';
+import '../services/turn_api.dart';
 import '../session/session_controller.dart';
+import 'camera_turn_screen.dart';
 import 'session_screen.dart';
 
 /// 앱의 첫 화면. 위쪽 큰 버튼은 "말하기", 아래쪽은 "다시 듣기"다.
@@ -11,10 +14,16 @@ import 'session_screen.dart';
 /// 처음 실행하면 버튼을 누르지 않아도 에이전트가 먼저 말을 건다.
 class AgentScreen extends StatefulWidget {
   const AgentScreen(
-      {super.key, required this.agent, required this.outfitCheck});
+      {super.key,
+      required this.agent,
+      required this.outfitCheck,
+      this.cameraTurn});
 
   final AgentController agent;
   final SessionController outfitCheck;
+
+  /// agent와 대화할 때 쓰는 카메라. 게이트웨이를 쓰지 않으면 null.
+  final CameraTurnController? cameraTurn;
 
   @override
   State<AgentScreen> createState() => _AgentScreenState();
@@ -27,6 +36,7 @@ class _AgentScreenState extends State<AgentScreen> {
   void initState() {
     super.initState();
     _a.openOutfitCheck = _openOutfitCheck;
+    if (widget.cameraTurn != null) _a.openCamera = _openCamera;
     WidgetsBinding.instance.addPostFrameCallback((_) => _a.start());
   }
 
@@ -38,6 +48,19 @@ class _AgentScreenState extends State<AgentScreen> {
       builder: (_) => SessionScreen(controller: session),
     ));
     session.onFinished = null;
+  }
+
+  /// 카메라 화면을 띄우고 카메라 대화가 끝나면 닫는다.
+  Future<TurnReply?> _openCamera(String sessionId, ImageKind kind) async {
+    final camera = widget.cameraTurn!;
+    final navigator = Navigator.of(context);
+    unawaited(navigator.push(MaterialPageRoute<void>(
+      builder: (_) =>
+          CameraTurnScreen(controller: camera, camera: camera.camera),
+    )));
+    final reply = await camera.run(sessionId, kind);
+    if (mounted && navigator.canPop()) navigator.pop();
+    return reply;
   }
 
   @override
