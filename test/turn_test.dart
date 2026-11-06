@@ -279,6 +279,19 @@ void main() {
       expect(speech.spoken, ['얼굴을 보여 주세요.', '카메라를 껐어요.', tapToTalk]);
     });
 
+    test('카메라를 그만두면 다음 말은 새 대화로 보낸다', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([
+        reply('옷을 보여 주세요.', TurnNext.cameraOutfit),
+        reply('지금 15도예요.', TurnNext.listen, id: 's_2'),
+      ]);
+      final agent = agentWith(speech, turns);
+      agent.openCamera = (_, __) async => null;
+      await agent.handle('오늘 뭐 입지');
+      await agent.handle('날씨 어때');
+      expect(turns.sessions, [null, null]);
+    });
+
     test('서버 오류면 이유를 말한다', () async {
       final speech = FakeSpeech();
       final agent = agentWith(

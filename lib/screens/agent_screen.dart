@@ -113,7 +113,7 @@ class _AgentScreenState extends State<AgentScreen> with WidgetsBindingObserver {
                   label: _a.busy ? '듣는 중' : '말하기',
                   detail: _a.message,
                   hint: _a.message,
-                  onTap: _a.busy ? null : () => unawaited(_a.talk()),
+                  onTap: () => unawaited(_a.talk()),
                   color: Theme.of(context).colorScheme.primaryContainer,
                 ),
               ),
