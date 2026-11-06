@@ -19,6 +19,14 @@ class FakeSpeech implements SpeechService {
 
   @override
   Future<void> speak(String text) async => spoken.add(text);
+
+  int stops = 0;
+
+  @override
+  bool get speaking => false;
+
+  @override
+  Future<void> stop() async => stops++;
 }
 
 class FakeWeatherService implements WeatherService {
