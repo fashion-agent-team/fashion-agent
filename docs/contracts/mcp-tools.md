@@ -39,6 +39,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 - `position`(옷이 화면 어디에 있나): box 중심 x가 0.4 미만이면 left, 0.6 초과면 right, 그 사이는 center.
 - `where`(옷 한 벌 안의 얼룩 위치): 같은 사진 기준("오른쪽 소매 끝" = 사진에서 오른쪽에 보이는 소매). agent는 이 값을 사용자가 "어디야?"라고 물을 때만 말합니다.
 
+**옷을 입고 찍은 사진(`mode=worn`)은 다릅니다.** 앱은 사진을 좌우로 뒤집지 않고 원본 그대로 보내고, 서버가 자세 인식(pose)으로 입은 사람의 몸 방향을 구해 `where`를 **입은 사람 몸 기준**으로 씁니다("오른쪽 소매" = 입은 사람의 오른팔). 사용자가 자기 몸을 만져 찾기 때문입니다. 얼굴 확인(mcp-face-check)의 셀카 규칙(앱이 뒤집어 보냄)과 다르니 주의하세요. 뒤집지 않고 보내는 것은 2026-11-06 정지원 제안이고, 팀 확인이 필요합니다(미정).
+
 ## mcp-weather
 
 ### `weather_today`
@@ -99,7 +101,11 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ### `clothes_inspect`
 옷 추천 2단계에서 앱이 자동으로 보낸 한 장마다 agent가 직접 부릅니다(GPT가 고르지 않음). 한 장에 옷이 두 벌 이상 있을 수 있습니다(비교). 얼룩·찢어짐을 **찾는 것**까지 하고, 그걸 어떻게 말할지는 GPT가 정합니다.
 
-입력 `{ "imageBase64": "<JPEG base64>" }`
+입력 `{ "imageBase64": "<JPEG base64>", "mode": "laid", "view": null }`
+
+- `mode`(없으면 `laid`): `laid`는 내려놓은 옷을 위에서 찍은 사진, `worn`은 옷을 입은 사람이 폰(세워 둠) 앞에 선 사진입니다(2026-11-06 추가).
+- `view`(`mode=worn`일 때만): `front` | `side` | `back`. agent가 앞→옆→뒤 순서로 한 장씩 부릅니다. 앞모습에서 옷 종류·색을 정하고, 옆·뒤에서는 얼룩·찢어짐을 더 찾습니다. 옆·뒤 사진에서는 보이는 옷만 돌려주면 됩니다.
+- `mode=worn`이면 `where`는 **입은 사람 몸 기준**("오른쪽 소매" = 입은 사람의 오른팔, "등 가운데")으로 씁니다. 사용자가 자기 몸을 만져 찾기 때문입니다. `position`은 쓰지 않아도 됩니다. 몸이 다 안 들어오면 `framing`에 "발이 안 보여요. 한 걸음 더 물러나 주세요." 같은 안내를 넣습니다.
 
 출력: 지금 비전 서버의 `ClothesScan`에 `source`와 `modelVersion`을 더한 모양입니다.
 ```json
@@ -107,11 +113,36 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "garments": [Garment, ...],
   "framing": null,              // 구도가 안 맞으면 "옷이 오른쪽에 잘렸어요. 폰을 오른쪽으로 조금 옮겨 주세요."
   "lighting": "ok",             // ok | dark
-  "source": "model",            // model(우리 모델) | gpt(폴백)
-  "modelVersion": "yolo-defect-v1"
+  "source": "model",            // model(우리 모델) | helper(지인 확인)
+  "modelVersion": "yolo-defect-v1",
+  "pendingHelper": null         // 애매한 결함이 있을 때만 값이 있음(아래)
 }
 ```
-판단 기준: 우리 모델의 결함 확신도가 0.5~0.7 사이인 것이 있으면 그 사진만 GPT에 다시 묻고 `source: "gpt"`. 0.7 이상은 그대로, 0.5 미만은 버립니다(첫 기준, 학습 후 조정).
+판단 기준은 결함(`defects`) 하나하나의 모델 확신도로 정합니다(2026-11-06 결정. 근거는 mcp-clothes-state PR #2 `docs/model-comparison.md` "판단 기준 제안". 첫 기준이고 실제 사진으로 평가한 뒤 조정. 아래 기준 0.5는 깨끗한 옷을 괜히 묻는 일을 줄이려고 임시로 올린 값).
+
+**옷 사진은 GPT 비전으로 보내지 않습니다**(2026-11-06 결정). 모델이 애매하면 지어내지 않고, 사용자가 원할 때 지인에게만 묻습니다.
+
+| 확신도 | 처리 |
+|---|---|
+| 0.6 이상 | 결함으로 보고 `defects`에 넣어 바로 알립니다. |
+| 0.5 이상 0.6 미만 | 애매함. `defects`에 넣지 않고 `pendingHelper.candidates`에 모읍니다. |
+| 0.5 미만 | 버립니다. |
+
+애매한 것이 있으면 이렇게 돌려줍니다. 사진은 넣지 않고 위치(box)만 줍니다. agent가 이 결과를 그대로 GPT에 넘기기 때문입니다.
+```json
+"pendingHelper": {
+  "garmentId": "g1",
+  "candidates": [
+    { "kind": "stain", "where": "오른쪽 소매 끝", "confidence": 0.42,
+      "box": { "x": 0.62, "y": 0.30, "w": 0.08, "h": 0.06 } }   // 원본 사진 기준 비율
+  ],
+  "note": "확실하지 않은 부분이 있어요."
+}
+```
+- agent는 확실한 결함(0.6 이상)을 먼저 말하고, `note`를 읽은 뒤 "지인에게 물어볼까요?"라고 묻습니다. `note`에는 위치를 넣지 않습니다. `where`는 다른 결함과 같이 사용자가 "어디야?"라고 물을 때만 말합니다.
+- 사용자가 원할 때만 `helper_ask`를 부릅니다. agent는 clothes_inspect에 보냈던 원본 사진에서 그 옷 한 벌(`garmentId`의 `box`)만 잘라 내고, 후보 `box`마다 테두리를 그린 **한 장**을 `imageBase64`로 넣습니다. 후보가 여러 개여도 한 벌에 한 번만 묻습니다(helper_ask 입력은 바꾸지 않음). 질문은 "표시한 곳이 얼룩인지 봐 줄래?"처럼 씁니다. 얼굴이 들어가지 않게 옷 부분만 보냅니다.
+- 답은 지금은 사용자가 "답 왔어?"라고 물으면 agent가 `helper_answer`로 확인합니다(FCM 알림은 gateway가 생긴 뒤, helper_answer 절과 같음). 답으로 알릴 때 `source`는 `helper`입니다. 기다리는 동안 다른 안내는 그대로 이어 갑니다.
+- 등록된 지인이 없거나 사용자가 묻지 않겠다고 하면 "확실하지 않은 부분이 있어요"까지만 말하고 끝냅니다.
 
 ## mcp-face-check
 
@@ -120,6 +151,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 **왼쪽·오른쪽은 셀카 화면(거울) 기준입니다.** 앱은 보내기 전에 사진과 윤곽점을 셀카 화면처럼 좌우를 뒤집어 맞춥니다(폰·플러그인마다 전면 카메라 사진 저장 방향이 달라서). 그러면 옷과 같은 규칙 "사진 왼쪽 = 사용자 왼쪽"이 됩니다. 서버는 받은 사진 그대로 왼쪽·오른쪽을 말합니다.
 
 사진은 앱이 카메라 영상에서 구도가 맞는 순간 한 장면만 꺼내 보낸 것이고, 서버는 판단에만 쓰고 남기지 않습니다.
+
+**얼굴·치아 사진은 GPT 같은 외부 AI로 보내지 않습니다**(개인정보, 2026-11-06 결정). 대칭은 윤곽점 계산으로, 치아는 우리가 학습한 모델(ONNX)을 이 서버에서 돌려서 봅니다. 그래서 두 도구에는 `source` 값이 없습니다. 모델이 애매하면 지어내지 않고 "잘 모르겠다"고 돌려주고, agent가 가족·친구에게 물어볼지(helper) 제안합니다.
 
 ### `face_makeup_check`
 "얼굴 볼래" → 앱이 얼굴을 실시간으로 비추며 구도를 안내하고, 잘 잡혀 1초 멈추면 그동안 찍은 3~5장을 보냅니다(2026-11-05 결정). 화장 대칭(눈썹, 입술 선, 볼·입술 색 좌우)을 장마다 재고 항목별 중간값으로 판단합니다. GPT는 쓰지 않습니다.
@@ -147,8 +180,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
     "checks": [{ "name": "browLength", "side": "right", "value": 0.21, "limit": 0.15, "ok": false }, ...],  // 기준값 맞추기용
     "skipped": [],              // 한쪽이 그늘져 건너뛴 색 비교: cheekColor, lipColor
     "frames": 3                 // 판단에 쓴 장 수
-  },
-  "source": "model"
+  }
 }
 ```
 `framing`이 있거나 `lighting`이 `dark`면(절반 넘는 장이 그러면) `symmetry`는 `null`입니다. 비교 항목과 기준값은 mcp-face-check `docs/DEVELOPMENT.md`에 있습니다.
@@ -161,22 +193,23 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 { "imageBase64": "<JPEG base64>",
   "mouthBox": { "x": 0.3, "y": 0.55, "w": 0.4, "h": 0.2 } }
 ```
-`mouthBox`는 앱이 입술 윤곽으로 구한 입 영역(비율)이고, 서버는 이 부분을 잘라서 봅니다. 없으면 서버가 사진에서 찾습니다.
+`mouthBox`는 앱이 ML Kit 입술 윤곽 `UPPER_LIP_BOTTOM`과 `LOWER_LIP_TOP` 점으로 구한 입 안쪽 박스(비율)입니다. 서버는 이 박스의 긴 변 × 1.36 정사각형으로 잘라(학습 때와 같은 규칙) 모델에 넣습니다. 없으면 서버가 사진에서 찾습니다.
 
 출력
 ```json
 {
   "framing": null,              // "입이 다 보이지 않아요. 입을 조금 더 벌려 주세요."
   "lighting": "ok",
-  "teeth": { "foreignObject": true, "confidence": 0.82, "note": "앞니 사이에 뭔가 낀 것 같아요." },
-  "source": "model"             // model | gpt
+  "teeth": { "foreignObject": true, "confidence": 0.82, "note": "앞니 사이에 뭔가 낀 것 같아요." }
 }
 ```
+`foreignObject`는 모델 확률로 정합니다. 0.7 이상이면 `true`, 0.3 이하면 `false`, 그 사이는 `null`(애매함)입니다(첫 기준, 실제 사진으로 평가한 뒤 조정).
+애매하면 `{"foreignObject": null, "confidence": 0.5, "note": "잘 보이지 않아서 확실하지 않아요."}`를 돌려주고, agent는 note를 읽은 뒤 "가족에게 사진 보내서 물어볼까요?"라고 묻습니다. 사용자가 원할 때만 `helper_ask`로 넘깁니다.
 
 ## mcp-closet
 
 ### `closet_save`
-옷 추천을 마칠 때("이걸로 할게") agent가 2단계에서 본 옷을 모아 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다(임베딩 유사도 + 종류·색 일치).
+옷 추천을 마칠 때("이걸로 할게") agent가 2단계에서 본 옷을 모아 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다: 종류·색 계열이 같고, 임베딩 유사도 0.90 이상이고, 이름이 같은 묶음(니트=스웨터, 운동화=스니커즈 …)일 때. e5는 같은 색 비슷한 옷(니트와 가디건)을 유사도만으로 못 가려서 이름 조건을 더했습니다(mcp-closet `docs/DEVELOPMENT.md`).
 
 입력 `{ "userId": "…", "garments": [Garment, ...] }`
 
@@ -184,6 +217,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 
 ### `closet_wear`
 입력 `{ "userId": "…", "garmentIds": ["c_17", "c_03"], "date": "2026-11-04" }` → 출력 `{ "recorded": 2 }`
+
+`date`가 없으면 서울 기준 오늘. 같은 날 함께 기록한 옷이 그날의 조합이 됩니다(`closet_outfits`). 남의 옷이나 없는 id가 섞이면 `not_found`이고 아무것도 기록하지 않습니다.
 
 ### `closet_search`
 RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(선택), 찾은 옷과 코디 지식을 GPT에 넘기면 GPT가 그 안에서만 골라 추천합니다(생성 단계).
@@ -193,7 +228,9 @@ RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(�
 { "userId": "…", "situation": "오늘 오전 면접, 체감 9도", "occasion": "formal", "apparentTemperature": 9.5,
   "excludeGarmentIds": ["c_17"], "limit": 8 }
 ```
-`situation`은 agent가 일정·날씨로 만든 문장이고 임베딩 검색에 씁니다. `occasion`, `apparentTemperature`는 있으면 필터로 씁니다. `excludeGarmentIds`는 빼고 싶은 옷(예: 어제 입은 옷)입니다.
+`situation`은 agent가 일정·날씨로 만든 문장이고 임베딩 검색에 씁니다. `occasion`, `apparentTemperature`는 있으면 필터로 씁니다(앱 `schedule_rules`·`weather_rules`가 "맞지 않아요"라고 하는 옷만 뺌, 예: 면접에 운동복, 체감 23도 이상에 겉옷). `excludeGarmentIds`는 꼭 빼고 싶은 옷입니다.
+
+`score`는 임베딩 유사도에 자리에 맞는 격식이면 최대 0.06을 더하고, 최근에 입은 옷이면 뺀 값입니다(어제 0.06, 그제 0.04, 일주일 안 0.02). 최근 입은 옷은 빼지 않고 뒤로만 보냅니다(옷이 적은 사람도 추천을 받게). 후보는 종류(상의·하의·겉옷·신발)를 돌아가며 골라 한 종류로 몰리지 않습니다.
 
 출력
 ```json
@@ -209,6 +246,22 @@ RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(�
 }
 ```
 옷장이 비어 있으면 `{ "candidates": [], "styleNotes": [...], "empty": true }`.
+
+### `closet_outfits`
+예전에 입은 조합입니다. 같은 날 `closet_wear`로 기록한 옷을 한 벌로 묶어 최근 날부터 줍니다. 개별 기능("지난번 면접 때 뭐 입었지?", "이 셔츠 전에 뭐랑 입었어?", "요즘 뭐 입었지?")에 쓰고, 옷 추천 흐름에서 자동으로 부르지 않습니다. "면접 때"처럼 일정으로 물으면 agent가 `schedule_list`로 날짜를 찾아 `from`·`to`에 넣습니다.
+
+입력 `{ "userId": "…", "from": "2026-10-01", "to": "2026-11-04", "garmentId": "c_17", "limit": 5 }` (userId 말고는 선택. `to` 기본 오늘, `from` 기본 `to`의 90일 전, `limit` 기본 5·최대 30)
+
+출력
+```json
+{ "outfits": [
+  { "date": "2026-10-28",
+    "garments": [
+      { "garmentId": "c_21", "category": "outer", "name": "자켓", "colorName": "남색", "formality": "smart" },
+      { "garmentId": "c_17", "category": "top", "name": "셔츠", "colorName": "흰색", "formality": "smart" },
+      { "garmentId": "c_05", "category": "bottom", "name": "슬랙스", "colorName": "검은색", "formality": "formal" } ] } ] }
+```
+한 날 안의 옷은 겉옷·상의·원피스·하의·신발 순입니다. 기록이 없으면 `{ "outfits": [] }`. 남의 옷 `garmentId`는 `not_found`. 하루에 두 번 갈아입어도 한 벌로 묶입니다(표를 바꾸지 않으려고 `wears`만 씀).
 
 ## mcp-helper
 

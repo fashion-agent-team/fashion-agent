@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fashion_agent/agent/agent_controller.dart';
 import 'package:fashion_agent/agent/agent_speech.dart';
 import 'package:fashion_agent/agent/answer_parsing.dart';
@@ -7,6 +9,7 @@ import 'package:fashion_agent/models/user_profile.dart';
 import 'package:fashion_agent/models/weather.dart';
 import 'package:fashion_agent/services/account_service.dart';
 import 'package:fashion_agent/services/listen_service.dart';
+import 'package:fashion_agent/services/permission_service.dart';
 import 'package:fashion_agent/services/profile_store.dart';
 import 'package:fashion_agent/services/speech_service.dart';
 import 'package:fashion_agent/services/weather_service.dart';
@@ -17,17 +20,48 @@ class FakeSpeech implements SpeechService {
 
   @override
   Future<void> speak(String text) async => spoken.add(text);
+
+  int stops = 0;
+
+  @override
+  bool get speaking => false;
+
+  @override
+  Future<void> stop() async => stops++;
 }
 
 /// 정해 둔 답을 차례로 "듣는다". null은 아무 말도 못 들은 경우다.
 class ScriptedListen implements ListenService {
-  ScriptedListen(this.answers);
+  ScriptedListen(this.answers, {this.blockWhenDone = false});
 
   final List<String?> answers;
+
+  /// 답이 다 떨어지면 null 대신 [cancel]될 때까지 기다린다. 계속 듣는 흐름을 시험할 때.
+  final bool blockWhenDone;
   var _i = 0;
+  Completer<String?>? _waiting;
+  int cancels = 0;
+
+  bool get waiting => _waiting != null && !_waiting!.isCompleted;
 
   @override
-  Future<String?> listen() async => _i < answers.length ? answers[_i++] : null;
+  Future<String?> listen({
+    Duration listenFor = const Duration(seconds: 15),
+    Duration pauseFor = const Duration(seconds: 3),
+    bool Function(String partial)? stopWhen,
+    Duration settle = const Duration(milliseconds: 700),
+  }) async {
+    if (_i < answers.length) return answers[_i++];
+    if (!blockWhenDone) return null;
+    return (_waiting = Completer<String?>()).future;
+  }
+
+  @override
+  Future<void> cancel() async {
+    cancels++;
+    final w = _waiting;
+    if (w != null && !w.isCompleted) w.complete(null);
+  }
 }
 
 class FakeAccount implements AccountService {
@@ -64,12 +98,15 @@ class FakeWeatherService implements WeatherService {
 }
 
 OnboardingFlow onboardingWith(FakeSpeech speech, List<String?> answers,
-        {ProfileStore? store, AccountService? account}) =>
+        {ProfileStore? store,
+        AccountService? account,
+        PermissionService? permissions}) =>
     OnboardingFlow(
       speech: speech,
       listen: ScriptedListen(answers),
       profiles: store ?? InMemoryProfileStore(),
       account: account ?? FakeAccount(),
+      permissions: permissions,
     );
 
 void main() {
@@ -171,6 +208,26 @@ void main() {
 
       expect(speech.spoken, contains('잘 듣지 못했어요. $askAgentName'));
       expect(profile.agentName, '하늘');
+    });
+
+    test('인사 뒤 첫 질문 전에 권한 창을 미리 알리고 한 번에 띄운다', () async {
+      final speech = FakeSpeech();
+      final permissions = FakePermissionService();
+      await onboardingWith(speech, [...answers, '네'], permissions: permissions)
+          .run();
+
+      expect(permissions.requests, 1);
+      expect(speech.spoken.take(3), [firstGreeting, permissionIntro, '고마워요.']);
+      expect(speech.spoken[3], startsWith('혹시 다른 폰에서'));
+    });
+
+    test('마이크를 막으면 들을 수 없다고 알려 준다', () async {
+      final speech = FakeSpeech();
+      await onboardingWith(speech, [...answers, '네'],
+              permissions: FakePermissionService(canListen: false))
+          .run();
+
+      expect(speech.spoken, contains(permissionDeniedListen));
     });
 
     test('계정에 연결되면 정보를 올린다', () async {

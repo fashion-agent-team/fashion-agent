@@ -10,24 +10,45 @@ class SpeechService {
     _tts.setErrorHandler((_) => _speaking = false);
     // 안내가 끝난 뒤 다음 안내로 넘어가도록 speak가 읽기를 마칠 때까지 기다리게 한다.
     _tts.awaitSpeakCompletion(true);
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      // 말한 뒤 바로 음성 인식을 켜므로, 재생과 녹음을 함께 쓰는 오디오 모드로 둔다.
-      // 이렇게 하지 않으면 마이크를 켠 뒤 안내 음성이 수화기 쪽으로 작게 나온다.
+    if (_isIOS) {
       _tts.setSharedInstance(true);
-      _tts.setIosAudioCategory(
-        IosTextToSpeechAudioCategory.playAndRecord,
-        [
-          IosTextToSpeechAudioCategoryOptions.defaultToSpeaker,
-          IosTextToSpeechAudioCategoryOptions.allowBluetooth,
-          IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
-        ],
-        IosTextToSpeechAudioMode.voicePrompt,
-      );
     }
+    _tts.setVolume(1.0);
   }
 
   final FlutterTts _tts = FlutterTts();
   bool _speaking = false;
+
+  static bool get _isIOS =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// 읽기 직전에 iOS 오디오를 "재생 전용"으로 바꾼다.
+  ///
+  /// 음성 인식이 켜졌던 녹음+재생(playAndRecord) 모드로 읽으면, 스피커로 나와도 통화용 음량이라
+  /// 최대로 키워도 작게 들린다. 읽는 동안에는 녹음할 일이 없으므로 재생 전용(playback)으로 크게 읽고,
+  /// 음성 인식은 들을 때 스스로 녹음 모드로 바꿨다가 끝나면 이 모드로 되돌린다.
+  Future<void> _loudPlayback() async {
+    if (!_isIOS) return;
+    await _tts.setIosAudioCategory(
+      IosTextToSpeechAudioCategory.playback,
+      [
+        IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+        IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+        IosTextToSpeechAudioCategoryOptions.duckOthers,
+      ],
+      IosTextToSpeechAudioMode.spokenAudio,
+    );
+  }
+
+  /// 지금 읽고 있는지.
+  bool get speaking => _speaking;
+
+  /// 읽던 안내를 멈춘다. 말하는 중에 말하기 버튼을 누르면 끊고 바로 듣게 할 때 쓴다.
+  Future<void> stop() async {
+    if (!_speaking) return;
+    await _tts.stop();
+    _speaking = false;
+  }
 
   /// 읽고 있던 안내를 끊고 [text]를 읽는다. 다 읽을 때까지 기다린다.
   Future<void> speak(String text) async {
@@ -41,6 +62,7 @@ class SpeechService {
       }
       _speaking = false;
     }
+    await _loudPlayback();
     await _tts.speak(text);
   }
 }
