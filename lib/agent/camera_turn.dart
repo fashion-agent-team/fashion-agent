@@ -121,6 +121,11 @@ class CameraTurnController extends ChangeNotifier {
 
   /// 말하기 버튼. 자동 촬영을 잠깐 멈추고 한 번 듣는다.
   Future<void> talk() async {
+    if (running && busy && speech.speaking) {
+      // 말하는 중에 누르면 끊는다.
+      await speech.stop();
+      return;
+    }
     if (!running || busy) return;
     _round++;
     await camera.cancel();

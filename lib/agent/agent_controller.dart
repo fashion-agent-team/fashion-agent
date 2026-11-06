@@ -106,8 +106,13 @@ class AgentController extends ChangeNotifier {
   }
 
   /// 화면 위쪽 큰 버튼: 말하기. 이름을 부르지 않아도 된다.
+  ///
+  /// 에이전트가 말하는 중에 누르면 말을 끊는다. 하던 대화가 이어서 듣는 차례면 바로 듣는다.
   Future<void> talk() async {
-    if (busy) return;
+    if (busy) {
+      if (speech.speaking) await speech.stop();
+      return;
+    }
     await _busy(() async {
       // 이름을 기다리며 듣던 것을 먼저 멈춘다. busy를 켠 뒤라 이름 듣기는 다시 시작하지 않는다.
       if (_waking) await listen.cancel();
@@ -152,6 +157,9 @@ class AgentController extends ChangeNotifier {
           listenFor: const Duration(seconds: 60),
           // "코디야 … 오늘 뭐 입지"처럼 이름 뒤에 잠깐 쉬어도 이어 듣게.
           pauseFor: const Duration(seconds: 3),
+          // 이름만 부르고 기다리면 3초를 다 기다리지 않고 바로 대답한다(2026-11-06 폰 확인: 불러도 대답이 없다고 느낌).
+          stopWhen: (partial) =>
+              afterWakeWord(partial, wakeName)?.isEmpty ?? false,
         );
         if (_paused || busy) continue;
         if (heard == null) {
@@ -247,6 +255,8 @@ class AgentController extends ChangeNotifier {
         }
         fromCamera = await open(reply.sessionId, camera);
         if (fromCamera == null) {
+          // "그만하기"로 나오면 옷 추천 대화를 끝낸다. 이어 두면 다음 말에 agent가 다시 카메라를 켠다(2026-11-06 폰 확인).
+          _sessionId = null;
           await _say('카메라를 껐어요.');
           break;
         }

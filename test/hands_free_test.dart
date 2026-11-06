@@ -44,6 +44,14 @@ void main() {
       expect(afterWakeWord('', '코디'), isNull);
     });
 
+    test('음성 인식이 살짝 다르게 쓴 이름도 알아듣는다', () {
+      expect(afterWakeWord('고디야 날씨 어때', '코디'), '날씨 어때');
+      expect(afterWakeWord('패숀봇 일정 알려 줘', '패션봇'), '일정 알려 줘');
+      expect(afterWakeWord('어디야', '코디'), isNull);
+      expect(afterWakeWord('오늘 뭐 입지', '코디'), isNull);
+      expect(afterWakeWord('에이전 날씨', null), '날씨');
+    });
+
     test('이름을 안 지었으면 "에이전트"로 부른다', () {
       expect(afterWakeWord('에이전트 날씨 어때', null), '날씨 어때');
     });

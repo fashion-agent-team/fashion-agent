@@ -29,6 +29,16 @@ class SpeechService {
   final FlutterTts _tts = FlutterTts();
   bool _speaking = false;
 
+  /// 지금 읽고 있는지.
+  bool get speaking => _speaking;
+
+  /// 읽던 안내를 멈춘다. 말하는 중에 말하기 버튼을 누르면 끊고 바로 듣게 할 때 쓴다.
+  Future<void> stop() async {
+    if (!_speaking) return;
+    await _tts.stop();
+    _speaking = false;
+  }
+
   /// 읽고 있던 안내를 끊고 [text]를 읽는다. 다 읽을 때까지 기다린다.
   Future<void> speak(String text) async {
     await _tts.setLanguage('ko-KR');
