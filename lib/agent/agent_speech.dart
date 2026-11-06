@@ -25,3 +25,8 @@ const tapToTalk = '다른 기능이 필요하면 화면 위쪽을 누르고 말�
 String returningGreeting(String agentName) =>
     '반갑습니다. 오늘 하루도 좋은 하루 되세요. 당신의 에이전트 $agentName입니다. '
     '원하시는 기능 있으시면 말씀해주세요.';
+
+/// 구글 로그인 창(iOS가 띄우는 "accounts.google.com을 사용하여 로그인하려고 합니다")이 뜨기 전에 읽는다.
+/// 창은 앱이 없앨 수 없어서 미리 무엇을 누를지 알려 준다(2026-11-06 진행 님 요청).
+const signInGuide = '곧 구글 로그인 창이 떠요. 오른쪽 계속 버튼을 누르고 쓰실 계정을 고르면 돼요. '
+    'VoiceOver를 쓰시면 오른쪽으로 쓸어 넘겨 계속에서 두 번 탭하세요.';

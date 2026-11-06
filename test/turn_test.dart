@@ -17,7 +17,12 @@ import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
 
 import 'agent_test.dart'
-    show FakeSpeech, ScriptedListen, FakeWeatherService, onboardingWith;
+    show
+        FakeAccount,
+        FakeSpeech,
+        ScriptedListen,
+        FakeWeatherService,
+        onboardingWith;
 
 TurnReply reply(String speech, TurnNext next, {String id = 's_1'}) =>
     TurnReply(sessionId: id, speech: speech, next: next);
@@ -27,7 +32,7 @@ class FakeTurnApi implements TurnApi {
   FakeTurnApi(this.replies, {this.signedIn = true});
 
   final List<Object> replies;
-  final bool signedIn;
+  bool signedIn;
   final sent = <String>[];
   final sessions = <String?>[];
   final locations = <TurnLocation?>[];
@@ -121,6 +126,8 @@ void main() {
       expect(r.next.camera, ImageKind.outfit);
       expect(r.resultType, 'outfit_advice');
       expect(TurnNext.parse('camera_teeth').camera, ImageKind.teeth);
+      expect(TurnNext.parse('camera_worn').camera, ImageKind.worn);
+      expect(ImageKind.worn.selfie, isFalse);
       expect(TurnNext.parse('listen').camera, isNull);
       expect(TurnNext.parse('모름'), TurnNext.done);
     });
@@ -141,8 +148,13 @@ void main() {
             accessToken: 'a1',
             refreshToken: 'r1',
             expiresAt: DateTime.now().add(const Duration(hours: 1)));
-      final api = GatewayTurnApi(GatewayAuth(
-          baseUrl: Uri.parse('http://gw:8080'), tokens: store, client: client));
+      final modes = MemoryOutfitModeStore();
+      final api = GatewayTurnApi(
+          GatewayAuth(
+              baseUrl: Uri.parse('http://gw:8080'),
+              tokens: store,
+              client: client),
+          modes: modes);
 
       expect(await api.available, isTrue);
       final r = await api.say(null, '안녕');
@@ -152,6 +164,43 @@ void main() {
       expect(jsonDecode(seen.body), {'utterance': '안녕'});
       expect(r.sessionId, 's_2');
       expect(r.speech, '안녕하세요');
+    });
+
+    test('고른 방식을 기억해서 다음 말부터 보낸다', () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = MockClient((req) async {
+        bodies.add(jsonDecode(req.body) as Map<String, dynamic>);
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({
+            'sessionId': 's_3',
+            'speech': '좋아요.',
+            'next': 'camera_worn',
+            'result': {'type': 'outfit_advice', 'outfitMode': 'worn'},
+          })),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final store = MemoryTokenStore()
+        ..tokens = GatewayTokens(
+            accessToken: 'a1',
+            refreshToken: 'r1',
+            expiresAt: DateTime.now().add(const Duration(hours: 1)));
+      final modes = MemoryOutfitModeStore();
+      final api = GatewayTurnApi(
+          GatewayAuth(
+              baseUrl: Uri.parse('http://gw:8080'),
+              tokens: store,
+              client: client),
+          modes: modes);
+
+      final r = await api.say(null, '오늘 뭐 입지?');
+      expect(bodies.first.containsKey('outfitMode'), isFalse);
+      expect(r.next.camera, ImageKind.worn);
+      expect(modes.mode, OutfitMode.worn);
+
+      await api.say('s_3', '입고 볼게');
+      expect(bodies.last['outfitMode'], 'worn');
     });
 
     test('위치 권한이 없으면 서울(locationFallback=true)로 보낸다', () async {
@@ -241,6 +290,19 @@ void main() {
       expect(speech.spoken, ['얼굴을 보여 주세요.', '카메라를 껐어요.', tapToTalk]);
     });
 
+    test('카메라를 그만두면 다음 말은 새 대화로 보낸다', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([
+        reply('옷을 보여 주세요.', TurnNext.cameraOutfit),
+        reply('지금 15도예요.', TurnNext.listen, id: 's_2'),
+      ]);
+      final agent = agentWith(speech, turns);
+      agent.openCamera = (_, __) async => null;
+      await agent.handle('오늘 뭐 입지');
+      await agent.handle('날씨 어때');
+      expect(turns.sessions, [null, null]);
+    });
+
     test('서버 오류면 이유를 말한다', () async {
       final speech = FakeSpeech();
       final agent = agentWith(
@@ -264,6 +326,49 @@ void main() {
       await agentWith(speech, turns).handle('기능 알려 줘');
       expect(turns.sent, isEmpty);
       expect(speech.spoken.first, featureIntro);
+    });
+
+    test('로그인이 풀린 채 다시 켜면 먼저 다시 로그인하고 agent로 보낸다', () async {
+      final speech = FakeSpeech();
+      final turns =
+          FakeTurnApi([reply('네, 말씀하세요.', TurnNext.done)], signedIn: false);
+      final store = InMemoryProfileStore();
+      await store.save(const UserProfile(name: '진행', agentName: '코디'));
+      final account = _SigningAccount(() => turns.signedIn = true);
+      final agent = AgentController(
+        speech: speech,
+        listen: ScriptedListen(['안녕']),
+        profiles: store,
+        onboarding: onboardingWith(speech, const [], account: account),
+        weatherService: FakeWeatherService(),
+        turns: turns,
+        location: here,
+      );
+      await agent.start();
+      expect(speech.spoken.first, contains('다시 로그인'));
+      expect(turns.sent, ['say:안녕']);
+      expect((await store.load())!.accountId, 'acc-1');
+      expect(account.uploaded?.name, '진행');
+    });
+
+    test('다시 로그인을 취소하면 폰 안 기능으로', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([], signedIn: false);
+      final store = InMemoryProfileStore();
+      await store.save(const UserProfile(name: '진행', agentName: '코디'));
+      final agent = AgentController(
+        speech: speech,
+        listen: ScriptedListen(['기능 알려 줘']),
+        profiles: store,
+        onboarding: onboardingWith(speech, const []),
+        weatherService: FakeWeatherService(),
+        turns: turns,
+        location: here,
+      );
+      await agent.start();
+      expect(speech.spoken, contains('로그인하지 못해서 지금은 폰 안의 기능만 쓸게요.'));
+      expect(speech.spoken, contains(featureIntro));
+      expect(turns.sent, isEmpty);
     });
 
     test('온보딩한 사용자도 첫 말부터 agent로 보낸다', () async {
@@ -335,6 +440,29 @@ void main() {
 
       expect(camera.opened, [true]);
       expect(turns.sent, ['show:face:3', 'show:teeth:3']);
+    });
+
+    test('입고 한 바퀴는 뒤쪽 카메라로 앞·옆·뒤를 차례로 보낸다', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([
+        reply('앞모습을 봤어요. 이제 천천히 옆으로 돌아서 잠시 멈춰 주세요.', TurnNext.cameraWorn),
+        reply('옆모습도 봤어요. 이제 뒤로 돌아서 잠시 멈춰 주세요.', TurnNext.cameraWorn),
+        reply('잘 어울려요.', TurnNext.listen),
+      ]);
+      final camera = FakeAutoCaptureCamera([photo, photo, photo]);
+      final end =
+          await cameraWith(speech, turns, camera).run('s_1', ImageKind.worn);
+      expect(camera.opened, [false]);
+      expect(turns.sent, ['show:worn:3', 'show:worn:3', 'show:worn:3']);
+      expect(end?.speech, '잘 어울려요.');
+    });
+
+    test('입고 한 바퀴에서 오래 안 멈추면 물러나라고 안내한다', () async {
+      final speech = FakeSpeech();
+      final camera = FakeAutoCaptureCamera([null, null, null]);
+      await cameraWith(speech, FakeTurnApi([]), camera)
+          .run('s_1', ImageKind.worn);
+      expect(speech.spoken.first, contains('물러나'));
     });
 
     test('이 사진에만 입 박스를 찾아 같이 보낸다', () async {
@@ -487,4 +615,17 @@ void main() {
       expect(left.b, greaterThan(left.r));
     });
   });
+}
+
+/// 로그인하면 게이트웨이 토큰이 생기는 것처럼 [onSignIn]을 부른다.
+class _SigningAccount extends FakeAccount {
+  _SigningAccount(this.onSignIn) : super(id: 'acc-1');
+
+  final void Function() onSignIn;
+
+  @override
+  Future<String?> signIn() async {
+    onSignIn();
+    return id;
+  }
 }

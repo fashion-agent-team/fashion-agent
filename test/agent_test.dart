@@ -20,6 +20,14 @@ class FakeSpeech implements SpeechService {
 
   @override
   Future<void> speak(String text) async => spoken.add(text);
+
+  int stops = 0;
+
+  @override
+  bool get speaking => false;
+
+  @override
+  Future<void> stop() async => stops++;
 }
 
 /// 정해 둔 답을 차례로 "듣는다". null은 아무 말도 못 들은 경우다.
@@ -40,6 +48,8 @@ class ScriptedListen implements ListenService {
   Future<String?> listen({
     Duration listenFor = const Duration(seconds: 15),
     Duration pauseFor = const Duration(seconds: 3),
+    bool Function(String partial)? stopWhen,
+    Duration settle = const Duration(milliseconds: 700),
   }) async {
     if (_i < answers.length) return answers[_i++];
     if (!blockWhenDone) return null;

@@ -79,7 +79,7 @@ class OnboardingFlow {
         await _ask('혹시 다른 폰에서 저를 쓰신 적이 있나요? 네 또는 아니요로 말씀해 주세요.', parseYesNo);
     if (usedBefore != true) return null;
 
-    await _say('쓰시던 계정으로 로그인할게요.');
+    await _say('쓰시던 계정으로 로그인할게요. $signInGuide');
     final id = await account.signIn();
     final saved = id == null ? null : await account.restore(id);
     if (saved == null || !saved.isOnboarded) {
@@ -152,7 +152,7 @@ class OnboardingFlow {
   }
 
   Future<UserProfile> _connectAccount(UserProfile p) async {
-    await _say('폰을 바꿔도 이어서 쓸 수 있게 계정에 연결할게요.');
+    await _say('폰을 바꿔도 이어서 쓸 수 있게 계정에 연결할게요. $signInGuide');
     final id = await account.signIn();
     if (id == null) {
       await _say('지금은 계정 연결 없이 이 폰에만 저장할게요.');

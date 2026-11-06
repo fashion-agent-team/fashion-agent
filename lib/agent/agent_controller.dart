@@ -13,6 +13,7 @@ import '../styling/weather_rules.dart';
 import 'agent_speech.dart';
 import 'intent_router.dart';
 import 'onboarding_flow.dart';
+import 'small_talk.dart';
 import 'wake_word.dart';
 
 /// 앱의 첫 화면 뒤에서 도는 에이전트. 처음이면 온보딩을, 아니면 인사를 하고 원하는 기능을 듣는다.
@@ -74,6 +75,7 @@ class AgentController extends ChangeNotifier {
           await _say('앞으로는 화면을 누르지 않아도 돼요. "$wakeName" 하고 부르면 언제든 대답할게요.');
         }
       } else {
+        await _reconnect();
         await _say(returningGreeting(profile!.agentName!));
       }
       await _listenAndHandle();
@@ -81,9 +83,36 @@ class AgentController extends ChangeNotifier {
     unawaited(_wakeLoop());
   }
 
+  /// 게이트웨이 주소가 있는데 로그인이 풀려 있으면 다시 로그인한다.
+  /// 2026-11-06 폰 확인: 서버 DB를 새로 만들자 로그인이 풀렸고, 로그인은 온보딩에서만 해서
+  /// 다시 깔아도 계속 폰 안 기능으로만 돌았다(agent·GPT에 말이 안 감).
+  Future<void> _reconnect() async {
+    final api = turns;
+    if (api == null || await api.available) return;
+    await _say('에이전트 서버에 다시 로그인할게요. $signInGuide');
+    final id = await onboarding.account.signIn();
+    if (id == null || !await api.available) {
+      await _say('로그인하지 못해서 지금은 폰 안의 기능만 쓸게요.');
+      return;
+    }
+    final linked = profile!.copyWith(accountId: id);
+    try {
+      await onboarding.account.upload(id, linked);
+    } catch (_) {
+      // 회원정보 올리기는 다음에 다시 해도 된다. 대화는 이어 간다.
+    }
+    await profiles.save(linked);
+    profile = linked;
+  }
+
   /// 화면 위쪽 큰 버튼: 말하기. 이름을 부르지 않아도 된다.
+  ///
+  /// 에이전트가 말하는 중에 누르면 말을 끊는다. 하던 대화가 이어서 듣는 차례면 바로 듣는다.
   Future<void> talk() async {
-    if (busy) return;
+    if (busy) {
+      if (speech.speaking) await speech.stop();
+      return;
+    }
     await _busy(() async {
       // 이름을 기다리며 듣던 것을 먼저 멈춘다. busy를 켠 뒤라 이름 듣기는 다시 시작하지 않는다.
       if (_waking) await listen.cancel();
@@ -126,7 +155,11 @@ class AgentController extends ChangeNotifier {
         final started = DateTime.now();
         final heard = await listen.listen(
           listenFor: const Duration(seconds: 60),
-          pauseFor: const Duration(seconds: 2),
+          // "코디야 … 오늘 뭐 입지"처럼 이름 뒤에 잠깐 쉬어도 이어 듣게.
+          pauseFor: const Duration(seconds: 3),
+          // 이름만 부르고 기다리면 3초를 다 기다리지 않고 바로 대답한다(2026-11-06 폰 확인: 불러도 대답이 없다고 느낌).
+          stopWhen: (partial) =>
+              afterWakeWord(partial, wakeName)?.isEmpty ?? false,
         );
         if (_paused || busy) continue;
         if (heard == null) {
@@ -222,6 +255,8 @@ class AgentController extends ChangeNotifier {
         }
         fromCamera = await open(reply.sessionId, camera);
         if (fromCamera == null) {
+          // "그만하기"로 나오면 옷 추천 대화를 끝낸다. 이어 두면 다음 말에 agent가 다시 카메라를 켠다(2026-11-06 폰 확인).
+          _sessionId = null;
           await _say('카메라를 껐어요.');
           break;
         }
@@ -260,7 +295,7 @@ class AgentController extends ChangeNotifier {
       case Intent.help:
         await _say(featureIntro);
       case Intent.unknown:
-        await _say('잘 이해하지 못했어요. 일정, 날씨, 얼굴 확인, 옷 검사 중에서 말씀해 주세요.');
+        await _say(smallTalk(text) ?? unknownSpeech);
     }
     await _say(_nextHint);
   }
