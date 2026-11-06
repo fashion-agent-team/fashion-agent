@@ -89,7 +89,7 @@ class AgentController extends ChangeNotifier {
   Future<void> _reconnect() async {
     final api = turns;
     if (api == null || await api.available) return;
-    await _say('에이전트 서버에 다시 로그인할게요.');
+    await _say('에이전트 서버에 다시 로그인할게요. $signInGuide');
     final id = await onboarding.account.signIn();
     if (id == null || !await api.available) {
       await _say('로그인하지 못해서 지금은 폰 안의 기능만 쓸게요.');
