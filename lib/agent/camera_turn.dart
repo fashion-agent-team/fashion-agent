@@ -211,13 +211,17 @@ class CameraTurnController extends ChangeNotifier {
 
   void _hint(CaptureHint hint) => unawaited(_say(switch (hint) {
         CaptureHint.tooDark => '너무 어두워요. 불을 켜 주세요.',
-        CaptureHint.shaking =>
-          kind.selfie ? '폰을 얼굴 앞에 두고 잠시 멈춰 주세요.' : '옷을 폰 앞에 두고 잠시 멈춰 주세요.',
+        CaptureHint.shaking => switch (kind) {
+            ImageKind.worn => '그 자리에 잠시 멈춰 서 주세요.',
+            ImageKind.outfit => '옷을 폰 앞에 두고 잠시 멈춰 주세요.',
+            _ => '폰을 얼굴 앞에 두고 잠시 멈춰 주세요.',
+          },
         CaptureHint.ok => '좋아요, 그대로 있어 주세요.',
       }));
 
   String _timeoutHint() => switch (kind) {
         ImageKind.outfit => '옷이 잘 보이지 않아요. 폰을 옷에서 한 걸음 떨어뜨려 비추고 잠시 멈춰 주세요.',
+        ImageKind.worn => '몸이 잘 보이지 않아요. 폰을 세워 둔 채 두세 걸음 물러나 잠시 멈춰 서 주세요.',
         ImageKind.face => '얼굴이 잘 보이지 않아요. 폰을 얼굴 앞 한 뼘 거리에 두고 잠시 멈춰 주세요.',
         ImageKind.teeth => '입이 잘 보이지 않아요. 폰을 입 앞에 두고 이를 보이게 한 채 잠시 멈춰 주세요.',
       };

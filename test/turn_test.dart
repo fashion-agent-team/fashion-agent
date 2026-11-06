@@ -110,6 +110,8 @@ void main() {
       expect(r.next.camera, ImageKind.outfit);
       expect(r.resultType, 'outfit_advice');
       expect(TurnNext.parse('camera_teeth').camera, ImageKind.teeth);
+      expect(TurnNext.parse('camera_worn').camera, ImageKind.worn);
+      expect(ImageKind.worn.selfie, isFalse);
       expect(TurnNext.parse('listen').camera, isNull);
       expect(TurnNext.parse('모름'), TurnNext.done);
     });
@@ -130,8 +132,13 @@ void main() {
             accessToken: 'a1',
             refreshToken: 'r1',
             expiresAt: DateTime.now().add(const Duration(hours: 1)));
-      final api = GatewayTurnApi(GatewayAuth(
-          baseUrl: Uri.parse('http://gw:8080'), tokens: store, client: client));
+      final modes = MemoryOutfitModeStore();
+      final api = GatewayTurnApi(
+          GatewayAuth(
+              baseUrl: Uri.parse('http://gw:8080'),
+              tokens: store,
+              client: client),
+          modes: modes);
 
       expect(await api.available, isTrue);
       final r = await api.say(null, '안녕');
@@ -141,6 +148,43 @@ void main() {
       expect(jsonDecode(seen.body), {'utterance': '안녕'});
       expect(r.sessionId, 's_2');
       expect(r.speech, '안녕하세요');
+    });
+
+    test('고른 방식을 기억해서 다음 말부터 보낸다', () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = MockClient((req) async {
+        bodies.add(jsonDecode(req.body) as Map<String, dynamic>);
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({
+            'sessionId': 's_3',
+            'speech': '좋아요.',
+            'next': 'camera_worn',
+            'result': {'type': 'outfit_advice', 'outfitMode': 'worn'},
+          })),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final store = MemoryTokenStore()
+        ..tokens = GatewayTokens(
+            accessToken: 'a1',
+            refreshToken: 'r1',
+            expiresAt: DateTime.now().add(const Duration(hours: 1)));
+      final modes = MemoryOutfitModeStore();
+      final api = GatewayTurnApi(
+          GatewayAuth(
+              baseUrl: Uri.parse('http://gw:8080'),
+              tokens: store,
+              client: client),
+          modes: modes);
+
+      final r = await api.say(null, '오늘 뭐 입지?');
+      expect(bodies.first.containsKey('outfitMode'), isFalse);
+      expect(r.next.camera, ImageKind.worn);
+      expect(modes.mode, OutfitMode.worn);
+
+      await api.say('s_3', '입고 볼게');
+      expect(bodies.last['outfitMode'], 'worn');
     });
 
     test('위치 권한이 없으면 서울(locationFallback=true)로 보낸다', () async {
@@ -323,6 +367,29 @@ void main() {
 
       expect(camera.opened, [true]);
       expect(turns.sent, ['show:face:3', 'show:teeth:3']);
+    });
+
+    test('입고 한 바퀴는 뒤쪽 카메라로 앞·옆·뒤를 차례로 보낸다', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([
+        reply('앞모습을 봤어요. 이제 천천히 옆으로 돌아서 잠시 멈춰 주세요.', TurnNext.cameraWorn),
+        reply('옆모습도 봤어요. 이제 뒤로 돌아서 잠시 멈춰 주세요.', TurnNext.cameraWorn),
+        reply('잘 어울려요.', TurnNext.listen),
+      ]);
+      final camera = FakeAutoCaptureCamera([photo, photo, photo]);
+      final end =
+          await cameraWith(speech, turns, camera).run('s_1', ImageKind.worn);
+      expect(camera.opened, [false]);
+      expect(turns.sent, ['show:worn:3', 'show:worn:3', 'show:worn:3']);
+      expect(end?.speech, '잘 어울려요.');
+    });
+
+    test('입고 한 바퀴에서 오래 안 멈추면 물러나라고 안내한다', () async {
+      final speech = FakeSpeech();
+      final camera = FakeAutoCaptureCamera([null, null, null]);
+      await cameraWith(speech, FakeTurnApi([]), camera)
+          .run('s_1', ImageKind.worn);
+      expect(speech.spoken.first, contains('물러나'));
     });
 
     test('옷 카메라에서 얼굴 카메라로 가면 앞쪽 카메라를 켠다', () async {
