@@ -29,7 +29,18 @@
 2. gateway: 8080 (`docs/ACCOUNT.md`와 같음). `/api/v1/agent/**`를 8081로 넘깁니다.
 3. 앱: `flutter run --release --dart-define=GATEWAY_URL=http://<노트북IP>:8080`
 
+## 이 사진의 입 박스
+
+`imageKind: teeth`로 보낼 때 찍은 사진에서 ML Kit 얼굴 검출(`google_mlkit_face_detection`, 폰 안에서 돎)로 입을 찾아 `mouthBox`를 같이 보냅니다(`lib/services/mouth_finder.dart`).
+
+- `UPPER_LIP_BOTTOM`과 `LOWER_LIP_TOP` 점을 감싸는 박스, 사진 크기 비율(0~1). 서버는 이 박스의 긴 변 × 1.36 정사각형으로 잘라 치아 모델에 넣습니다(학습 규칙과 같음).
+- 셀카 방향으로 뒤집은 뒤의 사진에서 찾으니 좌표를 따로 뒤집지 않습니다.
+- 얼굴이 여럿이면 가장 큰 얼굴. 못 찾으면 박스 없이 보내고, 서버가 사진 가운데를 봅니다.
+- 입을 다물고 있어도 그대로 보냅니다. 서버가 "입을 더 벌려 주세요"라고 안내합니다.
+- ML Kit 때문에 iOS 최소 버전을 15.5로 올렸습니다. 웹에서는 찾지 않습니다.
+
 ## 아직 안 한 것
 
-- ML Kit 구도 안내(옷·얼굴 위치, `faceLandmarks`, `mouthBox`). 지금은 보내지 않고, 서버가 사진만으로 봅니다.
+- ML Kit 구도 안내(옷·얼굴 위치, `faceLandmarks`). 지금은 보내지 않고, 서버가 사진만으로 봅니다.
+  - `mouthBox`는 보냅니다(아래 "이 사진의 입 박스").
 - 카메라가 켜진 동안 버튼 없이 계속 듣기. 지금은 위쪽을 눌러야 듣습니다.
