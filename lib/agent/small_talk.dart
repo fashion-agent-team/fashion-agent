@@ -25,6 +25,7 @@ String? smallTalk(String text, {DateTime? now}) {
   if (has(r'며칠|몇일|날짜|무슨요일|몇월')) {
     return '오늘은 ${t.month}월 ${t.day}일 ${_weekdays[t.weekday - 1]}요일이에요.';
   }
+  if (has(r'바보|멍청|멍텅|못생')) return '바보 아니에요. 그래도 더 잘 도와드리도록 노력할게요.';
   if (has(r'고마|감사|땡큐')) return '천만에요. 또 필요하면 언제든 불러 주세요.';
   if (has(r'잘자|잘있어|안녕히|다음에봐')) return '네, 다음에 또 불러 주세요.';
   if (has(r'누구야|누구세요|누구니|너는뭐|넌뭐|이름이뭐|이름뭐')) {

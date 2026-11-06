@@ -18,6 +18,7 @@ void main() {
     expect(smallTalk('지금 몇 시야?', now: at), '지금은 오후 3시 7분이에요.');
     expect(smallTalk('오늘 며칠이야', now: at), '오늘은 11월 6일 금요일이에요.');
     expect(smallTalk('너 누구야', now: at), contains('에이전트'));
+    expect(smallTalk('바보야~', now: at), contains('바보 아니에요'));
   });
 
   test('모르는 말은 null이라 할 수 있는 일을 안내한다', () {
