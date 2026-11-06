@@ -297,6 +297,16 @@ components:
         outfitMode: { type: string, enum: [laid, worn], nullable: true, description: "사용자가 고른 옷 보여 주는 방식. 앱이 기억한 값. 없으면 첫 옷 추천에서 agent가 물어봄" }
         autoCaptured: { type: boolean, default: true, description: 앱이 구도를 보고 자동으로 보낸 사진이면 true }
         faceLandmarks: { type: object, nullable: true, description: imageKind=face일 때 ML Kit 윤곽점 (mcp-tools.md의 landmarks) }
+        faceFrames:
+          type: array
+          nullable: true
+          maxItems: 4
+          description: "imageKind=face일 때 얼굴이 잘 잡혀 멈춘 1초 동안 더 찍은 장면들 [{image, faceLandmarks}]. 서버가 중간값으로 판단 (mcp-tools.md의 frames)"
+          items:
+            type: object
+            properties:
+              image: { type: string, format: byte }
+              faceLandmarks: { type: object }
         mouthBox: { type: object, nullable: true, description: imageKind=teeth일 때 ML Kit 입술 윤곽으로 구한 입 영역 (mcp-tools.md의 mouthBox) }
         location: { $ref: '#/components/schemas/Location' }
 
