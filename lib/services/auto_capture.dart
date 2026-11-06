@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import 'capture_service.dart';
+import 'framing.dart';
+import 'subject_finder.dart';
 
 /// 카메라 프레임을 [cells]×[cells] 칸으로 나눠 칸마다 평균 밝기(0~255)를 구한다.
 ///
@@ -125,9 +127,14 @@ abstract class AutoCaptureCamera {
 
   /// 프레임이 멈출 때까지 기다렸다가 한 장 찍는다. [timeout]이 지나거나 [cancel]하면 null.
   /// 앞쪽 카메라 사진은 셀카 방향으로 뒤집어서 준다.
+  ///
+  /// [subject]가 옷·몸이면 폰 안에서 그걸 찾아 화면에 잘 들어왔을 때만 찍고, 그전까지는
+  /// "폰을 조금 왼쪽으로"처럼 [onGuide]로 위치를 안내한다. 방금 찍은 것과 같은 장면은 다시 찍지 않는다.
   Future<Uint8List?> nextStill({
     Duration timeout = const Duration(seconds: 30),
     void Function(CaptureHint hint)? onHint,
+    Subject subject = Subject.any,
+    void Function(String speech)? onGuide,
   });
 
   /// 기다리던 [nextStill]을 멈춘다. 말하기를 누르거나 그만둘 때.
@@ -139,10 +146,17 @@ abstract class AutoCaptureCamera {
 class DeviceAutoCaptureCamera implements AutoCaptureCamera {
   DeviceAutoCaptureCamera({
     StillnessDetector? detector,
+    SubjectFinder? finder,
     this.mirrorFront = true,
-  }) : _detector = detector ?? StillnessDetector();
+  })  : _detector = detector ?? StillnessDetector(),
+        _finder = finder ?? MlKitSubjectFinder();
 
   final StillnessDetector _detector;
+  final SubjectFinder _finder;
+  CameraDescription? _camera;
+
+  /// 방금 찍은 장면(밝기 칸). 같은 옷을 계속 찍지 않으려고 둔다. 카메라를 다시 켜면 비운다.
+  List<double>? _lastShot;
 
   /// 앞쪽 카메라 사진을 좌우로 뒤집을지. 아이폰·안드로이드 카메라 플러그인 모두 찍은 사진은
   /// 거울처럼 뒤집혀 있지 않아서(남이 보는 방향) 뒤집는다. 실기기에서 오른손을 들고 확인한다.
@@ -176,10 +190,13 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
       enableAudio: false,
       imageFormatGroup: defaultTargetPlatform == TargetPlatform.iOS
           ? ImageFormatGroup.bgra8888
-          : ImageFormatGroup.yuv420,
+          // ML Kit(안드로이드)은 NV21을 받는다. 첫 평면 앞부분이 밝기(Y)라 lumaGrid도 그대로 된다.
+          : ImageFormatGroup.nv21,
     );
     await controller.initialize();
     _front = front;
+    _camera = camera;
+    _lastShot = null;
     _preview.value = controller;
   }
 
@@ -187,9 +204,12 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
   Future<Uint8List?> nextStill({
     Duration timeout = const Duration(seconds: 30),
     void Function(CaptureHint hint)? onHint,
+    Subject subject = Subject.any,
+    void Function(String speech)? onGuide,
   }) async {
     final controller = _preview.value;
-    if (controller == null) return null;
+    final camera = _camera;
+    if (controller == null || camera == null) return null;
     await cancel();
 
     final done = _waiting = Completer<Uint8List?>();
@@ -201,6 +221,29 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
     var saidDark = false;
     var saidMoving = false;
     var shooting = false;
+    // 구도(옷·몸 위치)
+    var finding = false;
+    var lastFind = -_findEvery.inMilliseconds;
+    Framing? framing;
+    var framingAt = Duration.zero;
+    String? lastGuide;
+    var lastGuideAt = -_guideGap;
+    var saidSame = false;
+
+    void guide(Framing f, Duration now) {
+      if (f.ready) {
+        if (lastGuide != f.speech) onGuide?.call(f.speech);
+        lastGuide = f.speech;
+        lastGuideAt = now;
+        return;
+      }
+      final gap = now - lastGuideAt;
+      if ((f.speech != lastGuide && gap >= _guideGap) || gap >= _guideRepeat) {
+        onGuide?.call(f.speech);
+        lastGuide = f.speech;
+        lastGuideAt = now;
+      }
+    }
 
     _timer = Timer(timeout, () => unawaited(_finish(null)));
     await controller.startImageStream((frame) {
@@ -210,14 +253,28 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
       lastLook = now.inMilliseconds;
 
       final plane = frame.planes.first;
-      final state = _detector.feed(
-        lumaGrid(plane.bytes,
-            width: frame.width,
-            height: frame.height,
-            bytesPerRow: plane.bytesPerRow,
-            bytesPerPixel: plane.bytesPerPixel ?? 1),
-        now,
-      );
+      final grid = lumaGrid(plane.bytes,
+          width: frame.width,
+          height: frame.height,
+          bytesPerRow: plane.bytesPerRow,
+          bytesPerPixel: plane.bytesPerPixel ?? 1);
+      final state = _detector.feed(grid, now);
+
+      // 옷·몸 찾기는 무거워서 조금씩만 한다. 결과는 다음 프레임들이 쓴다.
+      if (subject != Subject.any &&
+          !finding &&
+          state != FrameState.dark &&
+          now.inMilliseconds - lastFind >= _findEvery.inMilliseconds) {
+        finding = true;
+        lastFind = now.inMilliseconds;
+        unawaited(_finder.look(frame, camera, subject).then((f) {
+          finding = false;
+          if (f == null || done.isCompleted) return;
+          framing = f;
+          framingAt = clock.elapsed;
+          guide(f, clock.elapsed);
+        }));
+      }
 
       darkSince = state == FrameState.dark ? (darkSince ?? now) : null;
       movingSince = state == FrameState.moving ? (movingSince ?? now) : null;
@@ -225,22 +282,49 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
         saidDark = true;
         onHint?.call(CaptureHint.tooDark);
       }
-      if (!saidMoving &&
+      // 옷·몸을 찾을 때는 위치 안내가 대신한다.
+      if (subject == Subject.any &&
+          !saidMoving &&
           movingSince != null &&
           now - movingSince! > _movingHint) {
         saidMoving = true;
         onHint?.call(CaptureHint.shaking);
       }
-      if (state == FrameState.ready) {
-        shooting = true;
-        unawaited(_shoot(controller));
+      if (state != FrameState.ready) return;
+      if (subject != Subject.any) {
+        final f = framing;
+        if (f == null || !f.ready || now - framingAt > _framingFresh) return;
       }
+      final last = _lastShot;
+      if (subject == Subject.garment &&
+          last != null &&
+          sceneDifference(grid, last) < _sameScene) {
+        if (!saidSame) {
+          saidSame = true;
+          onGuide?.call('방금 본 옷과 같아요. 다른 옷을 보여 주시거나 "이걸로 할게"라고 말씀해 주세요.');
+        }
+        return;
+      }
+      shooting = true;
+      _lastShot = grid;
+      unawaited(_shoot(controller));
     });
     return done.future;
   }
 
   static const _darkHint = Duration(seconds: 2);
   static const _movingHint = Duration(seconds: 8);
+
+  /// 옷·몸 찾기 간격, 찾은 결과를 믿는 시간.
+  static const _findEvery = Duration(milliseconds: 400);
+  static const _framingFresh = Duration(milliseconds: 900);
+
+  /// 같은 안내는 이 간격 안에 다시 하지 않고, 바뀐 안내도 이만큼은 띄운다.
+  static const _guideGap = Duration(milliseconds: 2500);
+  static const _guideRepeat = Duration(seconds: 6);
+
+  /// 방금 찍은 장면과 밝기 차이가 이보다 작으면 같은 옷으로 본다. 실기기에서 조정한다.
+  static const _sameScene = 6.0;
 
   Future<void> _shoot(CameraController controller) async {
     try {
@@ -284,6 +368,8 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
     final controller = _preview.value;
     _preview.value = null;
     _front = null;
+    _camera = null;
+    _lastShot = null;
     await controller?.dispose();
   }
 }
@@ -294,6 +380,7 @@ class FakeAutoCaptureCamera implements AutoCaptureCamera {
 
   final List<Uint8List?> shots;
   final opened = <bool>[];
+  final subjects = <Subject>[];
   bool closed = false;
   Completer<Uint8List?>? _waiting;
 
@@ -302,7 +389,10 @@ class FakeAutoCaptureCamera implements AutoCaptureCamera {
   Future<Uint8List?> nextStill({
     Duration timeout = const Duration(seconds: 30),
     void Function(CaptureHint hint)? onHint,
+    Subject subject = Subject.any,
+    void Function(String speech)? onGuide,
   }) {
+    subjects.add(subject);
     if (shots.isNotEmpty) return Future.value(shots.removeAt(0));
     return (_waiting = Completer<Uint8List?>()).future;
   }

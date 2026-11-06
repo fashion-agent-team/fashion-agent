@@ -50,6 +50,17 @@
 2. gateway: 8080 (`docs/ACCOUNT.md`와 같음). `/api/v1/agent/**`를 8081로 넘깁니다.
 3. 앱: `flutter run --release --dart-define=GATEWAY_URL=http://<노트북IP>:8080`
 
+## 구도 안내 (폰 안 ML Kit)
+
+2026-11-06 진행 님 요청: 시각장애인은 옷이 화면 어디 있는지 모르니, 앱이 위치를 말로 잡아 주고 옷이 잘 들어왔을 때만 찍기.
+
+- 내려놓은 옷(`camera_outfit`): ML Kit 물체 찾기에서 "Fashion good"인 상자를 보고 "옷이 왼쪽에 걸쳐 있어요. 폰을 조금 왼쪽으로", "너무 가까워요. 폰을 조금 더 높이" 같은 안내를 합니다(`lib/services/framing.dart`).
+- 입은 옷(`camera_worn`): ML Kit 자세 찾기로 머리·어깨·엉덩이·발이 다 보이는지 보고 "발까지 보이게 한 걸음 뒤로" 등을 안내합니다.
+- 화면에 잘 들어오고(`Framing.ready`) 1초 멈추면 찍습니다. 방금 찍은 옷과 같은 장면이면 다시 찍지 않습니다.
+- 얼굴·이는 지금처럼 멈추면 찍습니다.
+- 사진·프레임은 폰 밖으로 보내지 않습니다. iOS 15.5 이상(`ios/Podfile`).
+- 아이폰은 프레임이 누워 있어서 줄이고 세워서(`uprightBgra`) 넣습니다. 방향·기준값은 실기기에서 조정합니다.
+
 ## 이 사진의 입 박스
 
 `imageKind: teeth`로 보낼 때 찍은 사진에서 ML Kit 얼굴 검출(`google_mlkit_face_detection`, 폰 안에서 돎)로 입을 찾아 `mouthBox`를 같이 보냅니다(`lib/services/mouth_finder.dart`).
@@ -62,5 +73,4 @@
 
 ## 아직 안 한 것
 
-- ML Kit 구도 안내(옷·얼굴 위치, `faceLandmarks`). 지금은 보내지 않고, 서버가 사진만으로 봅니다.
-  - `mouthBox`는 보냅니다(아래 "이 사진의 입 박스").
+- 얼굴 위치 안내(`faceLandmarks`). 지금은 보내지 않고, 서버가 사진만으로 봅니다. `mouthBox`는 보냅니다(위 "이 사진의 입 박스").
