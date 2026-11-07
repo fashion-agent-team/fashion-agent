@@ -114,19 +114,19 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "framing": null,              // 구도가 안 맞으면 "옷이 오른쪽에 잘렸어요. 폰을 오른쪽으로 조금 옮겨 주세요."
   "lighting": "ok",             // ok | dark
   "source": "model",            // model(우리 모델) | helper(지인 확인)
-  "modelVersion": "yolo-defect-v1",
+  "modelVersion": "yolo26n-v5",
   "pendingHelper": null         // 애매한 결함이 있을 때만 값이 있음(아래)
 }
 ```
-판단 기준은 결함(`defects`) 하나하나의 모델 확신도로 정합니다(2026-11-06 결정. 근거는 mcp-clothes-state PR #2 `docs/model-comparison.md` "판단 기준 제안". 첫 기준이고 실제 사진으로 평가한 뒤 조정. 아래 기준 0.5는 깨끗한 옷을 괜히 묻는 일을 줄이려고 임시로 올린 값).
+판단 기준은 결함(`defects`) 하나하나의 모델 확신도로 정합니다(2026-11-06 결정. 근거는 mcp-clothes-state PR #2 `docs/model-comparison.md` "판단 기준 제안". 2026-11-07 확신도 실험으로 확정: 모델 yolo26n v5 하나, 기준 0.6 / 0.3. 이 기준에서 지인에게 묻는 비율은 실제 얼룩 사진 12.5%, 깨끗한 옷 2%이고, 깨끗한 옷을 결함으로 잘못 알리는 비율은 0.5%).
 
 **옷 사진은 GPT 비전으로 보내지 않습니다**(2026-11-06 결정). 모델이 애매하면 지어내지 않고, 사용자가 원할 때 지인에게만 묻습니다.
 
 | 확신도 | 처리 |
 |---|---|
 | 0.6 이상 | 결함으로 보고 `defects`에 넣어 바로 알립니다. |
-| 0.5 이상 0.6 미만 | 애매함. `defects`에 넣지 않고 `pendingHelper.candidates`에 모읍니다. |
-| 0.5 미만 | 버립니다. |
+| 0.3 이상 0.6 미만 | 애매함. `defects`에 넣지 않고 `pendingHelper.candidates`에 모읍니다. |
+| 0.3 미만 | 버립니다. |
 
 애매한 것이 있으면 이렇게 돌려줍니다. 사진은 넣지 않고 위치(box)만 줍니다. agent가 이 결과를 그대로 GPT에 넘기기 때문입니다.
 ```json
