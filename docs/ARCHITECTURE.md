@@ -30,7 +30,7 @@ DB: PostgreSQL + pgvector (계정, 회원정보, 일정, 옷장, 지인, 확인 
 | MCP 공통 | mcp-* | Spring AI MCP Server (Streamable HTTP, `@Tool`) | 메서드에 어노테이션만 붙이면 도구가 됨 | MCP Java SDK 직접 |
 | weather | mcp-weather | Open-Meteo, RestClient, Caffeine 캐시 | 키 없음, 앱에서 이미 검증 | 기상청 단기예보 API, OpenWeatherMap |
 | schedule | mcp-schedule | 카카오 로컬 API, FCM, `@Scheduled` | 국내 장소 카테고리(예식장·장례식장)가 정확, 알림 무료 | 네이버 지역 검색 + 폰 로컬 알림, Google Places |
-| clothes_state | mcp-clothes-state | 얼룩·찢어짐·보풀: YOLO 파인튜닝 / 종류·격식: FashionCLIP / 색: 픽셀 평균 → 색 이름 규칙 / 실행: ONNX Runtime Java / 애매하면(0.3~0.6) 지인 확인, 옷 사진은 GPT로 보내지 않음 | 호출 비용 없이 서버 CPU로 동작, 결함 위치가 박스로 나옴 | Python FastAPI 추론 서버, 앱 안 Core ML·TFLite |
+| clothes_state | mcp-clothes-state | 얼룩·찢어짐·보풀: YOLO 파인튜닝 / 종류·격식: FashionCLIP / 색: 픽셀 평균 → 색 이름 규칙 / 실행: ONNX Runtime Java / 애매하면(0.3~0.5) 지인 확인, 옷 사진은 GPT로 보내지 않음 | 호출 비용 없이 서버 CPU로 동작, 결함 위치가 박스로 나옴 | Python FastAPI 추론 서버, 앱 안 Core ML·TFLite |
 | face_makeup_check, teeth_check (얼굴/치아 나눠 물음) | mcp-face-check | 앱 ML Kit 윤곽점 → 대칭 규칙(눈썹·입술 위치, 볼·입술 색 좌우 비교) + 치아 이물질 분류(MobileNet 파인튜닝, ONNX) | 대칭은 계산, 학습은 치아 분류 하나. 얼굴 사진은 외부 AI로 보내지 않음(애매하면 helper 제안) | MediaPipe Face Landmarker(Python), 전부 앱 안 TFLite |
 | closet | mcp-closet | RAG: Spring AI VectorStore + pgvector, multilingual-e5-small(ONNX) 임베딩, GPT 답변. 검색 대상은 내 옷 설명 + 코디 지식 문서 | 가진 옷 안에서만, 근거를 붙여 추천. 같은 옷 중복 찾기도 같은 벡터로 | OpenAI 임베딩 API, Qdrant·Chroma |
 | helper | mcp-helper | 문자(솔라피, 링크만 넣은 SMS), 답장용 웹 링크, Cloudflare R2(24시간 뒤 삭제) | 가족은 앱 설치 없이 링크로 답함, 카카오 심사 불필요, 개인 계정 가능, SMS 한 통 18원 | 네이버 클라우드 SENS·NHN Cloud SMS(사업자 회원만, 설정으로 바꿈), 카카오 알림톡, 같은 앱 도우미 모드 + FCM |
