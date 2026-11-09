@@ -198,6 +198,9 @@ class AgentController extends ChangeNotifier {
           listenFor: const Duration(seconds: 60),
           // "코디야 … 오늘 뭐 입지"처럼 이름 뒤에 잠깐 쉬어도 이어 듣게.
           pauseFor: const Duration(seconds: 3),
+          // 이름을 부르기 전까지는 마이크를 끄지 않고 계속 듣는다. 예전에는 3초 조용하면 끄고 다시 켰는데,
+          // 다시 켜는 사이에 부르면 못 들었다(2026-11-09 진행 님 폰 확인: 가만히 있다 부르면 귀를 닫고 있는 것 같다).
+          waitFor: const Duration(seconds: 60),
           // 이름만 부르고 기다리면 3초를 다 기다리지 않고 바로 대답한다(2026-11-06 폰 확인: 불러도 대답이 없다고 느낌).
           // "심청아 내일 뭐 입지?"처럼 이름 뒤 명령이 끝났으면 그것도 바로 처리한다(2026-11-09 발표 피드백: 텀이 길다).
           stopWhen: (partial) {

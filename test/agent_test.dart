@@ -50,6 +50,7 @@ class ScriptedListen implements ListenService {
   Future<String?> listen({
     Duration listenFor = const Duration(seconds: 15),
     Duration pauseFor = const Duration(seconds: 3),
+    Duration waitFor = const Duration(seconds: 8),
     bool Function(String partial)? stopWhen,
     Duration settle = const Duration(milliseconds: 700),
   }) async {

@@ -13,17 +13,25 @@ const defaultListenFor = Duration(seconds: 30);
 /// 그래서 기본값(온보딩 답 등)은 2초로 줄인다.
 const defaultPauseFor = Duration(seconds: 2);
 
+/// 듣기 시작하고 첫 말이 나올 때까지 기다리는 시간.
+///
+/// 2026-11-09 진행 님 폰 확인: 질문하고 바로 [pauseFor](1.4~2초) 안에 말을 시작하지 않으면 끝나 버렸다.
+/// 생각할 시간을 주려고, 첫 말이 들리기 전까지는 이만큼 기다리고, 말이 들리면 그때부터 [pauseFor]로 끝을 잰다.
+const defaultWaitFor = Duration(seconds: 8);
+
 /// 사용자의 말을 한 번 듣고 글자로 돌려준다.
 abstract class ListenService {
   /// 아무 말도 듣지 못하면 null. [cancel]해도 null.
   ///
   /// [listenFor]는 한 번에 듣는 가장 긴 시간, [pauseFor]는 말이 끊긴 뒤 끝낼 때까지 기다리는 시간.
+  /// [waitFor]는 첫 말이 나올 때까지 기다리는 시간이다([pauseFor]보다 짧으면 [pauseFor]).
   ///
   /// [stopWhen]이 있으면 중간에 들린 말이 조건에 맞고 [settle] 동안 더 바뀌지 않을 때 바로 끝낸다.
   /// 이름 부르기에서 "코디야"만 듣고 3초 조용하기를 기다리지 않으려고 쓴다.
   Future<String?> listen({
     Duration listenFor = defaultListenFor,
     Duration pauseFor = defaultPauseFor,
+    Duration waitFor = defaultWaitFor,
     bool Function(String partial)? stopWhen,
     Duration settle = const Duration(milliseconds: 700),
   });
@@ -50,6 +58,7 @@ class DeviceListenService implements ListenService {
   Future<String?> listen({
     Duration listenFor = defaultListenFor,
     Duration pauseFor = defaultPauseFor,
+    Duration waitFor = defaultWaitFor,
     bool Function(String partial)? stopWhen,
     Duration settle = const Duration(milliseconds: 700),
   }) async {
@@ -60,17 +69,23 @@ class DeviceListenService implements ListenService {
     heardNow.value = '';
     final done = _pending = Completer<String?>();
     Timer? early;
+    var started = false;
     unawaited(done.future.whenComplete(() => early?.cancel()));
     await _stt.listen(
       listenOptions: SpeechListenOptions(
         localeId: 'ko_KR',
         listenFor: listenFor,
-        pauseFor: pauseFor,
+        // 첫 말이 나올 때까지는 길게 기다린다. 말이 들리면 아래에서 pauseFor로 줄인다.
+        pauseFor: waitFor > pauseFor ? waitFor : pauseFor,
         listenMode: ListenMode.dictation,
       ),
       onResult: (result) {
         _heard = result.recognizedWords;
         heardNow.value = _heard;
+        if (!started && _heard.trim().isNotEmpty) {
+          started = true;
+          if (waitFor > pauseFor) _stt.changePauseFor(pauseFor);
+        }
         if (result.finalResult) {
           _finish();
           return;
