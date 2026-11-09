@@ -7,6 +7,7 @@ import '../services/speech_service.dart';
 import '../styling/korean.dart';
 import 'agent_speech.dart';
 import 'answer_parsing.dart';
+import 'wake_word.dart';
 
 /// 처음 설치했을 때의 음성 대화. 버튼 없이 묻고 듣기만 한다.
 ///
@@ -104,14 +105,26 @@ class OnboardingFlow {
   }
 
   /// 이름을 듣고 맞는지 되묻는다. [first]가 있으면 묻지 않고 그 이름부터 확인한다. 끝내 못 정하면 null.
+  ///
+  /// 2026-11-09 진행 님 폰 확인: "심청이"라고 해도 음성 인식이 자꾸 "신청"으로 적었다.
+  /// 그래서 많이 쓰는 이름과 소리가 한 끗 차이면 "혹시 심청이 말씀이세요?"라고 먼저 묻고,
+  /// 아니라고 하면 다음에는 한 글자씩 끊어서 말해 달라고 한다(인식기가 낱말로 바꿔 적지 않게).
   Future<String?> _pickAgentName(String question, {String? first}) async {
     var heard = first;
+    var ask = question;
     for (var i = 0; i <= retries; i++) {
-      final name = heard ?? await _ask(question, parseName);
+      final said = heard ?? await _ask(ask, parseName);
       heard = null;
-      if (name == null) return null;
+      if (said == null) return null;
+      final name = joinSpelled(said);
+      final guess = knownNameLike(name);
+      if (guess != null) {
+        final ok = await _ask('혹시 $guess, 이렇게 부르시려는 건가요?', parseYesNo);
+        if (ok == true) return guess;
+      }
       final ok = await _ask('제 이름을 $name, 이렇게 부르시면 될까요?', parseYesNo);
       if (ok == true) return name;
+      ask = spellNameAsk;
     }
     return null;
   }
@@ -286,6 +299,35 @@ String agentNameWithIda(String name) => ieyo(name);
 
 /// 이름을 정하지 못했을 때 쓰는 에이전트 이름.
 const defaultAgentName = '패션 에이전트';
+
+/// 이름을 잘못 들었을 때 다시 묻는 말.
+const spellNameAsk =
+    '제가 잘 못 알아들었나 봐요. 이름을 한 글자씩 천천히 끊어서 말씀해 주실래요? 예를 들면 심, 청, 이처럼요.';
+
+/// 에이전트 이름으로 많이 쓸 만한 이름. 음성 인식이 비슷한 낱말("신청")로 적으면 이 이름인지 먼저 묻는다.
+const knownAgentNames = [
+  '심청이', '심청', '지니', '코디', '하늘이', '하늘', '봄이', '별이', '누리', '다솜', '미소', '소리',
+  '루나', '토리', //
+];
+
+/// [name]이 [knownAgentNames]의 이름과 소리가 한 끗 차이면 그 이름. 똑같거나 멀면 null.
+String? knownNameLike(String name) {
+  final n = name.replaceAll(RegExp(r'\s+'), '');
+  if (n.length < 2 || knownAgentNames.contains(n)) return null;
+  for (final k in knownAgentNames) {
+    if (k.length == n.length && soundDistance(n, k) == 1) return k;
+  }
+  return null;
+}
+
+/// "심 청 이"처럼 한 글자씩 끊어 말했으면 붙인다. 아니면 그대로.
+String joinSpelled(String text) {
+  final parts =
+      text.trim().split(RegExp(r'[\s,.]+')).where((p) => p.isNotEmpty);
+  return parts.length > 1 && parts.every((p) => p.length == 1)
+      ? parts.join()
+      : text.trim();
+}
 
 /// 호칭 예시. "이진행" → "진행 님", "민수" → "민수 님". 이름이 없으면 null.
 String? suggestedCallName(UserProfile p) {
