@@ -27,7 +27,7 @@ class VoicePicker {
     final all = speech.voices;
     if (all.length < 2) {
       await say(
-          '지금은 고를 수 있는 목소리가 폰 기본 목소리 하나뿐이에요. 서버에 로그인하면 여러 목소리를 고를 수 있어요.');
+          '지금 폰에는 한국어 목소리가 하나뿐이에요. 설정의 손쉬운 사용, 읽기 및 말하기, 음성, 한국어에서 목소리를 더 받아 두시면 여기서 골라 쓸 수 있어요.');
       return null;
     }
     await say(intro);

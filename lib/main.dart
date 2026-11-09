@@ -42,6 +42,9 @@ const _fakeCamera = bool.fromEnvironment('FAKE_CAMERA');
 /// 화면을 누르지 않고 에이전트 이름을 불러 말하기. 끄려면 `--dart-define=HANDS_FREE=false`
 const _handsFree = bool.fromEnvironment('HANDS_FREE', defaultValue: true);
 
+/// 구글 Cloud TTS 목소리 켜기. 게이트웨이에 GOOGLE_TTS_API_KEY가 있을 때만: `--dart-define=CLOUD_TTS=true`
+const _cloudTts = bool.fromEnvironment('CLOUD_TTS');
+
 /// 게이트웨이 주소. 비우면 로그인 없이 이 폰에만 저장한다.
 /// 노트북에서 띄운 게이트웨이: `flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080`
 const _gatewayUrl = String.fromEnvironment('GATEWAY_URL');
@@ -64,9 +67,11 @@ Future<(AccountService, GatewayAuth?)> _account() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final (account, gateway) = await _account();
-  // 로그인돼 있으면 게이트웨이를 거쳐 구글 목소리로 읽는다(2026-11-09 발표 피드백). 아니면 폰 목소리.
-  final speech =
-      SpeechService(cloud: gateway == null ? null : GatewayTtsApi(gateway));
+  // 목소리는 하나로 통일한다(2026-11-09 진행 님). 기본은 폰의 고품질 한국어 목소리.
+  // 구글 Cloud TTS 키(카드 등록 필요)를 게이트웨이에 넣었을 때만 `--dart-define=CLOUD_TTS=true`로 구글 목소리를 켠다.
+  // Gemini TTS는 무료 횟수가 끝나면 목소리가 바뀌어서 쓰지 않는다.
+  final speech = SpeechService(
+      cloud: _cloudTts && gateway != null ? GatewayTtsApi(gateway) : null);
   final listen = DeviceListenService();
   final capture = _fakeCamera ? FakeCaptureService() : CameraCaptureService();
   final profiles = LocalProfileStore();
