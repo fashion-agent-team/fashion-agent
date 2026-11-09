@@ -17,6 +17,7 @@ import 'services/fake_vision_service.dart';
 import 'services/firebase_account_service.dart';
 import 'services/gateway_auth.dart';
 import 'services/listen_service.dart';
+import 'services/server_stt.dart';
 import 'services/mouth_finder.dart';
 import 'services/permission_service.dart';
 import 'services/profile_store.dart';
@@ -74,9 +75,14 @@ Future<void> main() async {
   // Gemini TTS는 무료 횟수가 끝나면 목소리가 바뀌어서 쓰지 않는다.
   final speech = SpeechService(
       cloud: _cloudTts && gateway != null ? GatewayTtsApi(gateway) : null);
-  final listen = DeviceListenService();
-  final capture = _fakeCamera ? FakeCaptureService() : CameraCaptureService();
   final profiles = LocalProfileStore();
+  // 부른 뒤 명령과 온보딩 답만 서버(OpenAI) 음성 인식으로 다시 받아 적는다(2026-11-09 진행 님 결정).
+  // 게이트웨이에 OPENAI_API_KEY가 없거나 실패하면 폰 음성 인식 글자를 그대로 쓴다.
+  final listen = DeviceListenService(
+    serverStt: gateway == null ? null : GatewayServerStt(gateway),
+    hint: () async => sttHint((await profiles.load())?.agentName),
+  );
+  final capture = _fakeCamera ? FakeCaptureService() : CameraCaptureService();
   final weather = WeatherService();
   // 처음 "날씨 알려 줘"에도 바로 답하도록 미리 받아 둔다. 권한 창은 띄우지 않는다.
   unawaited(weather.prefetch());

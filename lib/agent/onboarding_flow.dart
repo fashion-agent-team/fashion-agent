@@ -258,7 +258,8 @@ class OnboardingFlow {
     var prompt = question;
     for (var i = 0; i <= retries; i++) {
       await _say(prompt);
-      final heard = await listen.listen();
+      // 이름·직업처럼 흔치 않은 말이 많아서 서버 음성 인식으로 받아 적는다.
+      final heard = await listen.listen(server: true);
       if (heard != null) {
         if (skippable && isSkip(heard)) {
           await _say('네, 그건 건너뛸게요.');

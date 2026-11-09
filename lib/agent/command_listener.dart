@@ -30,6 +30,8 @@ class CommandListener {
         pauseFor: pause,
         stopWhen: (partial) => utteranceEnd(partial) == UtteranceEnd.complete,
         settle: settle,
+        // 명령은 서버 음성 인식으로 다시 받아 적는다(2026-11-09 진행 님 결정: 명령만 서버로).
+        server: true,
       );
 
   /// 명령 하나를 듣는다. 아무 말도 못 들으면 null.

@@ -53,6 +53,7 @@ class ScriptedListen implements ListenService {
     Duration waitFor = const Duration(seconds: 8),
     bool Function(String partial)? stopWhen,
     Duration settle = const Duration(milliseconds: 700),
+    bool server = false,
   }) async {
     if (_i < answers.length) return answers[_i++];
     if (!blockWhenDone) return null;
