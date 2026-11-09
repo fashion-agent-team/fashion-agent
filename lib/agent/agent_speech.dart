@@ -20,11 +20,18 @@ const featureIntro = '제가 도와드릴 수 있는 기능은 네 가지예요.
 
 const askFeature = '원하시는 기능을 말씀해 주세요.';
 
+/// 어느 화면에서든 "첫 화면"이라고 말하면 처음 화면으로 돌아온다. 시작할 때 알려 준다(2026-11-09 진행 님 요청).
+const homeHint = '어느 화면에서든 "첫 화면"이라고 말씀하시면 처음 화면으로 돌아와요.';
+
+/// "첫 화면", "처음 화면으로", "홈 화면" 같은 말이면 true.
+bool isHomeCommand(String text) =>
+    RegExp(r'첫\s*화면|처음\s*화면|홈\s*화면|첫\s*페이지|처음으로\s*돌아').hasMatch(text);
+
 const tapToTalk = '다른 기능이 필요하면 화면 위쪽을 누르고 말씀해 주세요.';
 
 String returningGreeting(String agentName, {String? callName}) =>
     '반갑습니다${callName == null ? '' : ', $callName'}. 오늘 하루도 좋은 하루 되세요. 당신의 에이전트 $agentName입니다. '
-    '원하시는 기능 있으시면 말씀해주세요.';
+    '$homeHint 원하시는 기능 있으시면 말씀해주세요.';
 
 /// 구글 로그인 창(iOS가 띄우는 "accounts.google.com을 사용하여 로그인하려고 합니다")이 뜨기 전에 읽는다.
 /// 창은 앱이 없앨 수 없어서 미리 무엇을 누를지 알려 준다(2026-11-06 진행 님 요청).

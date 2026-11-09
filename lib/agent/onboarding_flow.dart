@@ -59,7 +59,7 @@ class OnboardingFlow {
     profile = await _connectAccount(profile);
     await profiles.save(profile);
 
-    await _say('$featureIntro $askFeature');
+    await _say('$featureIntro $homeHint $askFeature');
     return profile;
   }
 

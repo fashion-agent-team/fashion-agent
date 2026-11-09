@@ -215,6 +215,13 @@ class AgentController extends ChangeNotifier {
 
   /// 사용자가 한 말을 기능으로 옮긴다.
   Future<void> handle(String text) async {
+    if (isHomeCommand(text)) {
+      // 첫 화면에서 "첫 화면": 하던 대화를 끝내고 처음부터 듣는다.
+      _sessionId = null;
+      await _say('첫 화면이에요. $askFeature');
+      await _listenAndHandle();
+      return;
+    }
     final setting = profile == null ? null : routeSetting(text);
     if (setting != null) {
       await _changeSetting(setting, text);
@@ -275,6 +282,11 @@ class AgentController extends ChangeNotifier {
       }
       final heard = await listen.listen();
       if (heard == null) break;
+      if (isHomeCommand(heard)) {
+        _sessionId = null;
+        await _say('첫 화면으로 돌아왔어요.');
+        break;
+      }
       utterance = heard;
     }
     await _say(_nextHint);

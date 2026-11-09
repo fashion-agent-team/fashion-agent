@@ -190,24 +190,36 @@ void main() {
   });
 
   group('옷 검사', () {
-    test('일정·날씨·손상 순서로 이유를 붙여 말한다', () {
+    test('맞지 않으면 옷 → 상태 → 오늘 날씨·일정 → 추천 순서로 말한다', () {
       final c = checkOutfit([shirt, jeans],
           weather: weatherAt(24), todayEvents: [event('면접')], now: today);
       expect(c.allGood, isFalse);
       expect(
-          checkSpeech(c),
+          checkSpeech(c, weather: weatherAt(24)),
           '보이는 옷은 남색 셔츠, 파란색 청바지예요. '
-          '오후 2시 면접 일정 기준으로 볼게요. '
-          '파란색 청바지는 편한 옷이라 면접에는 슬랙스나 정장 바지, 단정한 치마가 좋아요. '
-          '체감 온도가 24도라서 오늘 날씨에 알맞은 옷차림이에요. '
-          '얼룩이나 찢어진 곳은 보이지 않아요.');
+          '얼룩이나 찢어진 곳은 보이지 않아요. '
+          '오늘은 체감 온도 24도, 최저 ${weatherAt(24).minTemperature.round()}도 '
+          '최고 ${weatherAt(24).maxTemperature.round()}도예요. '
+          '오후 2시 면접이 있어요. '
+          '파란색 청바지는 편한 옷이라 면접에는 슬랙스나 정장 바지, 단정한 치마가 좋아요.');
+    });
+
+    test('날씨와 일정에 맞으면 잘 어울린다고만 말한다', () {
+      final c = checkOutfit([shirt, slacks],
+          weather: weatherAt(24), todayEvents: [event('면접')], now: today);
+      expect(c.allGood, isTrue);
+      expect(
+          checkSpeech(c, weather: weatherAt(24)),
+          '보이는 옷은 남색 셔츠, ${slacks.spokenName}예요. '
+          '얼룩이나 찢어진 곳은 보이지 않아요. '
+          '오늘 날씨와 일정에 잘 어울려요. 이대로 나가셔도 좋아요.');
     });
 
     test('일정이 없고 다 괜찮으면 그대로 나가도 좋다고 한다', () {
       final c =
           checkOutfit([shirt, slacks], weather: weatherAt(24), now: today);
       expect(c.allGood, isTrue);
-      expect(checkSpeech(c), contains('오늘 등록된 일정은 없어요.'));
+      expect(checkSpeech(c), contains('오늘 날씨에 잘 어울려요. 등록된 일정은 없어요.'));
       expect(checkSpeech(c), endsWith('이대로 나가셔도 좋아요.'));
     });
 

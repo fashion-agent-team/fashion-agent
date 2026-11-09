@@ -170,6 +170,28 @@ void main() {
       expect(camera.closed, isTrue);
     });
 
+    test('"첫 화면"이라고 하면 서버에 보내지 않고 카메라를 끈다', () async {
+      final speech = FakeSpeech();
+      final listen = ScriptedListen(['첫 화면'], blockWhenDone: true);
+      final turns = FakeTurnApi(const []);
+      final camera = FakeAutoCaptureCamera();
+      final c = CameraTurnController(
+        speech: speech,
+        listen: listen,
+        turns: turns,
+        camera: camera,
+        location: here,
+        handsFree: true,
+      );
+
+      final end = await c.run('s_1', ImageKind.outfit);
+
+      expect(end, isNull);
+      expect(turns.sent, isEmpty);
+      expect(speech.spoken, contains('첫 화면으로 돌아갈게요.'));
+      expect(camera.closed, isTrue);
+    });
+
     test('안내를 읽기 전에 듣기를 멈춘다', () async {
       final speech = FakeSpeech();
       final listen = ScriptedListen([], blockWhenDone: true);

@@ -183,7 +183,7 @@ void main() {
               '성별 남성, 직업 회사원, 키 170센티미터, 몸무게 건너뜀. 말씀해주신 정보와 일치할까요?'));
       expect(speech.spoken, contains('말씀해주신 정보를 바탕으로 도와드릴게요.'));
       expect(speech.spoken, contains('지금은 계정 연결 없이 이 폰에만 저장할게요.'));
-      expect(speech.spoken.last, '$featureIntro $askFeature');
+      expect(speech.spoken.last, '$featureIntro $homeHint $askFeature');
 
       expect(profile.agentName, '하늘');
       expect(profile.birthDate, DateTime(1990, 3, 5));
@@ -273,8 +273,10 @@ void main() {
           profile: const UserProfile(agentName: '하늘'));
       await agent.start();
 
-      expect(speech.spoken.first,
-          '반갑습니다. 오늘 하루도 좋은 하루 되세요. 당신의 에이전트 하늘입니다. 원하시는 기능 있으시면 말씀해주세요.');
+      expect(
+          speech.spoken.first,
+          '반갑습니다. 오늘 하루도 좋은 하루 되세요. 당신의 에이전트 하늘입니다. '
+          '$homeHint 원하시는 기능 있으시면 말씀해주세요.');
       expect(speech.spoken[1], contains('일교차가 13도로 커요'));
       expect(speech.spoken.last, tapToTalk);
     });
@@ -302,6 +304,13 @@ void main() {
   });
 
   group('말로 설정 바꾸기', () {
+    test('"첫 화면"을 알아듣는다', () {
+      expect(isHomeCommand('첫 화면'), isTrue);
+      expect(isHomeCommand('첫화면으로 가 줘'), isTrue);
+      expect(isHomeCommand('처음 화면'), isTrue);
+      expect(isHomeCommand('오늘 날씨 어때'), isFalse);
+    });
+
     test('설정 말을 고른다', () {
       expect(routeSetting('네 이름 바꿔 줘'), Setting.agentName);
       expect(routeSetting('이름을 코디로 바꿔 줘'), Setting.agentName);
@@ -344,6 +353,15 @@ void main() {
           weatherService: FakeWeatherService(),
           onboarding: onboardingWith(speech, answers, account: account),
         );
+
+    test('첫 화면에서 "첫 화면"이라고 하면 처음부터 듣는다', () async {
+      final speech = FakeSpeech();
+      final agent = agentWith(speech, ['첫 화면', '날씨 어때'],
+          profile: const UserProfile(agentName: '하늘'));
+      await agent.start();
+      expect(speech.spoken, contains('첫 화면이에요. $askFeature'));
+      expect(speech.spoken, contains(contains('일교차')));
+    });
 
     test('에이전트 이름을 바꾸고 저장·업로드한다', () async {
       final speech = FakeSpeech();

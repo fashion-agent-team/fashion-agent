@@ -111,6 +111,7 @@ Future<void> main() async {
           ? FakeVisionService()
           : HttpVisionService(Uri.parse(_visionUrl)),
       wardrobe: LocalWardrobeStore(),
+      listen: listen,
     ),
   ));
 }
