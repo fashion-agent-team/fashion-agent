@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -68,6 +70,8 @@ Future<void> main() async {
   final capture = _fakeCamera ? FakeCaptureService() : CameraCaptureService();
   final profiles = LocalProfileStore();
   final weather = WeatherService();
+  // 처음 "날씨 알려 줘"에도 바로 답하도록 미리 받아 둔다. 권한 창은 띄우지 않는다.
+  unawaited(weather.prefetch());
   final turns = gateway == null ? null : GatewayTurnApi(gateway);
   final location = LocationProvider();
   runApp(FashionAgentApp(
