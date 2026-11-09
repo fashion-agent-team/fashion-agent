@@ -334,7 +334,8 @@ void main() {
       final turns =
           FakeTurnApi([reply('네, 말씀하세요.', TurnNext.done)], signedIn: false);
       final store = InMemoryProfileStore();
-      await store.save(const UserProfile(name: '진행', agentName: '코디'));
+      await store.save(const UserProfile(
+          name: '진행', agentName: '코디', consent: consentVersion));
       final account = _SigningAccount(() => turns.signedIn = true);
       final agent = AgentController(
         speech: speech,
@@ -356,7 +357,8 @@ void main() {
       final speech = FakeSpeech();
       final turns = FakeTurnApi([], signedIn: false);
       final store = InMemoryProfileStore();
-      await store.save(const UserProfile(name: '진행', agentName: '코디'));
+      await store.save(const UserProfile(
+          name: '진행', agentName: '코디', consent: consentVersion));
       final agent = AgentController(
         speech: speech,
         listen: ScriptedListen(['기능 알려 줘']),
@@ -376,7 +378,8 @@ void main() {
       final speech = FakeSpeech();
       final turns = FakeTurnApi([reply('네, 말씀하세요.', TurnNext.done)]);
       final store = InMemoryProfileStore();
-      await store.save(const UserProfile(name: '진행', agentName: '코디'));
+      await store.save(const UserProfile(
+          name: '진행', agentName: '코디', consent: consentVersion));
       final agent = AgentController(
         speech: speech,
         listen: ScriptedListen(['안녕']),

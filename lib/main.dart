@@ -86,7 +86,10 @@ Future<void> main() async {
   final weather = WeatherService();
   // 처음 "날씨 알려 줘"에도 바로 답하도록 미리 받아 둔다. 권한 창은 띄우지 않는다.
   unawaited(weather.prefetch());
-  final turns = gateway == null ? null : GatewayTurnApi(gateway);
+  final turns = gateway == null
+      ? null
+      : GatewayTurnApi(gateway,
+          allowGpt: () async => (await profiles.load())?.consented ?? false);
   final location = LocationProvider();
   runApp(FashionAgentApp(
     cameraTurn: turns == null

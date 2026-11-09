@@ -153,8 +153,14 @@ abstract class TurnApi {
 
 class GatewayTurnApi implements TurnApi {
   GatewayTurnApi(this.gateway,
-      {this.timeout = const Duration(seconds: 40), OutfitModeStore? modes})
+      {this.timeout = const Duration(seconds: 40),
+      OutfitModeStore? modes,
+      this.allowGpt})
       : modes = modes ?? LocalOutfitModeStore();
+
+  /// 사용자가 처음 켤 때 동의했는지. 동의했으면 요청마다 allowGpt=true를 보내고,
+  /// agent는 애매한 얼룩을 그 부분 조각만 GPT로 확인한다(옷 상태 서버 #10).
+  final Future<bool> Function()? allowGpt;
 
   final GatewayAuth gateway;
 
@@ -189,6 +195,7 @@ class GatewayTurnApi implements TurnApi {
           mouthBox: mouthBox));
 
   Future<TurnReply> _post(Map<String, dynamic> body) async {
+    if (await allowGpt?.call() ?? false) body['allowGpt'] = true;
     final json =
         await gateway.sendJson('POST', _path, json: body).timeout(timeout);
     if (json == null) {

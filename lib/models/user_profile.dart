@@ -1,3 +1,6 @@
+/// 처음 켤 때 받는 동의 내용의 판. 내용(agent_speech.dart consentIntro)을 바꾸면 올린다.
+const consentVersion = '2026-11-09';
+
 /// 첫 실행 때 음성으로 받은 사용자 정보와 에이전트 이름.
 ///
 /// 키·몸무게 같은 민감한 항목은 건너뛸 수 있으므로 모두 null을 허용한다.
@@ -12,6 +15,7 @@ class UserProfile {
     this.agentName,
     this.callName,
     this.accountId,
+    this.consent,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -26,6 +30,7 @@ class UserProfile {
         agentName: json['agentName'] as String?,
         callName: json['callName'] as String?,
         accountId: json['accountId'] as String?,
+        consent: json['consent'] as String?,
       );
 
   final String? name;
@@ -46,6 +51,13 @@ class UserProfile {
   /// 로그인한 계정 id. null이면 이 폰에만 저장된 상태다.
   final String? accountId;
 
+  /// 처음 켤 때 받은 동의(권한, 서버 음성 인식, 사진 판단, GPT 확인·학습 저장)의 판([consentVersion]). null이면 아직.
+  final String? consent;
+
+  /// 지금 동의 내용에 동의했는지. 동의했으면 애매한 얼룩을 GPT로 확인해도 된다(allowGpt).
+  /// 동의 내용을 바꾸면 [consentVersion]을 올려 다시 묻는다.
+  bool get consented => consent == consentVersion;
+
   /// 온보딩을 마쳤는지. 에이전트 이름까지 정해야 끝난 것으로 본다.
   bool get isOnboarded => agentName != null;
 
@@ -59,6 +71,7 @@ class UserProfile {
     String? agentName,
     String? callName,
     String? accountId,
+    String? consent,
   }) =>
       UserProfile(
         name: name ?? this.name,
@@ -70,6 +83,7 @@ class UserProfile {
         agentName: agentName ?? this.agentName,
         callName: callName ?? this.callName,
         accountId: accountId ?? this.accountId,
+        consent: consent ?? this.consent,
       );
 
   Map<String, dynamic> toJson() => {
@@ -82,5 +96,6 @@ class UserProfile {
         'agentName': agentName,
         'callName': callName,
         'accountId': accountId,
+        'consent': consent,
       };
 }

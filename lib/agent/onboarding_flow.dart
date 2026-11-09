@@ -39,12 +39,18 @@ class OnboardingFlow {
 
   Future<UserProfile> run() async {
     await _say(firstGreeting);
-    await _askPermissions();
+    final consent = await askConsent();
 
     final restored = await _restoreFromOtherPhone();
-    if (restored != null) return restored;
+    if (restored != null) {
+      if (consent == null) return restored;
+      final withConsent = restored.copyWith(consent: consent);
+      await profiles.save(withConsent);
+      return withConsent;
+    }
 
-    var profile = UserProfile(agentName: await _askAgentName());
+    var profile =
+        UserProfile(agentName: await _askAgentName(), consent: consent);
     await _say('좋아요, 이제 제 이름은 ${agentNameWithIda(profile.agentName!)}. '
         '더 잘 챙겨 드리고 싶어서 몇 가지만 여쭤볼게요. '
         '말하기 싫은 건 건너뛰기라고 하시면 돼요. 전혀 괜찮아요.');
@@ -64,17 +70,37 @@ class OnboardingFlow {
     return profile;
   }
 
-  /// 말로 미리 알린 뒤 권한 창을 차례로 띄운다. 마이크를 막으면 들을 수 없다고 알려 준다.
-  Future<void> _askPermissions() async {
+  /// 처음 켤 때 동의받을 것을 한 번에 읽고, 권한 창을 띄운 뒤 "동의해"를 듣는다.
+  ///
+  /// 2026-11-09 진행 님: 앱을 처음 깔면 동의할 것(권한, 서버 음성 인식, 사진 판단, GPT 확인·학습 저장)을
+  /// 한 번에 전부 띄워 동의받고 시작한다. 말로 답하려면 마이크가 있어야 해서 권한 창을 먼저 띄운다.
+  /// 동의하면 동의 판([consentVersion]), 끝내 동의하지 않거나 마이크를 막으면 null.
+  Future<String?> askConsent() async {
+    await _say(consentIntro);
     final p = permissions;
-    if (p == null) return;
-    await _say(permissionIntro);
-    final result = await p.requestAll();
-    if (!result.canListen) {
-      await _say(permissionDeniedListen);
-    } else {
-      await _say('고마워요.');
+    if (p != null) {
+      await _say(permissionIntro);
+      final result = await p.requestAll();
+      if (!result.canListen) {
+        await _say(permissionDeniedListen);
+        return null;
+      }
     }
+    for (var i = 0; i <= retries; i++) {
+      final heard = await listen.listen(waitFor: const Duration(seconds: 10));
+      final answer = heard == null ? null : parseConsent(heard);
+      if (answer == true) {
+        await _say('동의해 주셔서 고마워요.');
+        return consentVersion;
+      }
+      if (heard != null && RegExp(r'다시').hasMatch(heard)) {
+        await _say(consentIntro);
+        continue;
+      }
+      if (i < retries) await _say(consentRequired);
+    }
+    await _say(consentDeclined);
+    return null;
   }
 
   Future<UserProfile?> _restoreFromOtherPhone() async {
@@ -300,6 +326,14 @@ String agentNameWithIda(String name) => ieyo(name);
 
 /// 이름을 정하지 못했을 때 쓰는 에이전트 이름.
 const defaultAgentName = '패션 에이전트';
+
+/// "동의해", "네 동의합니다", "응 좋아" → true. "아니", "싫어", "동의 안 해" → false. 모르면 null.
+bool? parseConsent(String text) {
+  final t = text.replaceAll(RegExp(r'\s+'), '');
+  if (RegExp(r'동의(안|하지않|못|를안)|비동의|아니|아뇨|싫').hasMatch(t)) return false;
+  if (RegExp(r'동의|동이|동희').hasMatch(t)) return true;
+  return parseYesNo(text);
+}
 
 /// 이름을 잘못 들었을 때 다시 묻는 말.
 const spellNameAsk =

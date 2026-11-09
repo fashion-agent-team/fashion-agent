@@ -112,6 +112,14 @@ class AgentController extends ChangeNotifier {
         await _reconnect();
         await _say(returningGreeting(profile!.agentName!,
             callName: profile!.callName));
+        // 동의 단계가 생기기 전에 깔았던 사용자는 한 번만 묻는다.
+        if (!profile!.consented) {
+          final at = await onboarding.askConsent();
+          if (at != null) {
+            profile = profile!.copyWith(consent: at);
+            await profiles.save(profile!);
+          }
+        }
       }
       unawaited(speech.prefetch(const [
         '말씀해 주세요.',
