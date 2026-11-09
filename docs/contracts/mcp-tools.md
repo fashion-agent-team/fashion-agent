@@ -39,6 +39,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 - `position`(옷이 화면 어디에 있나): box 중심 x가 0.4 미만이면 left, 0.6 초과면 right, 그 사이는 center.
 - `where`(옷 한 벌 안의 얼룩 위치): 같은 사진 기준("오른쪽 소매 끝" = 사진에서 오른쪽에 보이는 소매). agent는 이 값을 사용자가 "어디야?"라고 물을 때만 말합니다.
 
+**옷을 입고 찍은 사진(`mode=worn`)은 다릅니다.** 앱은 사진을 좌우로 뒤집지 않고 원본 그대로 보내고, 서버가 자세 인식(pose)으로 입은 사람의 몸 방향을 구해 `where`를 **입은 사람 몸 기준**으로 씁니다("오른쪽 소매" = 입은 사람의 오른팔). 사용자가 자기 몸을 만져 찾기 때문입니다. 얼굴 확인(mcp-face-check)의 셀카 규칙(앱이 뒤집어 보냄)과 다르니 주의하세요. 뒤집지 않고 보내는 것은 2026-11-06 정지원 제안이고, 팀 확인이 필요합니다(미정).
+
 ## mcp-weather
 
 ### `weather_today`
@@ -99,7 +101,11 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ### `clothes_inspect`
 옷 추천 2단계에서 앱이 자동으로 보낸 한 장마다 agent가 직접 부릅니다(GPT가 고르지 않음). 한 장에 옷이 두 벌 이상 있을 수 있습니다(비교). 얼룩·찢어짐을 **찾는 것**까지 하고, 그걸 어떻게 말할지는 GPT가 정합니다.
 
-입력 `{ "imageBase64": "<JPEG base64>" }`
+입력 `{ "imageBase64": "<JPEG base64>", "mode": "laid", "view": null }`
+
+- `mode`(없으면 `laid`): `laid`는 내려놓은 옷을 위에서 찍은 사진, `worn`은 옷을 입은 사람이 폰(세워 둠) 앞에 선 사진입니다(2026-11-06 추가).
+- `view`(`mode=worn`일 때만): `front` | `side` | `back`. agent가 앞→옆→뒤 순서로 한 장씩 부릅니다. 앞모습에서 옷 종류·색을 정하고, 옆·뒤에서는 얼룩·찢어짐을 더 찾습니다. 옆·뒤 사진에서는 보이는 옷만 돌려주면 됩니다.
+- `mode=worn`이면 `where`는 **입은 사람 몸 기준**("오른쪽 소매" = 입은 사람의 오른팔, "등 가운데")으로 씁니다. 사용자가 자기 몸을 만져 찾기 때문입니다. `position`은 쓰지 않아도 됩니다. 몸이 다 안 들어오면 `framing`에 "발이 안 보여요. 한 걸음 더 물러나 주세요." 같은 안내를 넣습니다.
 
 출력: 지금 비전 서버의 `ClothesScan`에 `source`와 `modelVersion`을 더한 모양입니다.
 ```json
@@ -107,11 +113,36 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "garments": [Garment, ...],
   "framing": null,              // 구도가 안 맞으면 "옷이 오른쪽에 잘렸어요. 폰을 오른쪽으로 조금 옮겨 주세요."
   "lighting": "ok",             // ok | dark
-  "source": "model",            // model(우리 모델) | gpt(폴백)
-  "modelVersion": "yolo-defect-v1"
+  "source": "model",            // model(우리 모델) | helper(지인 확인)
+  "modelVersion": "yolo26n-v6",
+  "pendingHelper": null         // 애매한 결함이 있을 때만 값이 있음(아래)
 }
 ```
-판단 기준: 우리 모델의 결함 확신도가 0.5~0.7 사이인 것이 있으면 그 사진만 GPT에 다시 묻고 `source: "gpt"`. 0.7 이상은 그대로, 0.5 미만은 버립니다(첫 기준, 학습 후 조정).
+판단 기준은 결함(`defects`) 하나하나의 모델 확신도로 정합니다(2026-11-06 결정. 근거는 mcp-clothes-state PR #2 `docs/model-comparison.md` "판단 기준 제안". 2026-11-08 확정: 모델 yolo26n v6 하나, 기준 0.5 / 0.3. 실험 기록은 mcp-clothes-state PR #5).
+
+**옷 사진은 GPT 비전으로 보내지 않습니다**(2026-11-06 결정). 모델이 애매하면 지어내지 않고, 사용자가 원할 때 지인에게만 묻습니다.
+
+| 확신도 | 처리 |
+|---|---|
+| 0.5 이상 | 결함으로 보고 `defects`에 넣어 바로 알립니다. |
+| 0.3 이상 0.5 미만 | 애매함. `defects`에 넣지 않고 `pendingHelper.candidates`에 모읍니다. |
+| 0.3 미만 | 버립니다. |
+
+애매한 것이 있으면 이렇게 돌려줍니다. 사진은 넣지 않고 위치(box)만 줍니다. agent가 이 결과를 그대로 GPT에 넘기기 때문입니다.
+```json
+"pendingHelper": {
+  "garmentId": "g1",
+  "candidates": [
+    { "kind": "stain", "where": "오른쪽 소매 끝", "confidence": 0.42,
+      "box": { "x": 0.62, "y": 0.30, "w": 0.08, "h": 0.06 } }   // 원본 사진 기준 비율
+  ],
+  "note": "확실하지 않은 부분이 있어요."
+}
+```
+- agent는 확실한 결함(0.5 이상)을 먼저 말하고, `note`를 읽은 뒤 "지인에게 물어볼까요?"라고 묻습니다. `note`에는 위치를 넣지 않습니다. `where`는 다른 결함과 같이 사용자가 "어디야?"라고 물을 때만 말합니다.
+- 사용자가 원할 때만 `helper_ask`를 부릅니다. agent는 clothes_inspect에 보냈던 원본 사진에서 그 옷 한 벌(`garmentId`의 `box`)만 잘라 내고, 후보 `box`마다 테두리를 그린 **한 장**을 `imageBase64`로 넣습니다. 후보가 여러 개여도 한 벌에 한 번만 묻습니다(helper_ask 입력은 바꾸지 않음). 질문은 "표시한 곳이 얼룩인지 봐 줄래?"처럼 씁니다. 얼굴이 들어가지 않게 옷 부분만 보냅니다.
+- 답은 지금은 사용자가 "답 왔어?"라고 물으면 agent가 `helper_answer`로 확인합니다(FCM 알림은 gateway가 생긴 뒤, helper_answer 절과 같음). 답으로 알릴 때 `source`는 `helper`입니다. 기다리는 동안 다른 안내는 그대로 이어 갑니다.
+- 등록된 지인이 없거나 사용자가 묻지 않겠다고 하면 "확실하지 않은 부분이 있어요"까지만 말하고 끝냅니다.
 
 ## mcp-face-check
 
@@ -124,23 +155,35 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 **얼굴·치아 사진은 GPT 같은 외부 AI로 보내지 않습니다**(개인정보, 2026-11-06 결정). 대칭은 윤곽점 계산으로, 치아는 우리가 학습한 모델(ONNX)을 이 서버에서 돌려서 봅니다. 그래서 두 도구에는 `source` 값이 없습니다. 모델이 애매하면 지어내지 않고 "잘 모르겠다"고 돌려주고, agent가 가족·친구에게 물어볼지(helper) 제안합니다.
 
 ### `face_makeup_check`
-"얼굴 볼래" → 얼굴 전체가 들어오게 안내한 한 장. 화장 대칭(눈썹, 입술 선, 볼·입술 색 좌우)을 봅니다.
+"얼굴 볼래" → 앱이 얼굴을 실시간으로 비추며 구도를 안내하고, 잘 잡혀 1초 멈추면 그동안 찍은 3~5장을 보냅니다(2026-11-05 결정). 화장 대칭(눈썹, 입술 선, 볼·입술 색 좌우)을 장마다 재고 항목별 중간값으로 판단합니다. GPT는 쓰지 않습니다.
 
 입력
 ```json
 { "imageBase64": "<JPEG base64>",
-  "landmarks": { "leftEyebrow": [[x,y], ...], "rightEyebrow": [...], "upperLip": [...], "lowerLip": [...] } }
+  "landmarks": { "leftEye": [[x,y], ...], "rightEye": [...],
+                 "leftEyebrowTop": [...], "leftEyebrowBottom": [...], "rightEyebrowTop": [...], "rightEyebrowBottom": [...],
+                 "upperLipTop": [...], "upperLipBottom": [...], "lowerLipTop": [...], "lowerLipBottom": [...],
+                 "face": [...], "noseBridge": [...], "noseBottom": [...], "leftCheek": [[x,y]], "rightCheek": [[x,y]],
+                 "yaw": 3.5, "roll": -2.0 },
+  "frames": [ { "imageBase64": "…", "landmarks": { … } }, … ] }   // 같은 1초의 나머지 장면(최대 4개)
 ```
-`landmarks`는 앱 ML Kit 윤곽점(사진 크기를 1로 본 비율, 셀카 방향으로 뒤집은 뒤 좌표)이고 없으면 서버가 사진만으로 봅니다.
+`landmarks`는 앱 ML Kit 얼굴 인식 **윤곽(contour) 모드** 결과입니다. 키는 ML Kit `FaceContour` 상수 이름을 camelCase로(LEFT_EYEBROW_TOP → `leftEyebrowTop`), 점은 사진 크기를 1로 본 비율이고 셀카 방향으로 뒤집은 뒤 좌표입니다. `yaw`, `roll`은 `headEulerAngleY`, `headEulerAngleZ`(도). 꼭 필요한 것은 `leftEye`, `rightEye`, `leftEyebrowTop`, `rightEyebrowTop`, `upperLipTop`, `lowerLipBottom`이고, 나머지는 있으면 더 정확합니다. 서버는 이름의 left/right를 믿지 않고 두 눈의 x 위치로 왼쪽을 다시 정합니다. 필수 윤곽이 없으면 `{"error": {"code": "no_landmarks"}}`(다시 찍기)입니다. 윤곽점은 위치를 잡는 데만 쓰고, 그려진 눈썹·입술 모양과 색은 사진 픽셀에서 잽니다(윤곽점은 그린 화장선을 따라가지 않음). "얼마나 다르면 비대칭인가" 기준값은 라벨 붙인 셀카로 학습합니다(mcp-face-check `training/`).
 
 출력
 ```json
 {
   "framing": null,              // "얼굴이 화면 위쪽에 잘렸어요. 폰을 조금 내려 주세요."
   "lighting": "ok",
-  "symmetry": { "ok": false, "notes": ["왼쪽 눈썹이 오른쪽보다 조금 짧게 그려졌어요."] }
+  "symmetry": {
+    "ok": false,
+    "notes": ["왼쪽 눈썹이 오른쪽보다 조금 짧게 그려졌어요."],   // 차이가 큰 순서로 최대 3개, agent가 그대로 읽음
+    "checks": [{ "name": "browLength", "side": "right", "value": 0.21, "limit": 0.15, "ok": false }, ...],  // 기준값 맞추기용
+    "skipped": [],              // 한쪽이 그늘져 건너뛴 색 비교: cheekColor, lipColor
+    "frames": 3                 // 판단에 쓴 장 수
+  }
 }
 ```
+`framing`이 있거나 `lighting`이 `dark`면(절반 넘는 장이 그러면) `symmetry`는 `null`입니다. 비교 항목과 기준값은 mcp-face-check `docs/DEVELOPMENT.md`에 있습니다.
 
 ### `teeth_check`
 "이 확인해 줘" → 폰을 입 가까이 대고 "'이~' 해 주세요" 안내. 앱이 ML Kit 입술 윤곽으로 입이 벌어진 걸 확인한 뒤 한 장. 이 사이에 낀 것을 봅니다.

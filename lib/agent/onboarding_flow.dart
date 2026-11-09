@@ -45,19 +45,21 @@ class OnboardingFlow {
 
     var profile = UserProfile(agentName: await _askAgentName());
     await _say('좋아요, 이제 제 이름은 ${agentNameWithIda(profile.agentName!)}. '
-        '더 잘 도와드리기 위해 몇 가지 여쭤볼게요. '
-        '말하고 싶지 않은 건 건너뛰기라고 말씀해 주세요.');
+        '더 잘 챙겨 드리고 싶어서 몇 가지만 여쭤볼게요. '
+        '말하기 싫은 건 건너뛰기라고 하시면 돼요. 전혀 괜찮아요.');
 
     for (final field in _Field.values) {
       profile = await _askField(profile, field);
     }
     profile = await _confirm(profile);
-    await _say('말씀해주신 정보를 바탕으로 도와드릴게요.');
+    final call = await _pickCallName(profile);
+    if (call != null) profile = profile.copyWith(callName: call);
+    await _say('알려 주셔서 고마워요. 이제 더 잘 맞춰서 도와드릴게요.');
 
     profile = await _connectAccount(profile);
     await profiles.save(profile);
 
-    await _say('$featureIntro $askFeature');
+    await _say('$featureIntro $homeHint $askFeature');
     return profile;
   }
 
@@ -79,7 +81,7 @@ class OnboardingFlow {
         await _ask('혹시 다른 폰에서 저를 쓰신 적이 있나요? 네 또는 아니요로 말씀해 주세요.', parseYesNo);
     if (usedBefore != true) return null;
 
-    await _say('쓰시던 계정으로 로그인할게요.');
+    await _say('쓰시던 계정으로 로그인할게요. $signInGuide');
     final id = await account.signIn();
     final saved = id == null ? null : await account.restore(id);
     if (saved == null || !saved.isOnboarded) {
@@ -89,20 +91,92 @@ class OnboardingFlow {
     final profile = saved.copyWith(accountId: id);
     await profiles.save(profile);
     await _say(
-        '다시 만나서 반가워요. 저는 ${agentNameWithIda(profile.agentName!)}. $askFeature');
+        '다시 만나서 정말 반가워요. 저는 ${agentNameWithIda(profile.agentName!)}. $askFeature');
     return profile;
   }
 
   Future<String> _askAgentName() async {
+    final name = await _pickAgentName(askAgentName);
+    if (name != null) return name;
+    const fallback = defaultAgentName;
+    await _say('이름은 나중에 바꿀 수 있어요. 우선 $fallback라고 불러 주세요.');
+    return fallback;
+  }
+
+  /// 이름을 듣고 맞는지 되묻는다. [first]가 있으면 묻지 않고 그 이름부터 확인한다. 끝내 못 정하면 null.
+  Future<String?> _pickAgentName(String question, {String? first}) async {
+    var heard = first;
     for (var i = 0; i <= retries; i++) {
-      final name = await _ask(askAgentName, parseName);
-      if (name == null) break;
+      final name = heard ?? await _ask(question, parseName);
+      heard = null;
+      if (name == null) return null;
       final ok = await _ask('제 이름을 $name, 이렇게 부르시면 될까요?', parseYesNo);
       if (ok == true) return name;
     }
-    const fallback = '패션 에이전트';
-    await _say('이름은 나중에 바꿀 수 있어요. 우선 $fallback라고 불러 주세요.');
-    return fallback;
+    return null;
+  }
+
+  /// 사용자를 어떻게 부를지 묻는다. 건너뛰면 null(따로 부르지 않음).
+  Future<String?> _pickCallName(UserProfile p, {String? first}) async {
+    final example = suggestedCallName(p) ?? '진행 님';
+    final question = '제가 어떻게 불러 드릴까요? 예를 들어 $example처럼 말씀해 주세요.';
+    var heard = first;
+    for (var i = 0; i <= retries; i++) {
+      final call =
+          heard ?? await _ask(question, parseCallName, skippable: true);
+      heard = null;
+      if (call == null) return null;
+      final ok = await _ask('앞으로 $call, 이렇게 불러 드릴까요?', parseYesNo);
+      if (ok == true) return call;
+    }
+    return null;
+  }
+
+  // ---- 온보딩 뒤에 말로 바꾸기 ("네 이름 바꿔 줘", "나를 진행 님이라고 불러 줘", "내 키 바꿔 줘") ----
+
+  /// 에이전트 이름을 바꾼다. [said]에 새 이름이 있으면("이름을 코디로 바꿔 줘") 바로 확인한다.
+  /// 바꾸지 않았으면 null.
+  Future<UserProfile?> changeAgentName(UserProfile p,
+      {String said = ''}) async {
+    final name = await _pickAgentName('새 이름을 말씀해 주세요.', first: newNameIn(said));
+    if (name == null) {
+      await _say(
+          '이름은 그대로 ${agentNameWithIda(p.agentName ?? defaultAgentName)}.');
+      return null;
+    }
+    await _say('좋아요, 이제 제 이름은 ${agentNameWithIda(name)}.');
+    return p.copyWith(agentName: name);
+  }
+
+  /// 사용자를 부르는 말(호칭)을 바꾼다. 바꾸지 않았으면 null.
+  Future<UserProfile?> changeCallName(UserProfile p, {String said = ''}) async {
+    final call = await _pickCallName(p, first: newCallNameIn(said));
+    if (call == null) {
+      await _say('호칭은 바꾸지 않았어요.');
+      return null;
+    }
+    await _say('알겠어요, $call. 앞으로 이렇게 불러 드릴게요.');
+    return p.copyWith(callName: call);
+  }
+
+  /// 사용자 정보 중 한 항목을 바꾼다. [said]에 항목이 있으면("내 키 바꿔 줘") 그 항목을 바로 묻는다.
+  /// 바꾸지 않았으면 null.
+  Future<UserProfile?> editProfile(UserProfile p, {String said = ''}) async {
+    final field = _Field.match(said) ??
+        await _ask(
+            '지금 정보는 ${summarize(p)} 어느 항목을 고칠까요? 이름, 생년월일, 성별, 직업, 키, 몸무게 중에서 말씀해 주세요.',
+            _Field.match);
+    if (field == null) {
+      await _say('정보는 바꾸지 않았어요.');
+      return null;
+    }
+    final edited = await _askField(_clear(p, field), field);
+    if (!field.isSet(edited)) {
+      await _say('${eunNeun(field.label)} 그대로 둘게요.');
+      return null;
+    }
+    await _say('바꿨어요. ${summarize(edited)}');
+    return edited;
   }
 
   Future<UserProfile> _askField(UserProfile p, _Field field) async {
@@ -152,7 +226,7 @@ class OnboardingFlow {
   }
 
   Future<UserProfile> _connectAccount(UserProfile p) async {
-    await _say('폰을 바꿔도 이어서 쓸 수 있게 계정에 연결할게요.');
+    await _say('폰을 바꿔도 이어서 쓸 수 있게 계정에 연결할게요. $signInGuide');
     final id = await account.signIn();
     if (id == null) {
       await _say('지금은 계정 연결 없이 이 폰에만 저장할게요.');
@@ -174,16 +248,16 @@ class OnboardingFlow {
       final heard = await listen.listen();
       if (heard != null) {
         if (skippable && isSkip(heard)) {
-          await _say('네, 건너뛸게요.');
+          await _say('네, 그건 건너뛸게요.');
           return null;
         }
         final value = parse(heard);
         if (value != null) return value;
       }
       prompt =
-          heard == null ? '잘 듣지 못했어요. $question' : '잘 이해하지 못했어요. $question';
+          heard == null ? '제가 잘 못 들었어요. $question' : '제가 잘 못 알아들었어요. $question';
     }
-    if (skippable) await _say('우선 넘어갈게요.');
+    if (skippable) await _say('괜찮아요, 우선 넘어갈게요.');
     return null;
   }
 
@@ -210,6 +284,18 @@ String summarize(UserProfile p) {
 /// "민수" → "민수예요", "하늘" → "하늘이에요".
 String agentNameWithIda(String name) => ieyo(name);
 
+/// 이름을 정하지 못했을 때 쓰는 에이전트 이름.
+const defaultAgentName = '패션 에이전트';
+
+/// 호칭 예시. "이진행" → "진행 님", "민수" → "민수 님". 이름이 없으면 null.
+String? suggestedCallName(UserProfile p) {
+  final name = p.name?.replaceAll(' ', '');
+  if (name == null || name.isEmpty) return null;
+  final hangul3 =
+      name.length == 3 && name.runes.every((c) => c >= 0xAC00 && c <= 0xD7A3);
+  return '${hangul3 ? name.substring(1) : name} 님';
+}
+
 enum _Field {
   name,
   birthDate,
@@ -217,6 +303,25 @@ enum _Field {
   job,
   height,
   weight;
+
+  /// 말할 때 쓰는 항목 이름.
+  String get label => switch (this) {
+        name => '이름',
+        birthDate => '생년월일',
+        gender => '성별',
+        job => '직업',
+        height => '키',
+        weight => '몸무게',
+      };
+
+  bool isSet(UserProfile p) => switch (this) {
+        name => p.name != null,
+        birthDate => p.birthDate != null,
+        gender => p.gender != null,
+        job => p.job != null,
+        height => p.heightCm != null,
+        weight => p.weightKg != null,
+      };
 
   static _Field? match(String text) {
     if (text.contains('생년') || text.contains('생일') || text.contains('날짜')) {
@@ -239,5 +344,6 @@ UserProfile _clear(UserProfile p, _Field field) => UserProfile(
       heightCm: field == _Field.height ? null : p.heightCm,
       weightKg: field == _Field.weight ? null : p.weightKg,
       agentName: p.agentName,
+      callName: p.callName,
       accountId: p.accountId,
     );

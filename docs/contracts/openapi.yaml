@@ -120,7 +120,7 @@ paths:
       description: |
         앱은 받은 speech를 읽어 주고, next에 따라 다음 동작을 합니다.
         - listen: 바로 듣기 시작
-        - camera_outfit / camera_face / camera_teeth: 카메라를 켜 둔 채로 유지. 앱이 ML Kit로 구도를 실시간 안내하고,
+        - camera_outfit / camera_worn / camera_face / camera_teeth: 카메라를 켜 둔 채로 유지. 앱이 ML Kit로 구도를 실시간 안내하고,
           옷(얼굴, 입)이 잘 들어와 1초 멈추면 한 장을 자동으로 같은 sessionId, image, imageKind로 보냄.
           사용자는 버튼을 누르지 않음. 카메라가 켜진 동안에도 말하기("이걸로 할게", "됐어")는 받음
         - done: 카메라를 끄고 대기 화면으로
@@ -232,6 +232,33 @@ paths:
       responses:
         '204': { description: 삭제됨 }
 
+  /api/v1/tts:
+    post:
+      tags: [voice]
+      summary: 문장을 구글 목소리로 읽은 소리 (2026-11-09 발표 피드백)
+      description: |
+        게이트웨이가 Google Cloud Text-to-Speech(ko-KR Chirp 3 HD)로 읽습니다. 그 키(GOOGLE_TTS_API_KEY)가 없으면
+        Gemini TTS(GEMINI_API_KEY, 같은 이름의 목소리)로 읽습니다. 둘 다 없으면 503이고, 앱은 폰 목소리로 읽습니다.
+        같은 목소리·문장은 게이트웨이와 앱이 기억해 두고 다시 받지 않습니다. 분당 횟수 제한은 말하기와 따로 셉니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 500 }
+                voice: { type: string, description: '목소리 이름. Achernar, Sulafat, Vindemiatrix, Aoede, Achird, Umbriel 등. 없으면 Achernar' }
+      responses:
+        '200':
+          description: 소리 파일. Cloud TTS는 MP3, Gemini TTS는 WAV(24kHz 16비트 모노).
+          content:
+            audio/mpeg: { schema: { type: string, format: binary } }
+            audio/wav: { schema: { type: string, format: binary } }
+        '503': { description: TTS 키가 없음(tts_unavailable) }
+        '502': { description: 구글 TTS 실패(tts_failed) }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -278,6 +305,7 @@ components:
         heightCm: { type: number, nullable: true }
         weightKg: { type: number, nullable: true }
         agentName: { type: string, nullable: true, description: null이면 온보딩 안 함 }
+        callName: { type: string, nullable: true, description: '에이전트가 사용자를 부르는 말(호칭). 예: "진행 님". null이면 따로 부르지 않음' }
 
     Location:
       type: object
@@ -293,9 +321,20 @@ components:
         sessionId: { type: string, nullable: true, description: 첫 말이면 비움. 이어지는 대화는 받은 값 그대로 }
         utterance: { type: string, nullable: true, description: STT 결과. 사진만 보낼 때는 비움 }
         image: { type: string, format: byte, nullable: true, description: "JPEG base64, 최대 약 6MB" }
-        imageKind: { type: string, enum: [outfit, face, teeth], nullable: true, description: "face·teeth 사진은 셀카 화면 방향으로 좌우를 맞춰서 보냄 (사진 왼쪽 = 사용자 왼쪽)" }
+        imageKind: { type: string, enum: [outfit, worn, face, teeth], nullable: true, description: "outfit=내려놓은 옷, worn=입고 선 모습(camera_worn, 뒤쪽 카메라, 뒤집지 않음). face·teeth 사진은 셀카 화면 방향으로 좌우를 맞춰서 보냄 (사진 왼쪽 = 사용자 왼쪽)" }
+        outfitMode: { type: string, enum: [laid, worn], nullable: true, description: "사용자가 고른 옷 보여 주는 방식. 앱이 기억한 값. 없으면 첫 옷 추천에서 agent가 물어봄" }
         autoCaptured: { type: boolean, default: true, description: 앱이 구도를 보고 자동으로 보낸 사진이면 true }
         faceLandmarks: { type: object, nullable: true, description: imageKind=face일 때 ML Kit 윤곽점 (mcp-tools.md의 landmarks) }
+        faceFrames:
+          type: array
+          nullable: true
+          maxItems: 4
+          description: "imageKind=face일 때 얼굴이 잘 잡혀 멈춘 1초 동안 더 찍은 장면들 [{image, faceLandmarks}]. 서버가 중간값으로 판단 (mcp-tools.md의 frames)"
+          items:
+            type: object
+            properties:
+              image: { type: string, format: byte }
+              faceLandmarks: { type: object }
         mouthBox: { type: object, nullable: true, description: imageKind=teeth일 때 ML Kit 입술 윤곽으로 구한 입 영역 (mcp-tools.md의 mouthBox) }
         location: { $ref: '#/components/schemas/Location' }
 
@@ -305,13 +344,14 @@ components:
       properties:
         sessionId: { type: string }
         speech: { type: string, description: 앱이 그대로 읽어 줄 한국어 }
-        next: { type: string, enum: [listen, camera_outfit, camera_face, camera_teeth, done] }
+        next: { type: string, enum: [listen, camera_outfit, camera_worn, camera_face, camera_teeth, done] }
         result:
           nullable: true
           type: object
           description: 화면·기록용 구조화 결과. 앱은 speech만 읽어도 동작해야 함
           properties:
-            type: { type: string, enum: [outfit_advice, outfit_check, face_makeup_check, teeth_check, weather, schedule, helper] }
+            type: { type: string, enum: [outfit_mode, outfit_advice, outfit_check, face_makeup_check, teeth_check, weather, schedule, helper] }
+            outfitMode: { type: string, enum: [laid, worn], nullable: true, description: "정해진 방식. 오면 앱이 기억해서 다음부터 outfitMode로 보냄" }
             outfitAdvice: { $ref: '#/components/schemas/OutfitAdvice' }
             outfitCheck: { $ref: '#/components/schemas/OutfitCheck' }
 

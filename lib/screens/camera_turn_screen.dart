@@ -58,9 +58,7 @@ class CameraTurnScreen extends StatelessWidget {
                         label: controller.busy ? '확인 중' : '말하기',
                         detail: controller.message,
                         hint: controller.message,
-                        onTap: controller.busy
-                            ? null
-                            : () => unawaited(controller.talk()),
+                        onTap: () => unawaited(controller.talk()),
                         color: scheme.primaryContainer.withValues(alpha: 0.55),
                       ),
                     ],
