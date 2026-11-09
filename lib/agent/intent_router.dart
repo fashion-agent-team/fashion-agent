@@ -42,6 +42,9 @@ enum Setting {
 
   /// 사용자 정보 읽어 주기.
   readProfile,
+
+  /// 에이전트 목소리 고르기(2026-11-09 발표 피드백).
+  voice,
 }
 
 const _change = r'바꾸|바꿔|바꿀|변경|수정|고치|고쳐|고칠|새로 ?지|다시 ?지|다시 ?정';
@@ -52,6 +55,12 @@ const _change = r'바꾸|바꿔|바꿀|변경|수정|고치|고쳐|고칠|새로
 Setting? routeSetting(String text) {
   bool has(String pattern) => RegExp(pattern).hasMatch(text);
   final change = has(_change);
+
+  // "목소리 순서대로 들려줘", "목소리 바꿔 줘", "다른 목소리 없어?"
+  if (has(r'목소리|보이스') &&
+      (change || has(r'들려|골라|고를|고르|순서|다른|별로|선택|어떤|뭐 ?있|듣고 ?싶'))) {
+    return Setting.voice;
+  }
 
   if (has(r'호칭') ||
       has(r'(^|\s)(저|나|날|절)(를|을)?\s.*((이)?라고|(으)?로)\s*(불러|부르)') ||

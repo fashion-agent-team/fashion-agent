@@ -45,8 +45,8 @@ class OnboardingFlow {
 
     var profile = UserProfile(agentName: await _askAgentName());
     await _say('좋아요, 이제 제 이름은 ${agentNameWithIda(profile.agentName!)}. '
-        '더 잘 도와드리기 위해 몇 가지 여쭤볼게요. '
-        '말하고 싶지 않은 건 건너뛰기라고 말씀해 주세요.');
+        '더 잘 챙겨 드리고 싶어서 몇 가지만 여쭤볼게요. '
+        '말하기 싫은 건 건너뛰기라고 하시면 돼요. 전혀 괜찮아요.');
 
     for (final field in _Field.values) {
       profile = await _askField(profile, field);
@@ -54,7 +54,7 @@ class OnboardingFlow {
     profile = await _confirm(profile);
     final call = await _pickCallName(profile);
     if (call != null) profile = profile.copyWith(callName: call);
-    await _say('말씀해주신 정보를 바탕으로 도와드릴게요.');
+    await _say('알려 주셔서 고마워요. 이제 더 잘 맞춰서 도와드릴게요.');
 
     profile = await _connectAccount(profile);
     await profiles.save(profile);
@@ -91,7 +91,7 @@ class OnboardingFlow {
     final profile = saved.copyWith(accountId: id);
     await profiles.save(profile);
     await _say(
-        '다시 만나서 반가워요. 저는 ${agentNameWithIda(profile.agentName!)}. $askFeature');
+        '다시 만나서 정말 반가워요. 저는 ${agentNameWithIda(profile.agentName!)}. $askFeature');
     return profile;
   }
 
@@ -248,16 +248,16 @@ class OnboardingFlow {
       final heard = await listen.listen();
       if (heard != null) {
         if (skippable && isSkip(heard)) {
-          await _say('네, 건너뛸게요.');
+          await _say('네, 그건 건너뛸게요.');
           return null;
         }
         final value = parse(heard);
         if (value != null) return value;
       }
       prompt =
-          heard == null ? '잘 듣지 못했어요. $question' : '잘 이해하지 못했어요. $question';
+          heard == null ? '제가 잘 못 들었어요. $question' : '제가 잘 못 알아들었어요. $question';
     }
-    if (skippable) await _say('우선 넘어갈게요.');
+    if (skippable) await _say('괜찮아요, 우선 넘어갈게요.');
     return null;
   }
 

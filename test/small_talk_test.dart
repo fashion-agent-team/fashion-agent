@@ -16,15 +16,15 @@ void main() {
   test('인사·고맙다·시간에는 대화하듯 답한다', () {
     final at = DateTime(2026, 11, 6, 15, 7);
     expect(smallTalk('안녕', now: at), contains('안녕하세요'));
-    expect(smallTalk('고마워', now: at), contains('천만에요'));
+    expect(smallTalk('고마워', now: at), contains('별말씀을요'));
     expect(smallTalk('지금 몇 시야?', now: at), '지금은 오후 3시 7분이에요.');
     expect(smallTalk('오늘 며칠이야', now: at), '오늘은 11월 6일 금요일이에요.');
-    expect(smallTalk('너 누구야', now: at), contains('에이전트'));
-    expect(smallTalk('바보야~', now: at), contains('바보 아니에요'));
+    expect(smallTalk('너 누구야', now: at), contains('친구'));
+    expect(smallTalk('바보야~', now: at), contains('서운해요'));
   });
 
   test('모르는 말은 null이라 할 수 있는 일을 안내한다', () {
     expect(smallTalk('노래 틀어 줘'), isNull);
-    expect(unknownSpeech, contains('할 수 없는'));
+    expect(unknownSpeech, contains('못 하는 일'));
   });
 }
