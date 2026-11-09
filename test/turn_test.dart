@@ -425,9 +425,9 @@ void main() {
       expect(end?.speech, '자켓도 좋아요. 이걸로 하시겠어요?');
       expect(camera.closed, isTrue);
       expect(speech.spoken, [
-        '찍었어요. 확인하고 있어요.',
+        '찍었어요. 볼게요.',
         '흰 셔츠가 면접에 잘 맞아요. 겉옷도 보여 주세요.',
-        '찍었어요. 확인하고 있어요.',
+        '찍었어요. 볼게요.',
       ]);
     });
 
@@ -465,7 +465,7 @@ void main() {
       final camera = FakeAutoCaptureCamera([null, null, null]);
       await cameraWith(speech, FakeTurnApi([]), camera)
           .run('s_1', ImageKind.worn);
-      expect(speech.spoken.first, contains('물러나'));
+      expect(speech.spoken.first, contains('뒤로'));
     });
 
     test('이 사진에만 입 박스를 찾아 같이 보낸다', () async {
@@ -539,8 +539,8 @@ void main() {
           .run('s_1', ImageKind.outfit);
       expect(end, isNull);
       expect(speech.spoken, [
-        contains('옷이 잘 보이지 않아요'),
-        contains('옷이 잘 보이지 않아요'),
+        contains('옷이 잘 안 보여요'),
+        contains('옷이 잘 안 보여요'),
         '잘 보이지 않아서 카메라를 끌게요.',
       ]);
     });

@@ -14,7 +14,12 @@ class SpeechService {
       _tts.setSharedInstance(true);
     }
     _tts.setVolume(1.0);
+    // 기본 속도(0.5)는 느리다는 의견(2026-11-09 리허설). iOS·안드로이드 모두 0.5가 보통 속도다.
+    _tts.setSpeechRate(speechRate);
   }
+
+  /// 읽는 속도. 0.5가 보통, 클수록 빠르다.
+  static const speechRate = 0.58;
 
   final FlutterTts _tts = FlutterTts();
   bool _speaking = false;

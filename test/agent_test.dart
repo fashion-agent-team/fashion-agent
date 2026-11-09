@@ -158,6 +158,10 @@ void main() {
     expect(routeIntent('겉옷 챙겨야 해?'), Intent.weather);
     expect(routeIntent('날씨에 맞게 입었는지 옷 검사해 줘'), Intent.outfitCheck);
     expect(routeIntent('이에 뭐 꼈는지 봐 줘'), Intent.faceCheck);
+    // 2026-11-09 리허설: "옷 검사"가 얼굴 확인으로 넘어갔다.
+    expect(routeIntent('옷검사 해 줘'), Intent.outfitCheck);
+    expect(routeIntent('머리부터 옷 검사해 줘'), Intent.outfitCheck);
+    expect(routeIntent('머리 정돈됐는지 봐 줘'), Intent.faceCheck);
     expect(routeIntent('뭐 할 수 있어?'), Intent.help);
     expect(routeIntent('안녕'), Intent.unknown);
   });

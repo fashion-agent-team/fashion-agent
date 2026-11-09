@@ -204,7 +204,7 @@ class CameraTurnController extends ChangeNotifier {
       _setBusy(true);
       try {
         // 찍혔다는 걸 바로 알린다. 답을 기다리는 동안 읽는다.
-        final saying = _say('찍었어요. 확인하고 있어요.');
+        final saying = _say('찍었어요. 볼게요.');
         final loc = await location.current();
         final box = kind == ImageKind.teeth ? await _findMouth(shot) : null;
         await _handle(
@@ -263,18 +263,18 @@ class CameraTurnController extends ChangeNotifier {
   void _hint(CaptureHint hint) => unawaited(_say(switch (hint) {
         CaptureHint.tooDark => '너무 어두워요. 불을 켜 주세요.',
         CaptureHint.shaking => switch (kind) {
-            ImageKind.worn => '그 자리에 잠시 멈춰 서 주세요.',
-            ImageKind.outfit => '옷을 폰 앞에 두고 잠시 멈춰 주세요.',
-            _ => '폰을 얼굴 앞에 두고 잠시 멈춰 주세요.',
+            ImageKind.worn => '잠깐 멈춰 주세요.',
+            ImageKind.outfit => '잠깐 멈춰 주세요.',
+            _ => '잠깐 멈춰 주세요.',
           },
-        CaptureHint.ok => '좋아요, 그대로 있어 주세요.',
+        CaptureHint.ok => '좋아요, 그대로요.',
       }));
 
   String _timeoutHint() => switch (kind) {
-        ImageKind.outfit => '옷이 잘 보이지 않아요. 폰을 옷에서 한 걸음 떨어뜨려 비추고 잠시 멈춰 주세요.',
-        ImageKind.worn => '몸이 잘 보이지 않아요. 폰을 세워 둔 채 두세 걸음 물러나 잠시 멈춰 서 주세요.',
-        ImageKind.face => '얼굴이 잘 보이지 않아요. 폰을 얼굴 앞 한 뼘 거리에 두고 잠시 멈춰 주세요.',
-        ImageKind.teeth => '입이 잘 보이지 않아요. 폰을 입 앞에 두고 이를 보이게 한 채 잠시 멈춰 주세요.',
+        ImageKind.outfit => '옷이 잘 안 보여요. 폰을 조금 떨어뜨려 비춰 주세요.',
+        ImageKind.worn => '몸이 잘 안 보여요. 두 걸음 뒤로 가 주세요.',
+        ImageKind.face => '얼굴이 잘 안 보여요. 폰을 얼굴 앞에 들어 주세요.',
+        ImageKind.teeth => '입이 잘 안 보여요. 이를 보이게 해 주세요.',
       };
 
   Future<void> _end(TurnReply? reply) async {

@@ -24,7 +24,7 @@ void main() {
       expect(frameGarment([const Rect.fromLTRB(0.55, 0.3, 0.95, 0.7)]).speech,
           contains('오른쪽'));
       expect(frameGarment([const Rect.fromLTRB(0.3, 0.0, 0.7, 0.5)]).speech,
-          contains('위쪽'));
+          contains('위로'));
     });
 
     test('너무 크면 높이 들고, 너무 작으면 가까이', () {
@@ -45,20 +45,43 @@ void main() {
   });
 
   group('입은 옷', () {
-    Map<String, List<BodyPoint>> body({double footY = 0.92, double x = 0.5}) =>
+    Map<String, List<BodyPoint>> body(
+            {double footY = 0.92,
+            double x = 0.5,
+            double kneeY = 0.72,
+            double footL = 0.9,
+            double scale = 1}) =>
         {
-          'head': [p(x, 0.08)],
-          'shoulder': [p(x - 0.1, 0.2), p(x + 0.1, 0.2)],
-          'hip': [p(x - 0.08, 0.5), p(x + 0.08, 0.5)],
-          'foot': [p(x - 0.06, footY), p(x + 0.06, footY)],
+          'head': [p(x, 0.08 * scale)],
+          'shoulder': [p(x - 0.1, 0.2 * scale), p(x + 0.1, 0.2 * scale)],
+          'hip': [p(x - 0.08, 0.5 * scale), p(x + 0.08, 0.5 * scale)],
+          'knee': [p(x - 0.07, kneeY * scale), p(x + 0.07, kneeY * scale)],
+          'foot': [
+            p(x - 0.06, footY * scale, footL),
+            p(x + 0.06, footY * scale, footL)
+          ],
         };
 
     test('머리부터 발까지 가운데면 찍는다', () {
       expect(frameBody(body()).ready, isTrue);
     });
 
-    test('발이 안 보이면 뒤로', () {
-      expect(frameBody(body(footY: 1.2)).speech, contains('발까지'));
+    test('발과 무릎 아래가 안 보이면 뒤로', () {
+      expect(frameBody(body(footY: 1.2, kneeY: 0.95, scale: 1.3)).speech,
+          contains('뒤로'));
+    });
+
+    test('발목이 흐릿해도 무릎이 아래쪽에 보이면 찍는다(리허설: 앞뒤로 왔다 갔다)', () {
+      expect(frameBody(body(footL: 0.2)).ready, isTrue);
+    });
+
+    test('조금 멀어도 앞으로 오라고 하지 않는다', () {
+      // 몸이 화면 세로의 40% 정도. 예전에는 45% 미만이면 앞으로 오라고 해서 뒤로·앞으로를 번갈아 말했다.
+      expect(frameBody(body(scale: 0.45)).ready, isTrue);
+    });
+
+    test('아주 멀면 앞으로', () {
+      expect(frameBody(body(scale: 0.2)).speech, contains('앞으로'));
     });
 
     test('몸이 없으면 서 달라고 한다', () {
@@ -66,7 +89,9 @@ void main() {
     });
 
     test('한쪽으로 치우치면 가운데로', () {
-      expect(frameBody(body(x: 0.15)).speech, contains('가운데'));
+      // 뒤쪽 카메라: 사진 왼쪽에 있으면 그 사람은 자기 오른쪽으로 치우친 것이라 왼쪽으로 가야 한다.
+      expect(frameBody(body(x: 0.15)).speech, contains('왼쪽'));
+      expect(frameBody(body(x: 0.85)).speech, contains('오른쪽'));
     });
   });
 

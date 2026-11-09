@@ -23,7 +23,7 @@ enum Subject {
 class Framing {
   const Framing.ready()
       : ready = true,
-        speech = '좋아요, 그대로 계세요.';
+        speech = '좋아요, 그대로요.';
   const Framing.fix(this.speech) : ready = false;
 
   final bool ready;
@@ -45,7 +45,7 @@ const _edge = 0.02;
 /// 내려놓은 옷 상자들(화면 기준 0~1)을 보고 안내한다. 여러 벌이면 모두 감싸는 상자로 본다.
 Framing frameGarment(List<Rect> boxes) {
   if (boxes.isEmpty) {
-    return const Framing.fix('옷이 안 보여요. 폰을 옷 쪽으로 천천히 비춰 주세요.');
+    return const Framing.fix('옷이 안 보여요. 폰을 옷 쪽으로 비춰 주세요.');
   }
   final box = boxes.reduce((a, b) => a.expandToInclude(b));
   final area = box.width * box.height;
@@ -55,24 +55,24 @@ Framing frameGarment(List<Rect> boxes) {
       cutBottom = box.bottom >= 1 - _edge;
 
   if (area > 0.85 || (cutLeft && cutRight) || (cutTop && cutBottom)) {
-    return const Framing.fix('너무 가까워요. 폰을 조금 더 높이 들어 주세요.');
+    return const Framing.fix('조금 더 높이 들어 주세요.');
   }
   if (area < 0.08) {
-    return const Framing.fix('옷이 작게 보여요. 폰을 옷에 조금 더 가까이 가져가 주세요.');
+    return const Framing.fix('조금 더 가까이 가 주세요.');
   }
   // 한쪽이 잘렸거나 한쪽으로 치우쳤으면 그쪽으로 폰을 옮기게 한다.
   final cx = box.center.dx, cy = box.center.dy;
   if (cutLeft || cx < 0.35) {
-    return const Framing.fix('옷이 왼쪽에 걸쳐 있어요. 폰을 조금 왼쪽으로 옮겨 주세요.');
+    return const Framing.fix('폰을 조금 왼쪽으로.');
   }
   if (cutRight || cx > 0.65) {
-    return const Framing.fix('옷이 오른쪽에 걸쳐 있어요. 폰을 조금 오른쪽으로 옮겨 주세요.');
+    return const Framing.fix('폰을 조금 오른쪽으로.');
   }
   if (cutTop || cy < 0.35) {
-    return const Framing.fix('옷이 위쪽에 걸쳐 있어요. 폰을 폰 윗부분 쪽으로 조금 옮겨 주세요.');
+    return const Framing.fix('폰을 조금 위로.');
   }
   if (cutBottom || cy > 0.65) {
-    return const Framing.fix('옷이 아래쪽에 걸쳐 있어요. 폰을 폰 아랫부분 쪽으로 조금 옮겨 주세요.');
+    return const Framing.fix('폰을 조금 아래로.');
   }
   return const Framing.ready();
 }
@@ -82,32 +82,44 @@ typedef BodyPoint = ({double x, double y, double likelihood});
 
 /// 입은 옷: 머리부터 발까지 화면에 들어왔는지 본다. 폰은 세워 두고 사람이 움직인다.
 ///
-/// [points]의 키: head(코나 귀), shoulder, hip, foot(발목이나 발뒤꿈치). 없거나 확률이 낮으면 안 보이는 것이다.
+/// [points]의 키: head(코나 귀), shoulder, hip, knee, foot(발목이나 발뒤꿈치). 없거나 확률이 낮으면 안 보이는 것이다.
+///
+/// 2026-11-09 리허설: "뒤로 가세요"와 "앞으로 오세요"를 번갈아 말하다 끝내 못 찍었다. 폰을 가슴 높이에 세우면
+/// 발이 들어오는 거리와 "너무 멀다"로 보는 거리 사이가 반 걸음도 안 됐기 때문이다. 그래서
+/// - 발목이 흐릿해도 무릎이 화면 아래쪽에 보이면 다 보인 것으로 친다(옷은 다 보인다).
+/// - "너무 멀다"는 몸이 화면의 4분의 1보다 작을 때만 말한다.
 Framing frameBody(Map<String, List<BodyPoint>> points) {
-  bool seen(String key) => (points[key] ?? const []).any((p) =>
-      p.likelihood >= 0.5 && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1);
+  bool seen(String key, [double min = 0.5]) =>
+      (points[key] ?? const []).any((p) =>
+          p.likelihood >= min && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1);
+  bool kneeLow() => (points['knee'] ?? const []).any((p) =>
+      p.likelihood >= 0.5 && p.x >= 0 && p.x <= 1 && p.y >= 0.7 && p.y <= 1);
 
   if (!seen('shoulder') || !seen('hip')) {
-    return const Framing.fix('몸이 안 보여요. 폰 앞 두세 걸음 떨어진 곳에 서 주세요.');
+    return const Framing.fix('몸이 안 보여요. 폰 앞에 서 주세요.');
   }
-  if (!seen('foot')) {
-    return const Framing.fix('발까지 보이게 한 걸음 뒤로 가 주세요.');
+  if (!seen('head', 0.4)) {
+    return const Framing.fix('한 걸음 뒤로 가 주세요.');
   }
-  if (!seen('head')) {
-    return const Framing.fix('머리까지 보이게 한 걸음 뒤로 가 주세요.');
+  if (!seen('foot', 0.3) && !kneeLow()) {
+    return const Framing.fix('한 걸음 뒤로 가 주세요.');
   }
   final all = points.values
       .expand((list) => list)
-      .where((p) => p.likelihood >= 0.5)
+      .where((p) => p.likelihood >= 0.5 && p.y >= 0 && p.y <= 1)
       .toList();
   final top = all.map((p) => p.y).reduce((a, b) => a < b ? a : b);
   final bottom = all.map((p) => p.y).reduce((a, b) => a > b ? a : b);
   final cx = all.map((p) => p.x).reduce((a, b) => a + b) / all.length;
-  if (bottom - top < 0.45) {
-    return const Framing.fix('조금 멀어요. 한 걸음 앞으로 와 주세요.');
+  if (bottom - top < 0.25) {
+    return const Framing.fix('한 걸음 앞으로 와 주세요.');
   }
-  if (cx < 0.3 || cx > 0.7) {
-    return const Framing.fix('화면 가운데에서 벗어났어요. 폰 정면으로 조금 옮겨 서 주세요.');
+  // 뒤쪽 카메라라 사진 왼쪽이 폰을 바라보는 사람의 오른쪽이다. 그 사람 기준으로 말한다.
+  if (cx < 0.25) {
+    return const Framing.fix('왼쪽으로 반 걸음 가 주세요.');
+  }
+  if (cx > 0.75) {
+    return const Framing.fix('오른쪽으로 반 걸음 가 주세요.');
   }
   return const Framing.ready();
 }
