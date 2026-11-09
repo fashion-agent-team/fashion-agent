@@ -8,10 +8,18 @@ import '../models/weather.dart';
 /// 오늘 날씨와 기온을 가져온다.
 ///
 /// Open-Meteo(https://open-meteo.com)를 쓴다. API 키가 필요 없고 웹(CORS)에서도 동작한다.
+///
+/// 같은 동네(소수 둘째 자리) 날씨는 10분 동안 다시 받지 않는다(2026-11-09 발표 피드백: 딜레이 줄이기).
 class WeatherService {
-  WeatherService({http.Client? client}) : _client = client ?? http.Client();
+  WeatherService({http.Client? client, DateTime Function()? now})
+      : _client = client ?? http.Client(),
+        _now = now ?? DateTime.now;
 
   final http.Client _client;
+  final DateTime Function() _now;
+
+  static const cacheFor = Duration(minutes: 10);
+  final _cache = <String, (DateTime, Weather)>{};
 
   // 위치를 못 얻으면 서울시청 기준으로 조회한다.
   static const double fallbackLatitude = 37.5665;
@@ -29,6 +37,10 @@ class WeatherService {
 
   Future<Weather> fetchWeather(double latitude, double longitude,
       {bool isFallbackLocation = false}) async {
+    final key =
+        '${latitude.toStringAsFixed(2)},${longitude.toStringAsFixed(2)}';
+    final hit = _cache[key];
+    if (hit != null && _now().difference(hit.$1) < cacheFor) return hit.$2;
     final uri = Uri.https('api.open-meteo.com', '/v1/forecast', {
       'latitude': '$latitude',
       'longitude': '$longitude',
@@ -46,7 +58,10 @@ class WeatherService {
     }
     final json =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    return Weather.fromOpenMeteo(json, isFallbackLocation: isFallbackLocation);
+    final weather =
+        Weather.fromOpenMeteo(json, isFallbackLocation: isFallbackLocation);
+    _cache[key] = (_now(), weather);
+    return weather;
   }
 
   Future<Position?> _currentPosition() async {

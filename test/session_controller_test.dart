@@ -15,9 +15,11 @@ import 'package:fashion_agent/session/session_step.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'fake_speech_extras.dart';
+
 import 'agent_test.dart' show ScriptedListen;
 
-class FakeSpeech implements SpeechService {
+class FakeSpeech with FakeSpeechExtras implements SpeechService {
   final spoken = <String>[];
 
   @override

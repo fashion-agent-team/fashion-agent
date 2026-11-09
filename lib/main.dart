@@ -10,6 +10,7 @@ import 'screens/agent_screen.dart';
 import 'services/account_service.dart';
 import 'services/auto_capture.dart';
 import 'services/capture_service.dart';
+import 'services/cloud_tts.dart';
 import 'services/fake_vision_service.dart';
 import 'services/firebase_account_service.dart';
 import 'services/gateway_auth.dart';
@@ -63,7 +64,9 @@ Future<(AccountService, GatewayAuth?)> _account() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final (account, gateway) = await _account();
-  final speech = SpeechService();
+  // 로그인돼 있으면 게이트웨이를 거쳐 구글 목소리로 읽는다(2026-11-09 발표 피드백). 아니면 폰 목소리.
+  final speech =
+      SpeechService(cloud: gateway == null ? null : GatewayTtsApi(gateway));
   final listen = DeviceListenService();
   final capture = _fakeCamera ? FakeCaptureService() : CameraCaptureService();
   final profiles = LocalProfileStore();
@@ -84,6 +87,7 @@ Future<void> main() async {
                 ? FakeAutoCaptureCamera()
                 : DeviceAutoCaptureCamera(),
           ),
+    heardNow: listen.heardNow,
     agent: AgentController(
       speech: speech,
       listen: listen,
@@ -121,22 +125,34 @@ class FashionAgentApp extends StatelessWidget {
       {super.key,
       required this.agent,
       required this.outfitCheck,
-      this.cameraTurn});
+      this.cameraTurn,
+      this.heardNow});
 
   final AgentController agent;
   final SessionController outfitCheck;
   final CameraTurnController? cameraTurn;
+  final ValueListenable<String>? heardNow;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: '패션 에이전트',
+      debugShowCheckedModeBanner: false,
+      // 심청이 마스코트에 맞춘 색: 다홍(주), 남색(보조), 한지 바탕.
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFC62F45),
+          secondary: const Color(0xFF283A6B),
+          surface: const Color(0xFFFFF8EC),
+        ),
+        scaffoldBackgroundColor: const Color(0xFFFFF8EC),
         useMaterial3: true,
       ),
       home: AgentScreen(
-          agent: agent, outfitCheck: outfitCheck, cameraTurn: cameraTurn),
+          agent: agent,
+          outfitCheck: outfitCheck,
+          cameraTurn: cameraTurn,
+          heardNow: heardNow),
     );
   }
 }

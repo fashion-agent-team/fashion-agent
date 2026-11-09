@@ -1,12 +1,17 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 /// 한 번에 듣는 가장 긴 시간.
 const defaultListenFor = Duration(seconds: 30);
 
-/// 말이 끊긴 뒤 끝낼 때까지 기다리는 시간. 2026-11-06 진행 님 폰 확인: 3초는 생각할 틈 없이 끊겨서 5초로.
-const defaultPauseFor = Duration(seconds: 5);
+/// 말이 끊긴 뒤 끝낼 때까지 기다리는 시간.
+///
+/// 2026-11-06에는 3초가 짧다고 5초로 늘렸지만, 2026-11-09 발표 피드백에서 말이 끝나고 기다리는 텀이 너무 길다고 했다.
+/// 이제 명령은 [CommandListener]가 문장이 끝났는지 보고 더 빨리 끝내고, 덜 끝난 말이면 "더 말하실 내용 있을까요?"를 묻는다.
+/// 그래서 기본값(온보딩 답 등)은 2초로 줄인다.
+const defaultPauseFor = Duration(seconds: 2);
 
 /// 사용자의 말을 한 번 듣고 글자로 돌려준다.
 abstract class ListenService {
@@ -30,6 +35,9 @@ abstract class ListenService {
 /// 기기의 음성 인식(iOS Speech, Android SpeechRecognizer)으로 한국어를 듣는다.
 class DeviceListenService implements ListenService {
   final _stt = SpeechToText();
+
+  /// 지금 듣고 있는 말(중간 결과). 화면에 보여 줘서 알아듣고 있다는 걸 알린다.
+  final heardNow = ValueNotifier<String>('');
   bool? _ready;
   Completer<String?>? _pending;
   String _heard = '';
@@ -49,6 +57,7 @@ class DeviceListenService implements ListenService {
     await cancel();
 
     _heard = '';
+    heardNow.value = '';
     final done = _pending = Completer<String?>();
     Timer? early;
     unawaited(done.future.whenComplete(() => early?.cancel()));
@@ -61,6 +70,7 @@ class DeviceListenService implements ListenService {
       ),
       onResult: (result) {
         _heard = result.recognizedWords;
+        heardNow.value = _heard;
         if (result.finalResult) {
           _finish();
           return;

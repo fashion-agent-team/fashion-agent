@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'agent_speech.dart' show isHomeCommand;
+import 'command_listener.dart';
 import '../services/auto_capture.dart';
 import '../services/capture_service.dart';
 import '../services/framing.dart';
@@ -98,10 +99,10 @@ class CameraTurnController extends ChangeNotifier {
         continue;
       }
       final started = DateTime.now();
-      final heard = await listen.listen(
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 3),
-      );
+      // 명령으로 끝난 말은 바로, 아니면 1.6초 조용하면 끝낸다(2026-11-09 피드백: 텀이 길다. 예전 3초).
+      final heard = await CommandListener.once(listen,
+          listenFor: const Duration(seconds: 30),
+          pause: const Duration(milliseconds: 1600));
       if (!running) break;
       if (heard == null || heard.trim().length < 2) {
         final quick =
@@ -143,7 +144,8 @@ class CameraTurnController extends ChangeNotifier {
     _setBusy(true);
     try {
       await _say('말씀해 주세요.');
-      final heard = await listen.listen();
+      await speech.listeningCue();
+      final heard = await CommandListener.once(listen);
       if (!running) return;
       if (heard == null) {
         await _say('잘 듣지 못했어요. 옷을 계속 보여 주셔도 돼요.');

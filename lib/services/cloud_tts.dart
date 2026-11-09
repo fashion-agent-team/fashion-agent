@@ -1,0 +1,135 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'gateway_auth.dart';
+
+/// 게이트웨이 `POST /api/v1/tts`로 문장을 소리(MP3·WAV)로 바꾼다.
+abstract class TtsApi {
+  /// 게이트웨이에 로그인했으면 true.
+  Future<bool> get available;
+
+  /// [text]를 [voice] 목소리로 읽은 소리 파일 바이트.
+  Future<Uint8List> synthesize(String text, String voice);
+}
+
+class GatewayTtsApi implements TtsApi {
+  GatewayTtsApi(this.gateway, {this.timeout = const Duration(seconds: 6)});
+
+  final GatewayAuth gateway;
+  final Duration timeout;
+
+  @override
+  Future<bool> get available => gateway.isSignedIn;
+
+  @override
+  Future<Uint8List> synthesize(String text, String voice) async {
+    final res = await gateway.send('POST', '/api/v1/tts',
+        json: {'text': text, 'voice': voice}).timeout(timeout);
+    if (res.bodyBytes.isEmpty) {
+      throw GatewayException(502, 'empty_audio', '소리가 비어 있어요');
+    }
+    return res.bodyBytes;
+  }
+}
+
+/// 읽은 소리를 기억해 두는 곳. 같은 문장(인사, 추임새, 안내)은 다시 받지 않고 바로 읽는다.
+///
+/// 메모리에 최근 [memoryLimit]개, 폰 임시 폴더에 파일로 남긴다. 파일 이름은 목소리+문장의 해시다.
+class TtsCache {
+  TtsCache({this.memoryLimit = 60, Future<Directory> Function()? dir})
+      : _dir = dir ?? _defaultDir;
+
+  final int memoryLimit;
+  final Future<Directory> Function() _dir;
+  final _memory = <String, Uint8List>{};
+  final _pending = <String, Future<Uint8List>>{};
+
+  static Future<Directory> _defaultDir() async {
+    final base = await getTemporaryDirectory();
+    final d = Directory('${base.path}/tts');
+    if (!await d.exists()) await d.create(recursive: true);
+    return d;
+  }
+
+  /// 기억해 둔 소리를 쓰고, 없으면 [load]로 받아 기억한다. 같은 문장을 동시에 받지 않는다.
+  Future<Uint8List> get(
+      String voice, String text, Future<Uint8List> Function() load) {
+    final key = cacheKey(voice, text);
+    final hit = _memory.remove(key);
+    if (hit != null) {
+      _memory[key] = hit; // 최근에 쓴 것으로 옮긴다
+      return Future.value(hit);
+    }
+    return _pending[key] ??=
+        _fromDiskOrLoad(key, load).whenComplete(() => _pending.remove(key));
+  }
+
+  Future<Uint8List> _fromDiskOrLoad(
+      String key, Future<Uint8List> Function() load) async {
+    File? file;
+    try {
+      file = File('${(await _dir()).path}/$key.audio');
+      if (await file.exists()) return _remember(key, await file.readAsBytes());
+    } on Object catch (e) {
+      debugPrint('TTS 파일 읽기 실패: $e');
+      file = null;
+    }
+    final bytes = await load();
+    _remember(key, bytes);
+    if (file != null) {
+      unawaited(file.writeAsBytes(bytes).then((_) {}, onError: (Object e) {
+        debugPrint('TTS 파일 저장 실패: $e');
+      }));
+    }
+    return bytes;
+  }
+
+  Uint8List _remember(String key, Uint8List bytes) {
+    _memory[key] = bytes;
+    while (_memory.length > memoryLimit) {
+      _memory.remove(_memory.keys.first);
+    }
+    return bytes;
+  }
+
+  /// 목소리+문장의 64비트 FNV-1a 해시(16진수).
+  @visibleForTesting
+  static String cacheKey(String voice, String text) {
+    // 웹에서도 돌게 32비트 두 개로 나눠 계산한다.
+    var h1 = 0x811c9dc5, h2 = 0x050c5d1f;
+    for (final c in '$voice\u0000$text'.codeUnits) {
+      h1 = ((h1 ^ c) * 0x01000193) & 0xffffffff;
+      h2 = ((h2 ^ (c + 7)) * 0x01000193) & 0xffffffff;
+    }
+    return h1.toRadixString(16).padLeft(8, '0') +
+        h2.toRadixString(16).padLeft(8, '0');
+  }
+}
+
+/// 긴 안내를 문장으로 나눈다. 첫 문장을 먼저 받아 읽는 동안 다음 문장을 받아서 기다림을 줄인다.
+List<String> splitSentences(String text) {
+  final out = <String>[];
+  final buf = StringBuffer();
+  final chars = text.trim().split('');
+  for (var i = 0; i < chars.length; i++) {
+    buf.write(chars[i]);
+    final end = '.?!'.contains(chars[i]) &&
+        (i + 1 == chars.length || chars[i + 1] == ' ' || chars[i + 1] == '"');
+    if (end && buf.toString().trim().length >= 6) {
+      out.add(buf.toString().trim());
+      buf.clear();
+    }
+  }
+  final rest = buf.toString().trim();
+  if (rest.isNotEmpty) {
+    if (out.isNotEmpty && rest.length < 6) {
+      out[out.length - 1] = '${out.last} $rest';
+    } else {
+      out.add(rest);
+    }
+  }
+  return out;
+}
