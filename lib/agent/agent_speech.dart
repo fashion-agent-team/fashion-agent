@@ -22,8 +22,8 @@ const askFeature = '원하시는 기능을 말씀해 주세요.';
 
 const tapToTalk = '다른 기능이 필요하면 화면 위쪽을 누르고 말씀해 주세요.';
 
-String returningGreeting(String agentName) =>
-    '반갑습니다. 오늘 하루도 좋은 하루 되세요. 당신의 에이전트 $agentName입니다. '
+String returningGreeting(String agentName, {String? callName}) =>
+    '반갑습니다${callName == null ? '' : ', $callName'}. 오늘 하루도 좋은 하루 되세요. 당신의 에이전트 $agentName입니다. '
     '원하시는 기능 있으시면 말씀해주세요.';
 
 /// 구글 로그인 창(iOS가 띄우는 "accounts.google.com을 사용하여 로그인하려고 합니다")이 뜨기 전에 읽는다.

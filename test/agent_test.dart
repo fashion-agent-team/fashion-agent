@@ -300,4 +300,125 @@ void main() {
       expect(speech.spoken, contains('얼굴 확인 기능은 지금 준비 중이에요.'));
     });
   });
+
+  group('말로 설정 바꾸기', () {
+    test('설정 말을 고른다', () {
+      expect(routeSetting('네 이름 바꿔 줘'), Setting.agentName);
+      expect(routeSetting('이름을 코디로 바꿔 줘'), Setting.agentName);
+      expect(routeSetting('에이전트 이름 변경'), Setting.agentName);
+      expect(routeSetting('나를 진행 님이라고 불러 줘'), Setting.callName);
+      expect(routeSetting('호칭 바꿔 줘'), Setting.callName);
+      expect(routeSetting('저를 어떻게 부를지 정하고 싶어'), Setting.callName);
+      expect(routeSetting('내 키 바꿔 줘'), Setting.profile);
+      expect(routeSetting('제 정보 수정할래'), Setting.profile);
+      expect(routeSetting('생일 바꿔 줘'), Setting.profile);
+      expect(routeSetting('내 정보 알려 줘'), Setting.readProfile);
+      expect(routeSetting('오늘 뭐 입지'), isNull);
+      expect(routeSetting('날씨 어때'), isNull);
+      expect(routeSetting('옷 바꿔 입을까'), isNull);
+      expect(routeSetting('내 키에 맞는 옷 골라 줘'), isNull);
+      expect(routeSetting('오늘 날씨에 친구 불러도 될까'), isNull);
+      expect(routeSetting('이 옷 이름이 뭐야'), isNull);
+    });
+
+    test('말에서 새 이름·호칭을 꺼낸다', () {
+      expect(newNameIn('이름을 코디로 바꿔 줘'), '코디');
+      expect(newNameIn('네 이름 하늘이라고 해'), '하늘');
+      expect(newNameIn('네 이름 바꿔 줘'), isNull);
+      expect(newCallNameIn('나를 진행 님이라고 불러 줘'), '진행 님');
+      expect(newCallNameIn('저를 대표님으로 불러 주세요'), '대표님');
+      expect(newCallNameIn('호칭 바꿔 줘'), isNull);
+      expect(parseCallName('진행 님이요'), '진행 님');
+      expect(parseCallName('그냥 진행이라고 불러'), '그냥 진행');
+    });
+
+    AgentController agentWith(FakeSpeech speech, List<String?> heard,
+            {required UserProfile profile,
+            List<String?> answers = const [],
+            ProfileStore? store,
+            FakeAccount? account}) =>
+        AgentController(
+          speech: speech,
+          listen: ScriptedListen(heard),
+          profiles: store ?? InMemoryProfileStore(profile),
+          weatherService: FakeWeatherService(),
+          onboarding: onboardingWith(speech, answers, account: account),
+        );
+
+    test('에이전트 이름을 바꾸고 저장·업로드한다', () async {
+      final speech = FakeSpeech();
+      const before =
+          UserProfile(name: '이진행', agentName: '박창근', accountId: 'uid-1');
+      final store = InMemoryProfileStore(before);
+      final account = FakeAccount(id: 'uid-1');
+      final agent = agentWith(speech, ['네 이름 바꿔 줘'],
+          profile: before,
+          answers: ['코디', '네'],
+          store: store,
+          account: account);
+      await agent.start();
+
+      expect(speech.spoken, contains('새 이름을 말씀해 주세요.'));
+      expect(speech.spoken, contains('좋아요, 이제 제 이름은 코디예요.'));
+      expect(agent.wakeName, '코디');
+      expect(store.profile?.agentName, '코디');
+      expect(store.profile?.name, '이진행');
+      expect(account.uploaded?.agentName, '코디');
+    });
+
+    test('호칭을 말과 함께 정하면 확인만 하고, 인사에 넣는다', () async {
+      final speech = FakeSpeech();
+      final store = InMemoryProfileStore(const UserProfile(agentName: '하늘'));
+      final agent = agentWith(speech, ['나를 진행 님이라고 불러 줘'],
+          profile: const UserProfile(agentName: '하늘'),
+          answers: ['응'],
+          store: store);
+      await agent.start();
+
+      expect(speech.spoken, contains('앞으로 진행 님, 이렇게 불러 드릴까요?'));
+      expect(store.profile?.callName, '진행 님');
+
+      final again = FakeSpeech();
+      await agentWith(again, const [], profile: store.profile!, store: store)
+          .start();
+      expect(again.spoken.first, startsWith('반갑습니다, 진행 님. 오늘 하루도'));
+    });
+
+    test('사용자 정보 한 항목만 바꾼다', () async {
+      final speech = FakeSpeech();
+      const before = UserProfile(name: '김민수', heightCm: 170, agentName: '하늘');
+      final store = InMemoryProfileStore(before);
+      final agent = agentWith(speech, ['내 키 바꿔 줘'],
+          profile: before, answers: ['175'], store: store);
+      await agent.start();
+
+      expect(store.profile?.heightCm, 175);
+      expect(store.profile?.name, '김민수');
+      expect(speech.spoken, contains(startsWith('바꿨어요. 이름 김민수')));
+    });
+
+    test('못 알아들으면 정보를 지우지 않고 그대로 둔다', () async {
+      final speech = FakeSpeech();
+      const before = UserProfile(heightCm: 170, agentName: '하늘');
+      final store = InMemoryProfileStore(before);
+      final agent = agentWith(speech, ['내 키 바꿔 줘'],
+          profile: before, answers: [null, null, null], store: store);
+      await agent.start();
+
+      expect(store.profile?.heightCm, 170);
+      expect(speech.spoken, contains('키는 그대로 둘게요.'));
+    });
+
+    test('온보딩에서 호칭을 묻는다', () async {
+      final speech = FakeSpeech();
+      final profile = await onboardingWith(speech, [
+        '아니요', '하늘', '네', //
+        '이진행이요', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '네',
+        '진행 님', '네',
+      ]).run();
+
+      expect(speech.spoken, contains('제가 어떻게 불러 드릴까요? 예를 들어 진행 님처럼 말씀해 주세요.'));
+      expect(profile.callName, '진행 님');
+    });
+  });
 }

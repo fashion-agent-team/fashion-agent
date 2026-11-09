@@ -278,6 +278,7 @@ components:
         heightCm: { type: number, nullable: true }
         weightKg: { type: number, nullable: true }
         agentName: { type: string, nullable: true, description: null이면 온보딩 안 함 }
+        callName: { type: string, nullable: true, description: '에이전트가 사용자를 부르는 말(호칭). 예: "진행 님". null이면 따로 부르지 않음' }
 
     Location:
       type: object

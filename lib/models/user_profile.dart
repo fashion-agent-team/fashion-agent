@@ -10,6 +10,7 @@ class UserProfile {
     this.heightCm,
     this.weightKg,
     this.agentName,
+    this.callName,
     this.accountId,
   });
 
@@ -23,6 +24,7 @@ class UserProfile {
         heightCm: (json['heightCm'] as num?)?.toDouble(),
         weightKg: (json['weightKg'] as num?)?.toDouble(),
         agentName: json['agentName'] as String?,
+        callName: json['callName'] as String?,
         accountId: json['accountId'] as String?,
       );
 
@@ -38,6 +40,9 @@ class UserProfile {
   /// 사용자가 지어 준 에이전트 이름.
   final String? agentName;
 
+  /// 에이전트가 사용자를 부르는 말(호칭). 예: "진행 님". null이면 따로 부르지 않는다.
+  final String? callName;
+
   /// 로그인한 계정 id. null이면 이 폰에만 저장된 상태다.
   final String? accountId;
 
@@ -52,6 +57,7 @@ class UserProfile {
     double? heightCm,
     double? weightKg,
     String? agentName,
+    String? callName,
     String? accountId,
   }) =>
       UserProfile(
@@ -62,6 +68,7 @@ class UserProfile {
         heightCm: heightCm ?? this.heightCm,
         weightKg: weightKg ?? this.weightKg,
         agentName: agentName ?? this.agentName,
+        callName: callName ?? this.callName,
         accountId: accountId ?? this.accountId,
       );
 
@@ -73,6 +80,7 @@ class UserProfile {
         'heightCm': heightCm,
         'weightKg': weightKg,
         'agentName': agentName,
+        'callName': callName,
         'accountId': accountId,
       };
 }

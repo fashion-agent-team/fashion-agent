@@ -52,6 +52,24 @@ void main() {
       expect(afterWakeWord('에이전 날씨', null), '날씨');
     });
 
+    test('사람 이름은 잘못 들은 소리·성 뺀 이름·받침 넘김도 알아듣는다', () {
+      const name = '박창근';
+      expect(afterWakeWord('박창근 날씨 어때', name), '날씨 어때');
+      expect(afterWakeWord('박 창근아 날씨 어때', name), '날씨 어때');
+      expect(afterWakeWord('박찬근 날씨 어때', name), '날씨 어때');
+      expect(afterWakeWord('박장근', name), '');
+      expect(afterWakeWord('박창건아', name), '');
+      expect(afterWakeWord('창근아 오늘 뭐 입지', name), '오늘 뭐 입지');
+      expect(afterWakeWord('창그나 오늘 뭐 입지', name), '오늘 뭐 입지');
+      expect(afterWakeWord('창근이야', name), '');
+      expect(afterWakeWord('오늘 장군 영화 봤어', name), isNull);
+      expect(afterWakeWord('오늘 날씨 어때', name), isNull);
+    });
+
+    test('비슷한 모음도 같게 본다', () {
+      expect(afterWakeWord('세봄아 날씨', '새봄'), '날씨');
+    });
+
     test('이름을 안 지었으면 "에이전트"로 부른다', () {
       expect(afterWakeWord('에이전트 날씨 어때', null), '날씨 어때');
     });
