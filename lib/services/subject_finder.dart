@@ -129,7 +129,7 @@ List<Rect> garmentBoxes(List<DetectedObject> found, double w, double h) {
       .toList();
 }
 
-/// 몸 자세에서 머리·어깨·엉덩이·발 점(0~1).
+/// 몸 자세에서 머리·어깨·엉덩이·무릎·발 점(0~1).
 Map<String, List<BodyPoint>> bodyPoints(Pose pose, double w, double h) {
   List<BodyPoint> pick(List<PoseLandmarkType> types) => [
         for (final t in types)
@@ -145,6 +145,7 @@ Map<String, List<BodyPoint>> bodyPoints(Pose pose, double w, double h) {
     'shoulder':
         pick([PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder]),
     'hip': pick([PoseLandmarkType.leftHip, PoseLandmarkType.rightHip]),
+    'knee': pick([PoseLandmarkType.leftKnee, PoseLandmarkType.rightKnee]),
     'foot': pick([
       PoseLandmarkType.leftAnkle,
       PoseLandmarkType.rightAnkle,

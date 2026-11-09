@@ -8,7 +8,13 @@ Intent routeIntent(String text) {
   bool has(String pattern) => RegExp(pattern).hasMatch(text);
 
   if (has(r'일정|스케줄|약속|미팅|회의')) return Intent.schedule;
-  if (has(r'얼굴|화장|메이크업|머리|헤어|치아|이빨|이에|고춧가루')) return Intent.faceCheck;
+  // "옷 검사해 줘"가 얼굴 확인으로 가던 문제(2026-11-09 리허설). 옷 이야기면 얼굴 말보다 먼저 본다.
+  if (has(r'옷\s*(검사|확인|봐|체크|상태)|입은\s*(옷|거|모습)|옷차림')) {
+    return Intent.outfitCheck;
+  }
+  if (has(r'얼굴|화장|메이크업|머리\s*(모양|정돈|상태|확인|봐)|헤어|치아|이빨|이에\s*(뭐|낀|꼈|묻)|고춧가루')) {
+    return Intent.faceCheck;
+  }
   if (has(r'검사|코디|입은|옷차림|어울려|어울리|얼룩|찢어|구멍')) {
     return Intent.outfitCheck;
   }
