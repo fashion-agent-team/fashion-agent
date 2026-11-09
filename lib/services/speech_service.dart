@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import 'cloud_tts.dart';
@@ -245,19 +246,22 @@ class SpeechService {
     }
   }
 
-  /// 듣기 시작을 알리는 짧은 "띵" 소리. 말씀하셔도 된다는 신호다(2026-11-09 피드백: 듣고 있는지 모르겠다).
+  /// 듣기 시작을 알리는 신호. 말씀하셔도 된다는 뜻이다(2026-11-09 피드백: 듣고 있는지 모르겠다).
+  ///
+  /// 폰을 짧게 진동하고 시스템 "딸깍" 소리를 낸다. 예전에는 audioplayers로 "띵" 소리를 틀었는데,
+  /// audioplayers는 소리가 끝나면 iOS 오디오 세션을 꺼 버려서(setActive(false)) 바로 이어 켠 마이크가
+  /// 아무 소리도 못 들었다(2026-11-09 폰 확인: 이름을 불러도 못 알아들음). 시스템 소리와 진동은 세션을 건드리지 않는다.
   Future<void> listeningCue() async {
     final gen = ++_generation;
     await _stopNow();
     if (gen != _generation) return;
     try {
-      await _play(_cue, mimeType: 'audio/wav');
+      await HapticFeedback.mediumImpact();
+      await SystemSound.play(SystemSoundType.click);
     } on Object catch (e) {
-      debugPrint('신호음 실패: $e');
+      debugPrint('신호 실패: $e');
     }
   }
-
-  static final Uint8List _cue = toneWav(const [880, 1320], ms: 90);
 
   Future<void> _speakDevice(String text, [Voice? voice]) async {
     final spec = voice?.spec;
