@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import 'cloud_tts.dart';
+import 'gateway_auth.dart' show GatewayException;
 import 'voices.dart';
 
 /// 앱의 모든 음성 안내를 담당한다.
@@ -57,21 +58,64 @@ class SpeechService {
   DateTime? _cloudPausedUntil;
 
   static const _firstTimeout = Duration(seconds: 4);
+  static const _slowTimeout = Duration(seconds: 9);
+
+  /// 서버 목소리가 안 될 때 대신 읽을 폰 목소리.
+  Voice get _bestDevice =>
+      _deviceVoices.isEmpty ? deviceVoice : _deviceVoices.first;
+
+  /// 지금 폰 TTS에 걸어 둔 목소리 id.
+  String? _deviceVoiceSet;
 
   static bool get _isIOS =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
-  /// 고를 수 있는 목소리. 서버 목소리가 없으면 폰 목소리 하나.
-  List<Voice> get voices =>
-      cloud == null ? const [deviceVoice] : const [...cloudVoices, deviceVoice];
+  /// 폰에 받아 둔 한국어 목소리. 좋은 것부터. [loadDeviceVoices]가 채운다.
+  List<Voice> _deviceVoices = const [];
+  bool _deviceVoicesLoaded = false;
 
-  /// 지금 목소리. 고른 적 없으면 서버 목소리 첫째(서버가 없으면 폰 목소리).
+  /// 고를 수 있는 목소리: 폰 목소리(좋은 것부터) 다음 구글 목소리.
+  List<Voice> get voices => [
+        ...(_deviceVoices.isEmpty ? const [deviceVoice] : _deviceVoices),
+        if (cloud != null) ...cloudVoices,
+      ];
+
+  /// 폰에 받아 둔 한국어 목소리를 읽는다. 한 번만 읽는다.
+  Future<void> loadDeviceVoices() async {
+    if (_deviceVoicesLoaded) return;
+    _deviceVoicesLoaded = true;
+    try {
+      final raw = await _tts.getVoices;
+      final list = <Voice>[];
+      final seen = <String>{};
+      for (final item in (raw as List? ?? const [])) {
+        if (item is! Map) continue;
+        final v = item.map((k, val) => MapEntry('$k', '$val'));
+        if (!(v['locale'] ?? '').toLowerCase().startsWith('ko')) continue;
+        final voice = Voice.fromDevice(v);
+        if (seen.add(voice.id)) list.add(voice);
+      }
+      list.sort((a, b) => b.rank.compareTo(a.rank));
+      _deviceVoices = list;
+      debugPrint('폰 한국어 목소리 ${list.length}개: '
+          '${list.map((v) => '${v.spec?['name']}(${v.spec?['quality']})').join(', ')}');
+    } on Object catch (e) {
+      debugPrint('폰 목소리 목록 실패: $e');
+    }
+  }
+
+  /// 지금 목소리. 고른 적 없으면 폰의 좋은 목소리(향상됨·프리미엄), 그것도 없으면 구글 목소리 첫째, 그다음 폰 기본.
   Future<Voice> get voice async {
     final known = _voice;
     if (known != null) return known;
+    await loadDeviceVoices();
     final id = await _voices.load();
     final all = voices;
-    return _voice = all.firstWhere((v) => v.id == id, orElse: () => all.first);
+    final saved = all.where((v) => v.id == id);
+    if (saved.isNotEmpty) return _voice = saved.first;
+    final good = _deviceVoices.where((v) => v.rank >= 2);
+    if (good.isNotEmpty) return _voice = good.first;
+    return _voice = cloud != null ? cloudVoices.first : all.first;
   }
 
   /// 목소리를 바꾸고 기억한다.
@@ -140,10 +184,11 @@ class SpeechService {
     final v = voice ?? await this.voice;
     final api = cloud;
     if (v.device || api == null || _cloudPaused || !await api.available) {
-      if (gen == _generation) await _speakDevice(text);
+      if (gen == _generation) await _speakDevice(text, v);
       return;
     }
-    final sentences = splitSentences(text);
+    // Gemini TTS는 하루 횟수가 적어서 한 번에 받는다. Cloud TTS는 문장으로 나눠 첫 문장부터 읽는다.
+    final sentences = api.wholeText ? [text.trim()] : splitSentences(text);
     Future<Uint8List> fetch(int i) => _cache.get(
         v.id, sentences[i], () => api.synthesize(sentences[i], v.id));
     var next = fetch(0);
@@ -151,12 +196,17 @@ class SpeechService {
       Uint8List bytes;
       final watch = Stopwatch()..start();
       try {
-        bytes = await next.timeout(_firstTimeout);
+        // Gemini는 읽는 데 2~6초 걸린다. 엔진을 아직 모르면 Gemini일 수 있어 넉넉히 기다린다.
+        bytes = await next
+            .timeout(api.wholeText || i == 0 ? _slowTimeout : _firstTimeout);
       } on Object catch (e) {
-        debugPrint('구글 목소리 실패, 폰 목소리로 읽어요: $e');
-        _cloudPausedUntil = DateTime.now().add(const Duration(minutes: 1));
+        // 무료 횟수를 다 쓰면(429) 한동안 폰 목소리만 쓴다.
+        final quota = e is GatewayException && e.status == 429;
+        debugPrint('구글 목소리 실패${quota ? '(무료 횟수 끝)' : ''}, 폰 목소리로 읽어요: $e');
+        _cloudPausedUntil = DateTime.now().add(
+            quota ? const Duration(minutes: 30) : const Duration(minutes: 1));
         if (gen == _generation) {
-          await _speakDevice(sentences.sublist(i).join(' '));
+          await _speakDevice(sentences.sublist(i).join(' '), _bestDevice);
         }
         return;
       }
@@ -208,8 +258,21 @@ class SpeechService {
 
   static final Uint8List _cue = toneWav(const [880, 1320], ms: 90);
 
-  Future<void> _speakDevice(String text) async {
-    await _tts.setLanguage('ko-KR');
+  Future<void> _speakDevice(String text, [Voice? voice]) async {
+    final spec = voice?.spec;
+    if (spec != null && _deviceVoiceSet != voice!.id) {
+      try {
+        await _tts.setVoice({
+          'name': spec['name'] ?? '',
+          'locale': spec['locale'] ?? 'ko-KR',
+          if (spec['identifier'] != null) 'identifier': spec['identifier']!,
+        });
+        _deviceVoiceSet = voice.id;
+      } on Object catch (e) {
+        debugPrint('폰 목소리 바꾸기 실패: $e');
+      }
+    }
+    if (_deviceVoiceSet == null) await _tts.setLanguage('ko-KR');
     await _loudPlayback();
     await _tts.speak(text);
   }

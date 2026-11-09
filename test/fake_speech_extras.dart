@@ -29,6 +29,9 @@ mixin FakeSpeechExtras implements SpeechService {
   }
 
   @override
+  Future<void> loadDeviceVoices() async {}
+
+  @override
   Future<void> prefetch(Iterable<String> texts) async {}
 
   @override

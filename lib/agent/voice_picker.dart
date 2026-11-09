@@ -23,6 +23,7 @@ class VoicePicker {
 
   /// 목소리를 고른다. 바꿨으면 고른 목소리, 그만두면 null. 안내는 [say]로 한다.
   Future<Voice?> run(Future<void> Function(String) say) async {
+    await speech.loadDeviceVoices();
     final all = speech.voices;
     if (all.length < 2) {
       await say(
