@@ -80,7 +80,8 @@ void main() {
         List<String?> heard, List<Object> replies) async {
       final speech = FakeSpeech();
       final store = InMemoryProfileStore();
-      await store.save(const UserProfile(name: '진행', agentName: '코디'));
+      await store.save(const UserProfile(
+          name: '진행', agentName: '코디', consent: consentVersion));
       final listen = ScriptedListen(heard, blockWhenDone: true);
       final turns = FakeTurnApi(replies);
       final agent = AgentController(

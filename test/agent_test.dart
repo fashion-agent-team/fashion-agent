@@ -53,6 +53,7 @@ class ScriptedListen implements ListenService {
     Duration waitFor = const Duration(seconds: 8),
     bool Function(String partial)? stopWhen,
     Duration settle = const Duration(milliseconds: 700),
+    bool server = false,
   }) async {
     if (_i < answers.length) return answers[_i++];
     if (!blockWhenDone) return null;
@@ -103,10 +104,12 @@ class FakeWeatherService implements WeatherService {
 OnboardingFlow onboardingWith(FakeSpeech speech, List<String?> answers,
         {ProfileStore? store,
         AccountService? account,
-        PermissionService? permissions}) =>
+        PermissionService? permissions,
+        bool consentFirst = true}) =>
     OnboardingFlow(
       speech: speech,
-      listen: ScriptedListen(answers),
+      // 처음 켤 때 동의부터 받는다.
+      listen: ScriptedListen([if (consentFirst) '동의해', ...answers]),
       profiles: store ?? InMemoryProfileStore(),
       account: account ?? FakeAccount(),
       permissions: permissions,
@@ -217,6 +220,22 @@ void main() {
       expect(profile.agentName, '하늘');
     });
 
+    test('처음에 동의를 받아 저장하고, 동의하지 않으면 다시 묻는다', () async {
+      final speech = FakeSpeech();
+      final store = InMemoryProfileStore();
+      final flow = OnboardingFlow(
+        speech: speech,
+        listen: ScriptedListen(['싫어', '동의합니다', ...answers, '네']),
+        profiles: store,
+        account: FakeAccount(),
+      );
+      final profile = await flow.run();
+      expect(speech.spoken, contains(consentRequired));
+      expect(profile.consented, isTrue);
+      expect(parseConsent('동의 안 해'), isFalse);
+      expect(parseConsent('네 동의할게요'), isTrue);
+    });
+
     test('인사 뒤 첫 질문 전에 권한 창을 미리 알리고 한 번에 띄운다', () async {
       final speech = FakeSpeech();
       final permissions = FakePermissionService();
@@ -224,8 +243,13 @@ void main() {
           .run();
 
       expect(permissions.requests, 1);
-      expect(speech.spoken.take(3), [firstGreeting, permissionIntro, '고마워요.']);
-      expect(speech.spoken[3], startsWith('혹시 다른 폰에서'));
+      expect(speech.spoken.take(4), [
+        firstGreeting,
+        consentIntro,
+        permissionIntro,
+        '동의해 주셔서 고마워요.',
+      ]);
+      expect(speech.spoken[4], startsWith('혹시 다른 폰에서'));
     });
 
     test('마이크를 막으면 들을 수 없다고 알려 준다', () async {
@@ -254,7 +278,8 @@ void main() {
               store: store,
               account: FakeAccount(
                   id: 'uid-1',
-                  saved: const UserProfile(name: '김민수', agentName: '하늘')))
+                  saved: const UserProfile(
+                      name: '김민수', agentName: '하늘', consent: consentVersion)))
           .run();
 
       expect(profile.agentName, '하늘');
@@ -271,13 +296,13 @@ void main() {
           listen: ScriptedListen(heard),
           profiles: InMemoryProfileStore(profile),
           weatherService: FakeWeatherService(),
-          onboarding: onboardingWith(speech, const []),
+          onboarding: onboardingWith(speech, const [], consentFirst: false),
         );
 
     test('다시 실행하면 이름을 넣어 인사하고, 날씨를 물으면 일교차도 알려 준다', () async {
       final speech = FakeSpeech();
       final agent = agentWith(speech, ['오늘 날씨 어때'],
-          profile: const UserProfile(agentName: '하늘'));
+          profile: const UserProfile(agentName: '하늘', consent: consentVersion));
       await agent.start();
 
       expect(
@@ -291,7 +316,7 @@ void main() {
     test('옷 검사를 말하면 옷 검사 화면을 연다', () async {
       final speech = FakeSpeech();
       final agent = agentWith(speech, ['옷 검사해 줘'],
-          profile: const UserProfile(agentName: '하늘'));
+          profile: const UserProfile(agentName: '하늘', consent: consentVersion));
       var opened = false;
       agent.openOutfitCheck = () async => opened = true;
       await agent.start();
@@ -303,7 +328,7 @@ void main() {
     test('준비 중인 기능은 그렇다고 말한다', () async {
       final speech = FakeSpeech();
       final agent = agentWith(speech, ['얼굴 좀 봐 줘'],
-          profile: const UserProfile(agentName: '하늘'));
+          profile: const UserProfile(agentName: '하늘', consent: consentVersion));
       await agent.start();
 
       expect(speech.spoken, contains('얼굴 확인 기능은 지금 준비 중이에요.'));
@@ -358,13 +383,14 @@ void main() {
           listen: ScriptedListen(heard),
           profiles: store ?? InMemoryProfileStore(profile),
           weatherService: FakeWeatherService(),
-          onboarding: onboardingWith(speech, answers, account: account),
+          onboarding: onboardingWith(speech, answers,
+              account: account, consentFirst: false),
         );
 
     test('첫 화면에서 "첫 화면"이라고 하면 처음부터 듣는다', () async {
       final speech = FakeSpeech();
       final agent = agentWith(speech, ['첫 화면', '날씨 어때'],
-          profile: const UserProfile(agentName: '하늘'));
+          profile: const UserProfile(agentName: '하늘', consent: consentVersion));
       await agent.start();
       expect(speech.spoken, contains('첫 화면이에요. $askFeature'));
       expect(speech.spoken, contains(contains('일교차')));
@@ -372,8 +398,11 @@ void main() {
 
     test('에이전트 이름을 바꾸고 저장·업로드한다', () async {
       final speech = FakeSpeech();
-      const before =
-          UserProfile(name: '이진행', agentName: '박창근', accountId: 'uid-1');
+      const before = UserProfile(
+          name: '이진행',
+          agentName: '박창근',
+          consent: consentVersion,
+          accountId: 'uid-1');
       final store = InMemoryProfileStore(before);
       final account = FakeAccount(id: 'uid-1');
       final agent = agentWith(speech, ['네 이름 바꿔 줘'],
@@ -393,9 +422,10 @@ void main() {
 
     test('호칭을 말과 함께 정하면 확인만 하고, 인사에 넣는다', () async {
       final speech = FakeSpeech();
-      final store = InMemoryProfileStore(const UserProfile(agentName: '하늘'));
+      final store = InMemoryProfileStore(
+          const UserProfile(agentName: '하늘', consent: consentVersion));
       final agent = agentWith(speech, ['나를 진행 님이라고 불러 줘'],
-          profile: const UserProfile(agentName: '하늘'),
+          profile: const UserProfile(agentName: '하늘', consent: consentVersion),
           answers: ['응'],
           store: store);
       await agent.start();
@@ -411,7 +441,8 @@ void main() {
 
     test('사용자 정보 한 항목만 바꾼다', () async {
       final speech = FakeSpeech();
-      const before = UserProfile(name: '김민수', heightCm: 170, agentName: '하늘');
+      const before = UserProfile(
+          name: '김민수', heightCm: 170, agentName: '하늘', consent: consentVersion);
       final store = InMemoryProfileStore(before);
       final agent = agentWith(speech, ['내 키 바꿔 줘'],
           profile: before, answers: ['175'], store: store);
@@ -424,7 +455,8 @@ void main() {
 
     test('못 알아들으면 정보를 지우지 않고 그대로 둔다', () async {
       final speech = FakeSpeech();
-      const before = UserProfile(heightCm: 170, agentName: '하늘');
+      const before =
+          UserProfile(heightCm: 170, agentName: '하늘', consent: consentVersion);
       final store = InMemoryProfileStore(before);
       final agent = agentWith(speech, ['내 키 바꿔 줘'],
           profile: before, answers: [null, null, null], store: store);

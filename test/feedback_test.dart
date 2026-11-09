@@ -7,6 +7,7 @@ import 'package:fashion_agent/services/cloud_tts.dart';
 import 'package:fashion_agent/services/speech_service.dart';
 import 'package:fashion_agent/services/voices.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fashion_agent/agent/onboarding_flow.dart';
 
 import 'agent_test.dart' show FakeSpeech, ScriptedListen;
 
@@ -159,6 +160,20 @@ void main() {
       final wav = toneWav(const [880], ms: 50);
       expect(audioMime(wav), 'audio/wav');
       expect(wav.length, 44 + 22050 * 50 ~/ 1000 * 2);
+    });
+  });
+
+  group('이름 잘못 듣기', () {
+    test('많이 쓰는 이름과 한 끗 차이면 그 이름인지 묻는다', () {
+      expect(knownNameLike('신청이'), '심청이');
+      expect(knownNameLike('신청'), '심청');
+      expect(knownNameLike('심청이'), isNull);
+      expect(knownNameLike('바다'), isNull);
+    });
+    test('한 글자씩 끊어 말하면 붙인다', () {
+      expect(joinSpelled('심, 청, 이'), '심청이');
+      expect(joinSpelled('심 청 이'), '심청이');
+      expect(joinSpelled('패션 에이전트'), '패션 에이전트');
     });
   });
 }

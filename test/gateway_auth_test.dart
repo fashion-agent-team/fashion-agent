@@ -131,7 +131,8 @@ void main() {
         name: '진행',
         birthDate: DateTime(1996, 2, 9),
         heightCm: 175,
-        agentName: '코디');
+        agentName: '코디',
+        consent: consentVersion);
     final out = profileToGateway(p);
     expect(out['birthDate'], '1996-02-09');
     expect(out.containsKey('accountId'), isFalse);

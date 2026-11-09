@@ -232,6 +232,36 @@ paths:
       responses:
         '204': { description: 삭제됨 }
 
+  /api/v1/stt:
+    post:
+      tags: [voice]
+      summary: 녹음한 말을 받아 적기 (OpenAI gpt-4o-mini-transcribe, 2026-11-09)
+      description: |
+        부른 뒤 명령과 온보딩 답만 보냅니다(이름 부르기 대기는 폰 음성 인식). 키(OPENAI_API_KEY)가 없으면 503 stt_unavailable이고
+        앱은 폰이 받아 적은 글자를 씁니다. 소리는 저장하지 않습니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [audioBase64]
+              properties:
+                audioBase64: { type: string, description: "m4a(AAC) 등 소리 파일 base64, 2MB까지" }
+                mimeType: { type: string, example: audio/m4a }
+                prompt: { type: string, description: "힌트(에이전트 이름, 자주 쓰는 말). 400자까지" }
+      responses:
+        "200":
+          description: 받아 적은 글자
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: { type: string, example: "심청아 내일 뭐 입지?" }
+        "503": { description: stt_unavailable }
+        "429": { description: stt_quota 또는 rate_limited }
+        "502": { description: stt_failed }
   /api/v1/tts:
     post:
       tags: [voice]

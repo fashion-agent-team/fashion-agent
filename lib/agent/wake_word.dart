@@ -145,3 +145,8 @@ int _distance(List<int> a, List<int> b) {
   }
   return prev[b.length];
 }
+
+/// 두 말의 소리(자모) 차이. 비슷한 소리는 같게 본다([afterWakeWord]와 같은 기준).
+int soundDistance(String a, String b) => _distance(
+    _sounds(_squash(a)).map((s) => s.$1).toList(),
+    _sounds(_squash(b)).map((s) => s.$1).toList());

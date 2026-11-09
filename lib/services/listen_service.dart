@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import 'server_stt.dart';
+
 /// 한 번에 듣는 가장 긴 시간.
 const defaultListenFor = Duration(seconds: 30);
 
@@ -28,12 +30,16 @@ abstract class ListenService {
   ///
   /// [stopWhen]이 있으면 중간에 들린 말이 조건에 맞고 [settle] 동안 더 바뀌지 않을 때 바로 끝낸다.
   /// 이름 부르기에서 "코디야"만 듣고 3초 조용하기를 기다리지 않으려고 쓴다.
+  ///
+  /// [server]면 듣는 동안 녹음해 두었다가 서버 음성 인식으로 다시 받아 적는다(명령·온보딩 답).
+  /// 서버가 없거나 실패하면 폰이 받아 적은 글자를 그대로 쓴다.
   Future<String?> listen({
     Duration listenFor = defaultListenFor,
     Duration pauseFor = defaultPauseFor,
     Duration waitFor = defaultWaitFor,
     bool Function(String partial)? stopWhen,
     Duration settle = const Duration(milliseconds: 700),
+    bool server = false,
   });
 
   /// 듣던 것을 멈춘다. 안내를 읽기 전에 불러서, 폰이 자기 목소리를 듣지 않게 한다.
@@ -42,7 +48,17 @@ abstract class ListenService {
 
 /// 기기의 음성 인식(iOS Speech, Android SpeechRecognizer)으로 한국어를 듣는다.
 class DeviceListenService implements ListenService {
+  DeviceListenService({this.serverStt, this.hint});
+
   final _stt = SpeechToText();
+
+  /// 서버 음성 인식. null이면 언제나 폰 음성 인식만.
+  ServerStt? serverStt;
+
+  /// 서버 음성 인식에 줄 힌트(에이전트 이름, 자주 쓰는 말). 이 낱말로 적어 준다.
+  final Future<String> Function()? hint;
+
+  SpeechRecorder? _recorder;
 
   /// 지금 듣고 있는 말(중간 결과). 화면에 보여 줘서 알아듣고 있다는 걸 알린다.
   final heardNow = ValueNotifier<String>('');
@@ -61,6 +77,7 @@ class DeviceListenService implements ListenService {
     Duration waitFor = defaultWaitFor,
     bool Function(String partial)? stopWhen,
     Duration settle = const Duration(milliseconds: 700),
+    bool server = false,
   }) async {
     if (!await prepare()) return null;
     await cancel();
@@ -100,11 +117,32 @@ class DeviceListenService implements ListenService {
         }
       },
     );
-    return done.future.timeout(listenFor + const Duration(seconds: 5),
-        onTimeout: () {
+    final api = server ? serverStt : null;
+    final recorder = api == null ? null : (_recorder ??= SpeechRecorder());
+    // 음성 인식이 마이크를 켠 다음에 녹음을 시작한다(세션이 녹음용이어야 녹음된다).
+    if (recorder != null) await recorder.start();
+    final heard = await done.future
+        .timeout(listenFor + const Duration(seconds: 5), onTimeout: () {
       _stt.stop();
       return _heard.isEmpty ? null : _heard;
     });
+    if (recorder == null) return heard;
+    final audio = await recorder.stop();
+    // 폰이 아무 말도 못 들었으면 서버에 보내지 않는다(조용한 소리에 돈을 쓰지 않게).
+    if (heard == null || audio == null) return heard;
+    try {
+      final watch = Stopwatch()..start();
+      final text =
+          await api!.transcribe(audio, 'audio/m4a', await hint?.call() ?? '');
+      debugPrint('[시간] 서버 음성 인식 ${watch.elapsedMilliseconds}ms: '
+          '폰 "$heard" → 서버 "$text"');
+      if (text.isEmpty) return heard;
+      heardNow.value = text;
+      return text;
+    } on Object catch (e) {
+      debugPrint('서버 음성 인식 실패, 폰 글자 사용: $e');
+      return heard;
+    }
   }
 
   @override
@@ -114,6 +152,7 @@ class DeviceListenService implements ListenService {
     _heard = '';
     _finish();
     await _stt.cancel();
+    await _recorder?.stop();
   }
 
   void _onStatus(String status) {
