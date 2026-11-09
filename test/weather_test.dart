@@ -103,5 +103,105 @@ void main() {
       expect(
           service.fetchWeather(37.5, 127.0), throwsA(isA<WeatherException>()));
     });
+
+    test('같은 동네는 30분 동안 다시 부르지 않는다', () async {
+      var calls = 0;
+      var now = DateTime(2026, 11, 9, 9);
+      final service = WeatherService(
+        client: MockClient((_) async {
+          calls++;
+          return http.Response(jsonEncode(sampleResponse()), 200);
+        }),
+        now: () => now,
+      );
+
+      await service.fetchWeather(37.5665, 126.9780);
+      now = now.add(const Duration(minutes: 10));
+      await service.fetchWeather(37.5661, 126.9779); // 수십 m 옆
+      expect(calls, 1);
+
+      now = now.add(const Duration(minutes: 25));
+      await service.fetchWeather(37.5665, 126.9780);
+      expect(calls, 2);
+    });
+
+    test('다른 동네나 다른 날이면 새로 받는다', () async {
+      var calls = 0;
+      var now = DateTime(2026, 11, 9, 23, 50);
+      final service = WeatherService(
+        client: MockClient((_) async {
+          calls++;
+          return http.Response(jsonEncode(sampleResponse()), 200);
+        }),
+        now: () => now,
+      );
+
+      await service.fetchWeather(37.5665, 126.9780);
+      await service.fetchWeather(35.1796, 129.0756); // 부산
+      expect(calls, 2);
+
+      now = DateTime(2026, 11, 10, 0, 5); // 자정이 지나면 오늘 최고·최저가 바뀐다
+      await service.fetchWeather(37.5665, 126.9780);
+      expect(calls, 3);
+    });
+
+    test('동시에 물어도 한 번만 부른다', () async {
+      var calls = 0;
+      final service = WeatherService(
+        client: MockClient((_) async {
+          calls++;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          return http.Response(jsonEncode(sampleResponse()), 200);
+        }),
+      );
+
+      await Future.wait([
+        service.fetchWeather(37.5, 127.0),
+        service.fetchWeather(37.5, 127.0),
+      ]);
+      expect(calls, 1);
+    });
+
+    test('실패는 기억하지 않고 다음에 다시 받는다', () async {
+      var fail = true;
+      final service = WeatherService(
+        client: MockClient((_) async => fail
+            ? http.Response('error', 500)
+            : http.Response(jsonEncode(sampleResponse()), 200)),
+      );
+
+      await expectLater(
+          service.fetchWeather(37.5, 127.0), throwsA(isA<WeatherException>()));
+      fail = false;
+      expect((await service.fetchWeather(37.5, 127.0)).condition, '맑음');
+    });
+
+    test('미리 받아 두면 물어볼 때 다시 부르지 않고, 권한 창은 띄우지 않는다', () async {
+      var calls = 0;
+      final asked = <bool>[];
+      final service = WeatherService(
+        client: MockClient((_) async {
+          calls++;
+          return http.Response(jsonEncode(sampleResponse()), 200);
+        }),
+        locate: ({required askPermission}) async {
+          asked.add(askPermission);
+          return (latitude: 37.5, longitude: 127.0);
+        },
+      );
+
+      await service.prefetch();
+      await service.fetchTodayWeather();
+      expect(calls, 1);
+      expect(asked, [false, true]);
+    });
+
+    test('미리 받기가 실패해도 조용히 넘어간다', () async {
+      final service = WeatherService(
+        client: MockClient((_) async => http.Response('error', 500)),
+        locate: ({required askPermission}) async => null,
+      );
+      await service.prefetch();
+    });
   });
 }
