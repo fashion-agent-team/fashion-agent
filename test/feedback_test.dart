@@ -88,8 +88,7 @@ void main() {
       expect(acknowledgementFor('11월 20일 뭐 입지?'),
           '네, 11월 20일 입을 옷을 골라 볼게요. 잠시만요.');
       expect(acknowledgementFor('오늘 날씨 어때?'), '네, 오늘 날씨 바로 알려 드릴게요.');
-      expect(acknowledgementFor('다음 주 토요일 일정 알려 줘'),
-          '네, 다음 주 토요일 일정 확인해 볼게요.');
+      expect(acknowledgementFor('다음 주 토요일 일정 알려 줘'), '네, 다음 주 토요일 일정 확인해 볼게요.');
     });
 
     test('모르는 말에는 어디에나 맞는 말만, 짧은 대답에는 하지 않는다', () {
@@ -122,8 +121,8 @@ void main() {
     test('다음, 다음, 처음부터 들은 뒤 2번을 고른다', () async {
       final speech = FakeSpeech();
       final listen = ScriptedListen(['다음', '다음', '처음부터', '2번 목소리가 좋아']);
-      final chosen = await VoicePicker(speech: speech, listen: listen)
-          .run(speech.speak);
+      final chosen =
+          await VoicePicker(speech: speech, listen: listen).run(speech.speak);
       expect(chosen, cloudVoices[1]);
       expect(speech.chosen, cloudVoices[1]);
       expect(speech.sampled.whereType<Voice>().take(4).toList(),
@@ -134,8 +133,8 @@ void main() {
     test('듣던 목소리에서 "이 목소리 좋아"', () async {
       final speech = FakeSpeech();
       final listen = ScriptedListen(['다음', '이 목소리 좋아']);
-      final chosen = await VoicePicker(speech: speech, listen: listen)
-          .run(speech.speak);
+      final chosen =
+          await VoicePicker(speech: speech, listen: listen).run(speech.speak);
       expect(chosen, cloudVoices[1]);
     });
   });
@@ -148,7 +147,8 @@ void main() {
     });
 
     test('같은 목소리·문장은 같은 이름으로 기억한다', () {
-      expect(TtsCache.cacheKey('Aoede', '안녕'), TtsCache.cacheKey('Aoede', '안녕'));
+      expect(
+          TtsCache.cacheKey('Aoede', '안녕'), TtsCache.cacheKey('Aoede', '안녕'));
       expect(TtsCache.cacheKey('Aoede', '안녕'),
           isNot(TtsCache.cacheKey('Kore', '안녕')));
     });
