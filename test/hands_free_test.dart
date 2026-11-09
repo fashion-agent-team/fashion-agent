@@ -52,6 +52,24 @@ void main() {
       expect(afterWakeWord('에이전 날씨', null), '날씨');
     });
 
+    test('사람 이름은 잘못 들은 소리·성 뺀 이름·받침 넘김도 알아듣는다', () {
+      const name = '박창근';
+      expect(afterWakeWord('박창근 날씨 어때', name), '날씨 어때');
+      expect(afterWakeWord('박 창근아 날씨 어때', name), '날씨 어때');
+      expect(afterWakeWord('박찬근 날씨 어때', name), '날씨 어때');
+      expect(afterWakeWord('박장근', name), '');
+      expect(afterWakeWord('박창건아', name), '');
+      expect(afterWakeWord('창근아 오늘 뭐 입지', name), '오늘 뭐 입지');
+      expect(afterWakeWord('창그나 오늘 뭐 입지', name), '오늘 뭐 입지');
+      expect(afterWakeWord('창근이야', name), '');
+      expect(afterWakeWord('오늘 장군 영화 봤어', name), isNull);
+      expect(afterWakeWord('오늘 날씨 어때', name), isNull);
+    });
+
+    test('비슷한 모음도 같게 본다', () {
+      expect(afterWakeWord('세봄아 날씨', '새봄'), '날씨');
+    });
+
     test('이름을 안 지었으면 "에이전트"로 부른다', () {
       expect(afterWakeWord('에이전트 날씨 어때', null), '날씨 어때');
     });
@@ -149,6 +167,28 @@ void main() {
 
       expect(end?.speech, '좋아요. 잘 다녀오세요.');
       expect(turns.sent, ['say:이걸로 할게']);
+      expect(camera.closed, isTrue);
+    });
+
+    test('"첫 화면"이라고 하면 서버에 보내지 않고 카메라를 끈다', () async {
+      final speech = FakeSpeech();
+      final listen = ScriptedListen(['첫 화면'], blockWhenDone: true);
+      final turns = FakeTurnApi(const []);
+      final camera = FakeAutoCaptureCamera();
+      final c = CameraTurnController(
+        speech: speech,
+        listen: listen,
+        turns: turns,
+        camera: camera,
+        location: here,
+        handsFree: true,
+      );
+
+      final end = await c.run('s_1', ImageKind.outfit);
+
+      expect(end, isNull);
+      expect(turns.sent, isEmpty);
+      expect(speech.spoken, contains('첫 화면으로 돌아갈게요.'));
       expect(camera.closed, isTrue);
     });
 

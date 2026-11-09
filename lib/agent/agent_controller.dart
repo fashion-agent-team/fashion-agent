@@ -76,7 +76,8 @@ class AgentController extends ChangeNotifier {
         }
       } else {
         await _reconnect();
-        await _say(returningGreeting(profile!.agentName!));
+        await _say(returningGreeting(profile!.agentName!,
+            callName: profile!.callName));
       }
       await _listenAndHandle();
     });
@@ -177,7 +178,8 @@ class AgentController extends ChangeNotifier {
         if (rest == null) continue;
         await _busy(() async {
           if (rest.isEmpty) {
-            await _say('네, 말씀해 주세요.');
+            final call = profile?.callName;
+            await _say(call == null ? '네, 말씀해 주세요.' : '네, $call. 말씀해 주세요.');
             await _listenAndHandle();
           } else {
             await handle(rest);
@@ -213,6 +215,18 @@ class AgentController extends ChangeNotifier {
 
   /// 사용자가 한 말을 기능으로 옮긴다.
   Future<void> handle(String text) async {
+    if (isHomeCommand(text)) {
+      // 첫 화면에서 "첫 화면": 하던 대화를 끝내고 처음부터 듣는다.
+      _sessionId = null;
+      await _say('첫 화면이에요. $askFeature');
+      await _listenAndHandle();
+      return;
+    }
+    final setting = profile == null ? null : routeSetting(text);
+    if (setting != null) {
+      await _changeSetting(setting, text);
+      return;
+    }
     final api = turns;
     if (api != null && await api.available && await _converse(api, text)) {
       return;
@@ -268,10 +282,44 @@ class AgentController extends ChangeNotifier {
       }
       final heard = await listen.listen();
       if (heard == null) break;
+      if (isHomeCommand(heard)) {
+        _sessionId = null;
+        await _say('첫 화면으로 돌아왔어요.');
+        break;
+      }
       utterance = heard;
     }
     await _say(_nextHint);
     return true;
+  }
+
+  /// 에이전트 이름·호칭·사용자 정보를 말로 바꾼다. 폰에 저장하고, 계정에 연결돼 있으면 서버에도 올린다.
+  Future<void> _changeSetting(Setting setting, String text) async {
+    final before = profile!;
+    final after = switch (setting) {
+      Setting.agentName => await onboarding.changeAgentName(before, said: text),
+      Setting.callName => await onboarding.changeCallName(before, said: text),
+      Setting.profile => await onboarding.editProfile(before, said: text),
+      Setting.readProfile => null,
+    };
+    if (setting == Setting.readProfile) {
+      await _say('${summarize(before)} '
+          '바꾸고 싶으면 "내 키 바꿔 줘"처럼 말씀해 주세요.');
+    }
+    if (after != null) {
+      profile = after;
+      await profiles.save(after);
+      final id = after.accountId;
+      if (id != null) {
+        try {
+          await onboarding.account.upload(id, after);
+        } catch (_) {
+          // 폰에는 저장했다. 서버에는 다음에 다시 올리면 된다.
+        }
+      }
+    }
+    // 이름을 바꿨으면 새 이름으로 안내한다("다른 게 필요하면 "코디" 하고 불러 주세요.").
+    await _say(_nextHint);
   }
 
   Future<void> _handleLocally(String text) async {

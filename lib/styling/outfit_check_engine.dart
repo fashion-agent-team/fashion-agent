@@ -42,22 +42,42 @@ OutfitCheck checkOutfit(
   );
 }
 
-/// 음성으로 읽을 결과. 입은 옷 → 일정 → 날씨 → 얼룩·찢어짐 순서로, 항목마다 이유를 붙인다.
-String checkSpeech(OutfitCheck c) {
+/// 음성으로 읽을 결과. 보이는 옷 → 얼룩·찢어짐 → 날씨·일정에 맞는지 순서다(2026-11-09 진행 님 요청).
+///
+/// 날씨와 일정에 잘 맞으면 "오늘 날씨와 일정에 잘 어울려요."만 말하고,
+/// 맞지 않으면 오늘 날씨와 일정을 먼저 알려 준 뒤 무엇을 바꾸면 좋을지 말한다.
+String checkSpeech(OutfitCheck c, {Weather? weather}) {
   if (c.unsure != null) return c.unsure!;
+  final fits = c.scheduleOk && c.weatherOk;
+  final umbrella = c.weatherNotes.where((n) => n.contains('우산'));
+  final advice = [
+    ...c.scheduleNotes,
+    ...c.weatherNotes.where((n) => !n.contains('알맞은 옷차림') && !n.contains('우산')),
+  ];
   final parts = <String>[
     '보이는 옷은 ${ieyo(c.garments.map((g) => g.spokenName).join(', '))}.',
-    if (c.event == null)
-      '오늘 등록된 일정은 없어요.'
-    else
-      '${spokenTime(c.event!.start)} ${c.event!.title} 일정 기준으로 볼게요. '
-          '${c.scheduleNotes.join(' ')}',
-    if (c.weatherNotes.isEmpty)
-      '날씨를 가져오지 못해서 날씨는 확인하지 못했어요.'
-    else
-      c.weatherNotes.join(' '),
     c.damageNotes.join(' '),
+    if (fits) ...[
+      if (c.weatherNotes.isNotEmpty && c.event != null)
+        '오늘 날씨와 일정에 잘 어울려요.'
+      else if (c.weatherNotes.isNotEmpty)
+        '오늘 날씨에 잘 어울려요. 등록된 일정은 없어요.'
+      else if (c.event != null)
+        '오늘 일정에 잘 어울려요.',
+    ] else ...[
+      if (weather != null) weatherSummary(weather),
+      if (c.event != null)
+        '${spokenTime(c.event!.start)} ${iGa(c.event!.title)} 있어요.',
+      ...advice,
+    ],
+    ...umbrella,
+    if (c.weatherNotes.isEmpty) '날씨를 가져오지 못해서 날씨는 확인하지 못했어요.',
     if (c.allGood) '이대로 나가셔도 좋아요.',
   ];
-  return parts.join(' ');
+  return parts.where((p) => p.isNotEmpty).join(' ');
 }
+
+/// "오늘은 체감 온도 12도, 최저 8도 최고 16도예요."
+String weatherSummary(Weather w) =>
+    '오늘은 체감 온도 ${spokenDegrees(w.apparentTemperature)}, '
+    '최저 ${spokenDegrees(w.minTemperature)} 최고 ${ieyo(spokenDegrees(w.maxTemperature))}.';

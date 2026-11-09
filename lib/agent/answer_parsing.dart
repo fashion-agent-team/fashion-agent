@@ -119,7 +119,7 @@ String? parseName(String text) {
       .replaceFirst(RegExp(r'^(음+|어+|저는|제 이름은|이름은|내 이름은|나는)\s*'), '')
       .replaceFirst(
           RegExp(
-              r'\s*(이라고 해요|라고 해요|이라고 합니다|라고 합니다|이라고 불러 ?줘|라고 불러 ?줘|입니다|이에요|예요|이야|야|요)$'),
+              r'\s*(이라고 해요|라고 해요|이라고 합니다|라고 합니다|이라고 불러 ?줘|라고 불러 ?줘|입니다|이에요|예요|이요|이야|야|요)$'),
           '')
       .trim();
   if (t.isEmpty || t.length > 20) return null;
@@ -141,3 +141,37 @@ String spokenDate(DateTime d) => '${d.year}년 ${d.month}월 ${d.day}일';
 /// 170.0 → "170", 62.5 → "62.5".
 String spokenNumber(double n) =>
     n == n.roundToDouble() ? n.toInt().toString() : n.toString();
+
+/// 호칭. "진행 님이라고 불러 줘" → "진행 님", "나를 대표님으로 불러 주세요" → "대표님".
+String? parseCallName(String text) {
+  var t = _clean(text)
+      .replaceFirst(RegExp(r'^(음+|어+)\s*'), '')
+      .replaceFirst(RegExp(r'^(앞으로|이제)\s*'), '')
+      .replaceFirst(RegExp(r'^(저|나|날|절)(를|을)?\s+'), '')
+      .replaceFirst(RegExp(r'^(저를|나를|날|절)\s*'), '')
+      .replaceFirst(RegExp(r'\s*((이)?라고|(으)?로)\s*(불러|부르|해|해 ?줘|해 ?주세요).*$'), '')
+      .replaceFirst(RegExp(r'\s*(입니다|이에요|예요|이요|요)$'), '')
+      .trim();
+  if (t.isEmpty || t.length > 20) return null;
+  return t;
+}
+
+/// "네 이름을 코디로 바꿔 줘" → "코디". 새 이름을 함께 말하지 않았으면 null.
+String? newNameIn(String text) {
+  final m =
+      RegExp(r'이름(을|은|이)?\s*(.+?)\s*((이)?라고|(으)?로)\s*(바꿔|바꾸|바꿀|변경|해|할|지어|불러)')
+          .firstMatch(_clean(text));
+  final name = m?.group(2)?.trim();
+  if (name == null || name.isEmpty || name.length > 20) return null;
+  return name;
+}
+
+/// "진행 님이라고 불러 줘"처럼 호칭을 함께 말했으면 그 호칭. 아니면 null.
+String? newCallNameIn(String text) {
+  if (!RegExp(r'((이)?라고|(으)?로)\s*(불러|부르|해 ?줘|해 ?주세요)').hasMatch(_clean(text))) {
+    return null;
+  }
+  final t = parseCallName(text.replaceFirst(RegExp(r'^.*호칭(을|은)?\s*'), ''));
+  if (t == null || RegExp(r'호칭|어떻게|뭐라고').hasMatch(t)) return null;
+  return t;
+}

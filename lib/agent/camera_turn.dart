@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'agent_speech.dart' show isHomeCommand;
 import '../services/auto_capture.dart';
 import '../services/capture_service.dart';
 import '../services/framing.dart';
@@ -114,6 +115,10 @@ class CameraTurnController extends ChangeNotifier {
       quickMisses = 0;
       // 그사이 사진이 찍혀 보내는 중이면 그 답을 먼저 듣게 한다.
       if (busy) continue;
+      if (isHomeCommand(heard)) {
+        await _goHome();
+        break;
+      }
       _round++;
       await camera.cancel();
       _setBusy(true);
@@ -145,10 +150,22 @@ class CameraTurnController extends ChangeNotifier {
         _watch();
         return;
       }
+      if (isHomeCommand(heard)) {
+        await _goHome();
+        return;
+      }
       await _handle(() => turns.say(_sessionId, heard));
     } finally {
       _setBusy(false);
     }
+  }
+
+  /// "첫 화면": 카메라를 끄고 첫 화면으로 돌아간다(그만하기와 같다).
+  Future<void> _goHome() async {
+    _round++;
+    await camera.cancel();
+    await _say('첫 화면으로 돌아갈게요.');
+    await _end(null);
   }
 
   /// 그만하기 버튼.

@@ -22,3 +22,46 @@ Intent routeIntent(String text) {
   if (has(helpWords)) return Intent.help;
   return Intent.unknown;
 }
+
+/// 폰 안에서 바로 바꾸는 설정. 에이전트 서버로 보내지 않는다.
+enum Setting {
+  /// 에이전트 이름 바꾸기.
+  agentName,
+
+  /// 사용자를 부르는 말(호칭) 바꾸기.
+  callName,
+
+  /// 사용자 정보(이름·생년월일·성별·직업·키·몸무게) 바꾸기.
+  profile,
+
+  /// 사용자 정보 읽어 주기.
+  readProfile,
+}
+
+const _change = r'바꾸|바꿔|바꿀|변경|수정|고치|고쳐|고칠|새로 ?지|다시 ?지|다시 ?정';
+
+/// 설정을 바꾸려는 말이면 그 설정을, 아니면 null.
+///
+/// "나를 진행 님이라고 불러 줘" → 호칭, "네 이름 바꿔 줘" → 에이전트 이름, "내 키 바꿔 줘" → 사용자 정보.
+Setting? routeSetting(String text) {
+  bool has(String pattern) => RegExp(pattern).hasMatch(text);
+  final change = has(_change);
+
+  if (has(r'호칭') ||
+      has(r'(^|\s)(저|나|날|절)(를|을)?\s.*((이)?라고|(으)?로)\s*(불러|부르)') ||
+      has(r'(^|\s)(저를|나를|날|절)\s*(.*(이라고|라고|으로|로))?\s*(불러|부르)') ||
+      has(r'(어떻게|뭐라고)\s*(불러|부르|부를)')) {
+    return Setting.callName;
+  }
+  final info = has(r'(내|제|나의|저의|사용자|회원|개인)\s*정보|프로필');
+  final mine = has(r'(내|제|나의|저의)\s*(이름|성함|생년월일|생일|성별|직업|키|몸무게|체중)');
+  if (change && (info || mine)) return Setting.profile;
+  if (info && has(r'알려|읽어|말해|뭐|확인|어떻게')) return Setting.readProfile;
+  if (change && has(r'생년월일|생일|성별|직업|몸무게|체중|(^|\s)키(를|가|는)?\s')) {
+    return Setting.profile;
+  }
+  if (has(r'이름') && (change || has(r'이름(을|은)?.*(으로|로|이라고|라고)\s*(해|할|불러)'))) {
+    return Setting.agentName;
+  }
+  return null;
+}
