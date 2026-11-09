@@ -84,15 +84,17 @@ void main() {
 
   group('추임새', () {
     test('들은 날짜와 기능을 되짚는다', () {
-      expect(acknowledgementFor('내일 입을 옷 추천해 줘'), '네, 내일 입을 옷을 골라 볼게요. 잠시만요.');
+      expect(acknowledgementFor('내일 입을 옷 추천해 줘'),
+          '좋아요, 내일 입을 옷 같이 골라 볼게요. 잠깐만 기다려 주세요.');
       expect(acknowledgementFor('11월 20일 뭐 입지?'),
-          '네, 11월 20일 입을 옷을 골라 볼게요. 잠시만요.');
-      expect(acknowledgementFor('오늘 날씨 어때?'), '네, 오늘 날씨 바로 알려 드릴게요.');
-      expect(acknowledgementFor('다음 주 토요일 일정 알려 줘'), '네, 다음 주 토요일 일정 확인해 볼게요.');
+          '좋아요, 11월 20일 입을 옷 같이 골라 볼게요. 잠깐만 기다려 주세요.');
+      expect(acknowledgementFor('오늘 날씨 어때?'), '네, 오늘 날씨 금방 알아봐 드릴게요.');
+      expect(acknowledgementFor('다음 주 토요일 일정 알려 줘'),
+          '네, 다음 주 토요일 일정 같이 볼게요. 잠깐만요.');
     });
 
     test('모르는 말에는 어디에나 맞는 말만, 짧은 대답에는 하지 않는다', () {
-      expect(acknowledgementFor('오늘 기분이 좀 그래'), '네, 잠시만요.');
+      expect(acknowledgementFor('오늘 기분이 좀 그래'), '네, 잘 들었어요. 잠깐만요.');
       expect(acknowledgementFor('응'), isNull);
       expect(acknowledgementFor('어 봐줘'), isNull);
     });

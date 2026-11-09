@@ -367,7 +367,7 @@ void main() {
         location: here,
       );
       await agent.start();
-      expect(speech.spoken, contains('로그인하지 못해서 지금은 폰 안의 기능만 쓸게요.'));
+      expect(speech.spoken, contains('로그인이 잘 안 돼서, 지금은 폰 안에서 되는 것만 같이 할게요.'));
       expect(speech.spoken, contains(featureIntro));
       expect(turns.sent, isEmpty);
     });
@@ -425,9 +425,9 @@ void main() {
       expect(end?.speech, '자켓도 좋아요. 이걸로 하시겠어요?');
       expect(camera.closed, isTrue);
       expect(speech.spoken, [
-        '찍었어요. 볼게요.',
+        '찍었어요. 잘 볼게요.',
         '흰 셔츠가 면접에 잘 맞아요. 겉옷도 보여 주세요.',
-        '찍었어요. 볼게요.',
+        '찍었어요. 잘 볼게요.',
       ]);
     });
 
@@ -541,7 +541,7 @@ void main() {
       expect(speech.spoken, [
         contains('옷이 잘 안 보여요'),
         contains('옷이 잘 안 보여요'),
-        '잘 보이지 않아서 카메라를 끌게요.',
+        '잘 안 보여서 카메라는 잠깐 끌게요. 다시 하고 싶으면 말씀해 주세요.',
       ]);
     });
 

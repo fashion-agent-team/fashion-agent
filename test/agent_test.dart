@@ -187,7 +187,7 @@ void main() {
           speech.spoken,
           contains('말씀해주신 정보를 읽어 드릴게요. 이름 김민수, 생년월일 1990년 3월 5일, '
               '성별 남성, 직업 회사원, 키 170센티미터, 몸무게 건너뜀. 말씀해주신 정보와 일치할까요?'));
-      expect(speech.spoken, contains('말씀해주신 정보를 바탕으로 도와드릴게요.'));
+      expect(speech.spoken, contains('알려 주셔서 고마워요. 이제 더 잘 맞춰서 도와드릴게요.'));
       expect(speech.spoken, contains('지금은 계정 연결 없이 이 폰에만 저장할게요.'));
       expect(speech.spoken.last, '$featureIntro $homeHint $askFeature');
 
@@ -212,7 +212,7 @@ void main() {
       final profile = await onboardingWith(
           speech, ['아니요', null, '하늘', '네', ...answers.skip(3), '네']).run();
 
-      expect(speech.spoken, contains('잘 듣지 못했어요. $askAgentName'));
+      expect(speech.spoken, contains('제가 잘 못 들었어요. $askAgentName'));
       expect(profile.agentName, '하늘');
     });
 
@@ -258,7 +258,7 @@ void main() {
 
       expect(profile.agentName, '하늘');
       expect(store.profile?.accountId, 'uid-1');
-      expect(speech.spoken.last, startsWith('다시 만나서 반가워요. 저는 하늘이에요.'));
+      expect(speech.spoken.last, startsWith('다시 만나서 정말 반가워요. 저는 하늘이에요.'));
     });
   });
 
@@ -281,8 +281,8 @@ void main() {
 
       expect(
           speech.spoken.first,
-          '반갑습니다. 오늘 하루도 좋은 하루 되세요. 당신의 에이전트 하늘입니다. '
-          '$homeHint 원하시는 기능 있으시면 말씀해주세요.');
+          '반가워요. 저 하늘이에요. 오늘도 같이 준비해 봐요. '
+          '$homeHint 필요한 게 있으면 편하게 말씀해 주세요.');
       expect(speech.spoken[1], contains('일교차가 13도로 커요'));
       expect(speech.spoken.last, tapToTalk);
     });
@@ -296,7 +296,7 @@ void main() {
       await agent.start();
 
       expect(opened, isTrue);
-      expect(speech.spoken.last, startsWith('옷 검사를 마쳤어요.'));
+      expect(speech.spoken.last, startsWith('옷 다 봤어요.'));
     });
 
     test('준비 중인 기능은 그렇다고 말한다', () async {
@@ -405,7 +405,7 @@ void main() {
       final again = FakeSpeech();
       await agentWith(again, const [], profile: store.profile!, store: store)
           .start();
-      expect(again.spoken.first, startsWith('반갑습니다, 진행 님. 오늘 하루도'));
+      expect(again.spoken.first, startsWith('반가워요, 진행 님. 저 하늘이에요.'));
     });
 
     test('사용자 정보 한 항목만 바꾼다', () async {

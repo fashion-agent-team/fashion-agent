@@ -81,7 +81,7 @@ class CameraTurnController extends ChangeNotifier {
       await camera.open(front: kind.selfie);
     } on Object catch (e) {
       debugPrint('카메라를 켜지 못함: $e');
-      await _say('카메라를 켜지 못했어요. 설정 앱에서 카메라 권한을 확인해 주세요.');
+      await _say('미안해요, 카메라를 못 켰어요. 설정 앱에서 카메라 권한이 켜져 있는지 봐 주실래요?');
       await _end(null);
       return done.future;
     }
@@ -148,7 +148,7 @@ class CameraTurnController extends ChangeNotifier {
       final heard = await CommandListener.once(listen);
       if (!running) return;
       if (heard == null) {
-        await _say('잘 듣지 못했어요. 옷을 계속 보여 주셔도 돼요.');
+        await _say('제가 잘 못 들었어요. 괜찮아요, 옷은 계속 보여 주셔도 돼요.');
         _watch();
         return;
       }
@@ -194,7 +194,7 @@ class CameraTurnController extends ChangeNotifier {
       if (round != _round || !running) return;
       if (shot == null) {
         if (++_timeouts >= maxTimeouts) {
-          await _say('잘 보이지 않아서 카메라를 끌게요.');
+          await _say('잘 안 보여서 카메라는 잠깐 끌게요. 다시 하고 싶으면 말씀해 주세요.');
           await _end(null);
           return;
         }
@@ -206,7 +206,7 @@ class CameraTurnController extends ChangeNotifier {
       _setBusy(true);
       try {
         // 찍혔다는 걸 바로 알린다. 답을 기다리는 동안 읽는다.
-        final saying = _say('찍었어요. 볼게요.');
+        final saying = _say('찍었어요. 잘 볼게요.');
         final loc = await location.current();
         final box = kind == ImageKind.teeth ? await _findMouth(shot) : null;
         await _handle(
@@ -263,13 +263,13 @@ class CameraTurnController extends ChangeNotifier {
   }
 
   void _hint(CaptureHint hint) => unawaited(_say(switch (hint) {
-        CaptureHint.tooDark => '너무 어두워요. 불을 켜 주세요.',
+        CaptureHint.tooDark => '조금 어두워요. 불을 켜 주실래요?',
         CaptureHint.shaking => switch (kind) {
             ImageKind.worn => '잠깐 멈춰 주세요.',
             ImageKind.outfit => '잠깐 멈춰 주세요.',
             _ => '잠깐 멈춰 주세요.',
           },
-        CaptureHint.ok => '좋아요, 그대로요.',
+        CaptureHint.ok => '좋아요, 그대로 있어 주세요.',
       }));
 
   String _timeoutHint() => switch (kind) {

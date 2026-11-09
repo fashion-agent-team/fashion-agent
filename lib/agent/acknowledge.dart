@@ -30,24 +30,24 @@ String? acknowledgementFor(String text) {
   final day = spokenDay(text);
   final on = day == null ? '' : '$day ';
   if (asksOutfitAdvice(text)) {
-    return '네, $on입을 옷을 골라 볼게요. 잠시만요.';
+    return '좋아요, $on입을 옷 같이 골라 볼게요. 잠깐만 기다려 주세요.';
   }
   switch (routeIntent(text)) {
     case Intent.weather:
-      return '네, $on날씨 바로 알려 드릴게요.';
+      return '네, $on날씨 금방 알아봐 드릴게요.';
     case Intent.schedule:
-      if (RegExp(r'넣어|등록|추가|잡아').hasMatch(text)) return '네, 일정 넣어 볼게요.';
-      if (RegExp(r'지워|삭제|취소|빼').hasMatch(text)) return '네, 일정 찾아볼게요.';
-      return '네, $on일정 확인해 볼게요.';
+      if (RegExp(r'넣어|등록|추가|잡아').hasMatch(text)) return '네, 일정 넣어 둘게요. 잠깐만요.';
+      if (RegExp(r'지워|삭제|취소|빼').hasMatch(text)) return '네, 그 일정 찾아볼게요. 잠깐만요.';
+      return '네, $on일정 같이 볼게요. 잠깐만요.';
     case Intent.outfitCheck:
-      return '네, 옷 볼 준비를 할게요.';
+      return '좋아요, 옷 같이 볼 준비 할게요.';
     case Intent.faceCheck:
-      return '네, 얼굴 봐 드릴 준비를 할게요.';
+      return '좋아요, 얼굴 봐 드릴 준비 할게요.';
     case Intent.help:
     case Intent.unknown:
-      return '네, 잠시만요.';
+      return '네, 잘 들었어요. 잠깐만요.';
   }
 }
 
 /// 이어지는 대화(되묻기에 대한 답)에서 하는 추임새. 길게 말하지 않는다.
-const shortAcknowledgement = '네, 잠시만요.';
+const shortAcknowledgement = '네, 잘 들었어요. 잠깐만요.';

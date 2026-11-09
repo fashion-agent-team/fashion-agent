@@ -133,7 +133,7 @@ class AgentController extends ChangeNotifier {
     await _say('에이전트 서버에 다시 로그인할게요. $signInGuide');
     final id = await onboarding.account.signIn();
     if (id == null || !await api.available) {
-      await _say('로그인하지 못해서 지금은 폰 안의 기능만 쓸게요.');
+      await _say('로그인이 잘 안 돼서, 지금은 폰 안에서 되는 것만 같이 할게요.');
       return;
     }
     final linked = profile!.copyWith(accountId: id);
@@ -264,7 +264,7 @@ class AgentController extends ChangeNotifier {
   Future<void> _listenAndHandle() async {
     final heard = await _hear();
     if (heard == null) {
-      await _say('잘 듣지 못했어요. $_nextHint');
+      await _say('앗, 제가 잘 못 들었어요. $_nextHint');
       return;
     }
     await handle(heard);
@@ -326,7 +326,7 @@ class AgentController extends ChangeNotifier {
       if (camera != null) {
         final open = openCamera;
         if (open == null) {
-          await _say('카메라를 켤 수 없어요.');
+          await _say('미안해요, 카메라를 켤 수가 없어요.');
           break;
         }
         fromCamera = await open(reply.sessionId, camera);
@@ -397,9 +397,9 @@ class AgentController extends ChangeNotifier {
           await _say('옷 검사 화면을 열 수 없어요.');
           return;
         }
-        await _say('옷 검사를 시작할게요.');
+        await _say('좋아요, 옷 같이 볼게요.');
         await open();
-        await _say('옷 검사를 마쳤어요. $_nextHint');
+        await _say('옷 다 봤어요. $_nextHint');
         return;
       case Intent.faceCheck:
         await _say('얼굴 확인 기능은 지금 준비 중이에요.');
@@ -418,7 +418,7 @@ class AgentController extends ChangeNotifier {
       final weather = await weatherService.fetchTodayWeather();
       return '${weather.toSpeech()} ${dailyRangeAdvice(weather) ?? ''}'.trim();
     } catch (_) {
-      return '날씨를 가져오지 못했어요. 인터넷 연결을 확인해 주세요.';
+      return '미안해요, 날씨를 못 가져왔어요. 인터넷이 연결돼 있는지 한번 봐 주실래요?';
     }
   }
 
