@@ -30,13 +30,27 @@ const speedQuestion =
 const speedChanged = '네, 이제 이 속도로 말할게요. 괜찮으세요?';
 
 /// 말 속도 다음에 구글로 로그인한다(2026-11-10 진행 님).
-const signInIntro = '폰을 바꿔도 이어서 쓰실 수 있게 구글 계정으로 로그인할게요.';
+const signInIntro = '폰을 바꿔도 이어서 쓸 수 있게 구글 계정으로 로그인할게요.';
 
 /// 로그인한 계정에 전에 쓴 정보가 있을 때(2026-11-10 진행 님 대사).
 const restoredAccount = '전에 쓰신 적 있군요. 기존 정보를 불러오겠습니다.';
 
+/// 전에 쓴 정보를 불러온 뒤. 묻지 않고 바로 시작한다.
+String restoredGreeting(String agentName, {String? callName}) =>
+    '다시 만나서 반가워요${callName == null ? '' : ', ${honorific(callName)}'}. '
+    '저 ${ieyo(agentName)}. 오늘은 뭘 같이 해 볼까요?';
+
+/// 로그인했는데 계정에 정보가 없을 때(새 사용자).
+const newUserHello = '처음 오셨군요. 반가워요.';
+
 /// 로그인을 취소했거나 안 됐을 때.
 const signInSkipped = '지금은 계정 연결 없이 이 폰에만 저장할게요.';
+
+/// 첫 실행 때 목소리를 묻는다(새 사용자만, 말 빠르기 다음).
+const voiceQuestion = '목소리는 맘에 드시나요? "괜찮아", "바꾸고 싶어"로 알려주세요.';
+
+/// "바꾸고 싶어"라고 하면 하나씩 들려주기 전에.
+const voicePickIntro = '목소리를 하나씩 들려 드릴게요. 원하는 목소리면 "좋아"라고 해주세요.';
 
 /// 처음 이름. 사용자가 다른 이름을 말하지 않으면 이 이름으로 부른다.
 const firstAgentName = '심청이';
@@ -46,22 +60,85 @@ const askAgentName =
 
 const keepAgentName = '좋아요, 심청이라고 불러 주세요. 나중에라도 "네 이름 바꿔 줘"라고 하시면 바꿀 수 있어요.';
 
-const featureIntro = '저는 일정과 날씨에 맞는 옷 추천, 옷 검사, 얼굴 확인을 도와드려요. '
-    '목소리를 바꾸고 싶으면 "목소리 바꿔 줘"라고 해 주세요.';
+/// 내 정보를 묻기 전에.
+const profileIntro =
+    '개인 맞춤형 패션 추천을 하기 위해 몇 가지만 여쭤볼게요. 말하기 싫은 건 건너뛰기 라고 하시면 돼요.';
 
-const askFeature = '오늘은 뭘 같이 해 볼까요? 편하게 말씀해 주세요.';
+/// 호칭 끝맺음. 호칭에 이미 "님"이 있으면 겹치지 않게 한다.
+String niceToMeetCall(String callName) => '잘 부탁드려요 ${honorific(callName)}.';
 
-/// 어느 화면에서든 "첫 화면"이라고 말하면 처음 화면으로 돌아온다. 시작할 때 알려 준다(2026-11-09 진행 님 요청).
-const homeHint = '"첫 화면"이라고 하시면 언제든 처음으로 돌아와요.';
+/// "진행" → "진행님", "진행 님"·"진행님" → 그대로, "선생님"·"사장님" → 그대로.
+String honorific(String callName) {
+  final t = callName.trim();
+  return t.endsWith('님') ? t : '$t님';
+}
 
-/// "첫 화면", "처음 화면으로", "홈 화면" 같은 말이면 true.
-bool isHomeCommand(String text) =>
-    RegExp(r'첫\s*화면|처음\s*화면|홈\s*화면|첫\s*페이지|처음으로\s*돌아').hasMatch(text);
+/// 기능 목록. 첫 설치 안내와 "기능 설명"이 같이 쓴다.
+const _features = '제가 할 수 있는 것들 알려드릴게요. '
+    '저는 일정 추가, 날씨 정보, 옷 추천, 원하는 옷 확인, 화장 상태와 이에 낀 이물질 확인을 도와드려요.';
+
+/// 설치 후 처음 한 번만 하는 기능 안내.
+const firstFeatureGuide = '$_features "처음으로"라고 하시면 언제든 처음으로 돌아와요. 편하게 말씀해 주세요.';
+
+/// "처음으로" 화면(처음 이후 / 다음 사용부터).
+const homeScreen = '원하시는 기능을 말씀하시면 도와드려요. 어떤 기능이 있는지 궁금하시면 "기능 설명"이라고 말씀해주세요.';
+
+/// "기능 설명".
+const featureExplain =
+    '$_features 각 기능별 자세한 정보를 알고 싶으시면 "이물질 확인 자세히 알려줘"와 같이 말씀해주세요.';
+
+/// 이전 이름. 도움말 말("뭐 할 수 있어?")에 쓴다.
+const featureIntro = featureExplain;
+
+/// 기능별 "○○ 자세히 알려줘".
+const featureDetails = {
+  '일정 추가': '일정을 추가하실 수 있어요. 날짜와 시간 일정을 알려 주시면 일정에 맞는 패션을 추천해드려요. '
+      '당일에 알림으로 리마인드 해드려요.',
+  '날씨 정보': '오늘 날씨를 알려드려요. 내일 날씨도 궁금하시면 알려드릴게요. 날씨를 바탕으로 패션을 추천해드려요.',
+  '옷 추천': '일정과 날씨를 토대로 어떤 옷을 입으면 좋을지 종합적으로 판단해서 패션을 추천해드려요.',
+  '원하는 옷 확인': '옷 사진을 찍어서 그 옷이 그 날에 잘 어울리는 옷인지 판단해서 알려드려요. '
+      '옷 사진은 내려놓고 찍는 방식과 입고 한 바퀴 도는 방식 중에 선택하실 수 있어요. '
+      '또한 옷에 묻은 얼룩이나 찢어진 부분이 있는지도 같이 확인해드려요.',
+  '화장 상태': '현재는 화장의 좌우 대칭 정도 봐 드릴 수 있어요. 이후에 더 업데이트 될 예정이에요.',
+  '이물질 확인': '이~ 하고 찍은 사진으로 이에 이물질이 끼었나 확인해드려요. 안심하고 웃으실 수 있을거예요.',
+};
+
+/// "기능 설명", "기능 알려 줘"면 true.
+bool isFeatureExplainCommand(String text) =>
+    RegExp(r'기능\s*(설명|소개|알려|뭐|목록)').hasMatch(text);
+
+/// "이물질 확인 자세히 알려줘", "옷 추천 설명해 줘"면 그 기능 설명, 아니면 null.
+String? featureDetailFor(String text) {
+  if (!RegExp(r'자세히|설명').hasMatch(text)) return null;
+  bool has(String p) => RegExp(p).hasMatch(text);
+  final key = has(r'이물질|치아|이빨|이에')
+      ? '이물질 확인'
+      : has(r'화장|메이크업')
+          ? '화장 상태'
+          : has(r'일정|스케줄')
+              ? '일정 추가'
+              : has(r'날씨')
+                  ? '날씨 정보'
+                  : has(r'옷\s*(확인|검사)|원하는\s*옷|얼룩')
+                      ? '원하는 옷 확인'
+                      : has(r'추천')
+                          ? '옷 추천'
+                          : null;
+  return key == null ? null : featureDetails[key];
+}
+
+/// 어느 화면에서든 "처음으로"라고 말하면 처음 화면으로 돌아온다("첫 화면"도 알아듣는다).
+const homeHint = '"처음으로"라고 말해주시면 언제든 처음으로 돌아와요.';
+
+/// "처음으로", "첫 화면", "처음 화면으로", "홈 화면" 같은 말이면 true.
+bool isHomeCommand(String text) => RegExp(
+        r'^\s*처음으로\s*(가|돌아|갈|[.!]?\s*$)|첫\s*화면|처음\s*화면|홈\s*화면|첫\s*페이지|처음으로\s*돌아')
+    .hasMatch(text);
 
 const tapToTalk = '다른 기능이 필요하면 화면 위쪽을 누르고 말씀해 주세요.';
 
 String returningGreeting(String agentName, {String? callName}) =>
-    '반가워요${callName == null ? '' : ', $callName'}. 저 ${ieyo(agentName)}. 오늘도 같이 준비해 봐요. '
+    '반가워요${callName == null ? '' : ', ${honorific(callName)}'}. 저 ${ieyo(agentName)}. 오늘도 같이 준비해 봐요. '
     '$homeHint 필요한 게 있으면 편하게 말씀해 주세요.';
 
 /// 구글 로그인 창(iOS가 띄우는 "accounts.google.com을 사용하여 로그인하려고 합니다")이 뜨기 전에 읽는다.

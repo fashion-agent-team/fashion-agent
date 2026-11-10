@@ -287,13 +287,20 @@ class AgentController extends ChangeNotifier {
   /// 사용자가 한 말을 기능으로 옮긴다.
   Future<void> handle(String text) async {
     if (isHomeCommand(text)) {
-      // 첫 화면에서 "첫 화면": 하던 대화를 끝내고 처음부터 듣는다.
+      // 처음 화면에서 "처음으로": 하던 대화를 끝내고 처음부터 듣는다.
       _sessionId = null;
-      await _say('첫 화면이에요. $askFeature');
+      await _say(homeScreen);
       await _listenAndHandle();
       return;
     }
     if (await _speedOrRepeat(text)) {
+      await _say(_nextHint);
+      return;
+    }
+    // 기능 설명은 폰이 바로 답한다(서버에 보내지 않는다).
+    final detail = featureDetailFor(text);
+    if (detail != null || isFeatureExplainCommand(text)) {
+      await _say(detail ?? featureExplain);
       await _say(_nextHint);
       return;
     }
@@ -367,7 +374,7 @@ class AgentController extends ChangeNotifier {
       if (heard == null) break;
       if (isHomeCommand(heard)) {
         _sessionId = null;
-        await _say('첫 화면으로 돌아왔어요.');
+        await _say('처음으로 돌아왔어요. $homeScreen');
         break;
       }
       utterance = heard;

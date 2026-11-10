@@ -7,6 +7,7 @@ import '../services/speech_service.dart';
 import '../styling/korean.dart';
 import 'agent_speech.dart';
 import 'answer_parsing.dart';
+import 'voice_picker.dart';
 import 'wake_word.dart';
 
 /// 처음 설치했을 때의 음성 대화. 버튼 없이 묻고 듣기만 한다.
@@ -55,30 +56,33 @@ class OnboardingFlow {
       await profiles.save(restored);
       await _say(restoredAccount);
       await _say(
-          returningGreeting(restored.agentName!, callName: restored.callName));
+          restoredGreeting(restored.agentName!, callName: restored.callName));
       return restored;
     }
+    if (id != null) await _say(newUserHello);
 
     await askSpeed();
+    await askVoice();
     final agentName = await _askFirstAgentName();
     var profile =
         UserProfile(agentName: agentName, consent: consent, accountId: id);
-    await _say('더 잘 챙겨 드리고 싶어서 몇 가지만 여쭤볼게요. '
-        '말하기 싫은 건 건너뛰기라고 하시면 돼요. 전혀 괜찮아요.');
+    await _say(profileIntro);
 
     for (final field in _Field.values) {
       profile = await _askField(profile, field);
     }
     profile = await _confirm(profile);
     final call = await _pickCallName(profile);
-    if (call != null) profile = profile.copyWith(callName: call);
-    await _say('알려 주셔서 고마워요. 이제 더 잘 맞춰서 도와드릴게요.');
+    if (call != null) {
+      profile = profile.copyWith(callName: call);
+      await _say(niceToMeetCall(call));
+    }
 
     profile = profile.copyWith(speechRate: speech.rate);
     if (id != null) await account.upload(id, profile);
     await profiles.save(profile);
 
-    await _say('$featureIntro $homeHint $askFeature');
+    await _say(firstFeatureGuide);
     return profile;
   }
 
@@ -112,6 +116,22 @@ class OnboardingFlow {
       await speech.changeRate(answer);
       prompt = speedChanged;
     }
+  }
+
+  /// 목소리가 마음에 드는지 묻는다. "바꾸고 싶어"면 하나씩 들려주고 "좋아"로 고른다.
+  /// "괜찮아"거나 대답이 없으면 그대로 다음으로 간다.
+  Future<void> askVoice() async {
+    await _say(voiceQuestion);
+    final heard = await listen.listen(waitFor: const Duration(seconds: 10));
+    if (heard == null || !_wantsOtherVoice(heard)) return;
+    await VoicePicker(speech: speech, listen: listen, intro: voicePickIntro)
+        .run(_say);
+  }
+
+  static bool _wantsOtherVoice(String text) {
+    final t = text.replaceAll(RegExp(r'\s+'), '');
+    if (RegExp(r'안바꿔|안바꿀|바꾸지').hasMatch(t)) return false;
+    return RegExp(r'바꾸|바꿔|바꿀|별로|싫|다른|안좋|맘에안|마음에안|들려').hasMatch(t);
   }
 
   /// 처음 이름은 [firstAgentName]. "좋아"거나 대답이 없으면 그대로, 다른 이름을 말하면 맞는지 확인한다.
@@ -173,16 +193,36 @@ class OnboardingFlow {
     return null;
   }
 
-  /// 사용자를 어떻게 부를지 묻는다. 건너뛰면 null(따로 부르지 않음).
+  /// 사용자를 어떻게 부를지 묻는다. 이름이 있으면 그 이름("진행 님")을 먼저 제안한다. 건너뛰면 null(따로 부르지 않음).
   Future<String?> _pickCallName(UserProfile p, {String? first}) async {
-    final example = suggestedCallName(p) ?? '진행 님';
-    final question = '제가 어떻게 불러 드릴까요? 예를 들어 $example처럼 말씀해 주세요.';
+    final suggestion = suggestedCallName(p);
+    final question = suggestion == null
+        ? '제가 어떻게 불러 드릴까요? 불리고 싶은 호칭을 말씀해 주세요.'
+        : '제가 어떻게 불러 드릴까요? ${euro(suggestion)} 불러드리면 될까요? 아니라면 불리고 싶은 호칭을 말씀해 주세요.';
     var heard = first;
     for (var i = 0; i <= retries; i++) {
-      final call =
-          heard ?? await _ask(question, parseCallName, skippable: true);
-      heard = null;
-      if (call == null) return null;
+      String? call;
+      if (heard != null) {
+        call = heard;
+        heard = null;
+      } else {
+        var said = await _askRaw(question, skippable: true);
+        if (said == null) return null;
+        final yes = suggestion == null ? null : parseYesNo(said);
+        if (yes == true) return suggestion;
+        if (yes == false) {
+          // "아니요, 민수라고 불러 줘"면 뒤 호칭만, "아니요"뿐이면 호칭을 다시 듣는다("아니"를 호칭으로 받지 않게).
+          said = said
+              .replaceFirst(RegExp(r'^\s*(아니요|아니에요|아니|아뇨)[\s,.]*'), '')
+              .trim();
+          if (said.isEmpty) {
+            said = await _askRaw('불리고 싶은 호칭을 말씀해 주세요.', skippable: true);
+            if (said == null) return null;
+          }
+        }
+        call = parseCallName(said);
+        if (call == null) continue;
+      }
       final ok = await _ask('앞으로 $call, 이렇게 불러 드릴까요?', parseYesNo);
       if (ok == true) return call;
     }
@@ -315,6 +355,10 @@ class OnboardingFlow {
     if (skippable) await _say('괜찮아요, 우선 넘어갈게요.');
     return null;
   }
+
+  /// [question]을 읽고 들은 말을 그대로 돌려준다(건너뛰기·못 들음은 [_ask]와 같다).
+  Future<String?> _askRaw(String question, {bool skippable = false}) =>
+      _ask(question, (t) => t.trim().isEmpty ? null : t, skippable: skippable);
 
   Future<void> _say(String text) async {
     onSay?.call(text);

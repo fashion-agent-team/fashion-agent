@@ -189,7 +189,7 @@ void main() {
 
       expect(end, isNull);
       expect(turns.sent, isEmpty);
-      expect(speech.spoken, contains('첫 화면으로 돌아갈게요.'));
+      expect(speech.spoken, contains('처음으로 돌아갈게요.'));
       expect(camera.closed, isTrue);
     });
 
