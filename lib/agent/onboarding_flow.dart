@@ -90,7 +90,8 @@ class OnboardingFlow {
       var heard = await listen.listen(waitFor: const Duration(seconds: 10));
       // 2026-11-10 진행 님: "동의해"라고 하지 않았는데 고맙다고 했다. 폰이 제 안내 끝("…라고 해 주세요")을
       // 들은 것으로 보고, 안내 말투가 섞인 글은 답으로 치지 않는다.
-      if (heard != null && RegExp(r'라고|주세요|말씀|시각장애인').hasMatch(heard)) heard = null;
+      if (heard != null && RegExp(r'라고|주세요|말씀|시각장애인').hasMatch(heard))
+        heard = null;
       final answer = heard == null ? null : parseConsent(heard);
       if (answer == true) {
         await _say('동의해 주셔서 고마워요.');
