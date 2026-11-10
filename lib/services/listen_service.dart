@@ -132,11 +132,15 @@ class DeviceListenService implements ListenService {
     if (heard == null || audio == null) return heard;
     try {
       final watch = Stopwatch()..start();
-      final text =
-          await api!.transcribe(audio, 'audio/m4a', await hint?.call() ?? '');
+      final prompt = await hint?.call() ?? '';
+      final text = await api!.transcribe(audio, 'audio/m4a', prompt);
       debugPrint('[시간] 서버 음성 인식 ${watch.elapsedMilliseconds}ms: '
           '폰 "$heard" → 서버 "$text"');
       if (text.isEmpty) return heard;
+      if (looksLikeHintEcho(text, prompt, heard)) {
+        debugPrint('서버 글이 힌트를 따라 적은 것 같아 폰 글자 사용');
+        return heard;
+      }
       heardNow.value = text;
       return text;
     } on Object catch (e) {

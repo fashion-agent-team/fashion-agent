@@ -12,7 +12,7 @@ bool? parseYesNo(String text) {
   final t = _clean(text);
   // "아니"가 "네"보다 먼저다. "아니요 네 번째"처럼 섞여도 부정으로 본다.
   if (RegExp(r'아니|아뇨|틀려|틀렸|다시|싫어').hasMatch(t)) return false;
-  if (RegExp(r'^(네|예|응|어|맞|좋아|그래|그렇|오케이|ok)', caseSensitive: false)
+  if (RegExp(r'^(네|넵|넹|예|응|웅|엉|어|맞|좋아|그래|그렇|그럼|오케이|ok)', caseSensitive: false)
           .hasMatch(t) ||
       RegExp(r'맞아|맞습니다|맞아요|일치|좋아요').hasMatch(t)) {
     return true;
