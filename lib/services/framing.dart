@@ -80,7 +80,9 @@ Framing frameGarment(List<Rect> boxes) {
 /// 몸의 점 하나(화면 기준 0~1)와 보일 확률.
 typedef BodyPoint = ({double x, double y, double likelihood});
 
-/// 입은 옷: 머리부터 발까지 화면에 들어왔는지 본다. 폰은 세워 두고 사람이 움직인다.
+/// 입은 옷: 어깨부터 발까지 화면에 들어왔는지 본다. 폰은 세워 두고 사람이 움직인다.
+///
+/// 2026-11-09 진행 님: 서서 찍을 때 얼굴은 안 나와도 된다. 그래서 머리는 보지 않고 어깨·엉덩이·발(또는 아래쪽 무릎)만 본다.
 ///
 /// [points]의 키: head(코나 귀), shoulder, hip, knee, foot(발목이나 발뒤꿈치). 없거나 확률이 낮으면 안 보이는 것이다.
 ///
@@ -97,9 +99,6 @@ Framing frameBody(Map<String, List<BodyPoint>> points) {
 
   if (!seen('shoulder') || !seen('hip')) {
     return const Framing.fix('몸이 안 보여요. 폰 앞에 서 주세요.');
-  }
-  if (!seen('head', 0.4)) {
-    return const Framing.fix('한 걸음 뒤로 가 주세요.');
   }
   if (!seen('foot', 0.3) && !kneeLow()) {
     return const Framing.fix('한 걸음 뒤로 가 주세요.');

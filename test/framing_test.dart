@@ -84,6 +84,11 @@ void main() {
       expect(frameBody(body(scale: 0.2)).speech, contains('앞으로'));
     });
 
+    test('얼굴이 안 나와도 어깨부터 발까지 보이면 찍는다', () {
+      final points = body()..remove('head');
+      expect(frameBody(points).ready, isTrue);
+    });
+
     test('몸이 없으면 서 달라고 한다', () {
       expect(frameBody({}).speech, contains('몸이 안 보여요'));
     });

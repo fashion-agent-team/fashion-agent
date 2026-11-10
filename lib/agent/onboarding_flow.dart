@@ -93,8 +93,8 @@ class OnboardingFlow {
         await _say('동의해 주셔서 고마워요.');
         return consentVersion;
       }
-      if (heard != null && RegExp(r'다시').hasMatch(heard)) {
-        await _say(consentIntro);
+      if (heard != null && RegExp(r'다시|자세|뭐|설명').hasMatch(heard)) {
+        await _say(consentDetail);
         continue;
       }
       if (i < retries) await _say(consentRequired);

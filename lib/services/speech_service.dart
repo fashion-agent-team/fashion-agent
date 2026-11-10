@@ -33,12 +33,12 @@ class SpeechService {
       _tts.setSharedInstance(true);
     }
     _tts.setVolume(1.0);
-    // 기본 속도(0.5)는 느리다는 의견(2026-11-09 리허설). iOS·안드로이드 모두 0.5가 보통 속도다.
+    // 리허설 때 0.58로 올렸다가, 같은 날 새 목소리로 들어 보니 너무 빠르다고 해서(진행 님) 보통 속도로 되돌린다.
     _tts.setSpeechRate(speechRate);
   }
 
   /// 읽는 속도. 0.5가 보통, 클수록 빠르다.
-  static const speechRate = 0.58;
+  static const speechRate = 0.5;
 
   /// 구글 목소리를 받는 곳. null이면 언제나 폰 목소리.
   TtsApi? cloud;
