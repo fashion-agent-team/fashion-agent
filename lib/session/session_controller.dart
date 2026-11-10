@@ -152,7 +152,7 @@ class SessionController extends ChangeNotifier {
         if (heard == null || busy || step != at) return;
         final command = sessionCommand(heard);
         if (command == SessionCommand.back && onFinished != null) {
-          await _say('첫 화면으로 돌아갈게요.');
+          await _say('처음으로 돌아갈게요.');
           _finish();
           return;
         }
@@ -171,10 +171,10 @@ class SessionController extends ChangeNotifier {
   }
 
   String get _commandHint => step == SessionStep.result
-      ? '${onFinished == null ? '' : '처음으로 가려면 "첫 화면", '}'
+      ? '${onFinished == null ? '' : '처음으로 가려면 "처음으로", '}'
           '다시 검사하려면 "다시 검사"라고 말씀해 주세요.'
       : '옷을 비추고 "찍어 줘"라고 말씀해 주세요.'
-          '${onFinished == null ? '' : ' 그만하려면 "첫 화면"이라고 말씀해 주세요.'}';
+          '${onFinished == null ? '' : ' 그만하려면 "처음으로"라고 말씀해 주세요.'}';
 
   Future<void> _check() async {
     final scan = await _scan();
@@ -194,7 +194,7 @@ class SessionController extends ChangeNotifier {
     result = check;
     _set(SessionStep.result);
     await _say(
-        '${checkSpeech(check, weather: weather)} ${onFinished == null ? '' : '처음으로 가려면 "첫 화면", '}'
+        '${checkSpeech(check, weather: weather)} ${onFinished == null ? '' : '처음으로 가려면 "처음으로", '}'
         '다시 검사하려면 "다시 검사"라고 말씀해 주세요. 다시 들으려면 화면 아래쪽을 눌러 주세요.');
     _startListening();
   }

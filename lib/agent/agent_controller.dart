@@ -12,6 +12,7 @@ import '../services/weather_service.dart';
 import '../styling/weather_rules.dart';
 import 'acknowledge.dart';
 import 'agent_speech.dart';
+import 'answer_parsing.dart';
 import 'command_listener.dart';
 import 'intent_router.dart';
 import 'onboarding_flow.dart';
@@ -105,6 +106,8 @@ class AgentController extends ChangeNotifier {
       profile = await profiles.load();
       if (profile == null || !profile!.isOnboarded) {
         profile = await onboarding.run();
+        // 마이크나 음성 인식을 막아 시작하지 못했다. 다음에 열면 처음부터 다시 묻는다.
+        if (!profile!.isOnboarded) return;
         if (handsFree) {
           await _say('앞으로는 화면을 누르지 않아도 돼요. "$wakeName" 하고 부르면 언제든 대답할게요.');
         }
@@ -284,10 +287,21 @@ class AgentController extends ChangeNotifier {
   /// 사용자가 한 말을 기능으로 옮긴다.
   Future<void> handle(String text) async {
     if (isHomeCommand(text)) {
-      // 첫 화면에서 "첫 화면": 하던 대화를 끝내고 처음부터 듣는다.
+      // 처음 화면에서 "처음으로": 하던 대화를 끝내고 처음부터 듣는다.
       _sessionId = null;
-      await _say('첫 화면이에요. $askFeature');
+      await _say(homeScreen);
       await _listenAndHandle();
+      return;
+    }
+    if (await _speedOrRepeat(text)) {
+      await _say(_nextHint);
+      return;
+    }
+    // 기능 설명은 폰이 바로 답한다(서버에 보내지 않는다).
+    final detail = featureDetailFor(text);
+    if (detail != null || isFeatureExplainCommand(text)) {
+      await _say(detail ?? featureExplain);
+      await _say(_nextHint);
       return;
     }
     final setting = profile == null ? null : routeSetting(text);
@@ -353,11 +367,14 @@ class AgentController extends ChangeNotifier {
         _sessionId = null;
         break;
       }
-      final heard = await _hear();
+      var heard = await _hear();
+      while (heard != null && await _speedOrRepeat(heard)) {
+        heard = await _hear();
+      }
       if (heard == null) break;
       if (isHomeCommand(heard)) {
         _sessionId = null;
-        await _say('첫 화면으로 돌아왔어요.');
+        await _say('처음으로 돌아왔어요. $homeScreen');
         break;
       }
       utterance = heard;
@@ -447,7 +464,47 @@ class AgentController extends ChangeNotifier {
     }
   }
 
+  /// 마지막으로 한 안내("다시 말해 줘"에 다시 읽는다). "불러 주세요" 같은 다음 안내는 빼고 기억한다.
+  String? _lastAnswer;
+
+  /// "천천히 말해 줘", "빠르게 말해 줘", "다시 말해 줘"면 처리하고 true(2026-11-10 진행 님).
+  Future<bool> _speedOrRepeat(String text) async {
+    final speed = speedCommand(text);
+    if (speed != null) {
+      final changed = await speech.changeRate(speed);
+      if (changed) unawaited(_saveRate());
+      final word = speed < 0 ? '천천히' : '빠르게';
+      await _say(changed
+          ? '네, 이제 조금 더 $word 말할게요.'
+          : '지금이 제가 낼 수 있는 ${speed < 0 ? '가장 느린' : '가장 빠른'} 빠르기예요.');
+      return true;
+    }
+    final last = _lastAnswer;
+    if (isRepeatRequest(text) && last != null) {
+      await _say(last);
+      return true;
+    }
+    return false;
+  }
+
+  /// 바꾼 말 빠르기를 정보에 넣어 폰과 계정에 저장한다(다른 폰에서도 같은 빠르기).
+  Future<void> _saveRate() async {
+    final p = profile;
+    if (p == null || !p.isOnboarded) return;
+    final after = p.copyWith(speechRate: speech.rate);
+    profile = after;
+    await profiles.save(after);
+    final id = after.accountId;
+    if (id == null) return;
+    try {
+      await onboarding.account.upload(id, after);
+    } catch (_) {
+      // 폰에는 저장했다.
+    }
+  }
+
   Future<void> _say(String text) async {
+    if (text != _nextHint && !text.startsWith('네, 이제 조금 더')) _lastAnswer = text;
     message = text;
     _setPhase(AgentPhase.speaking);
     notifyListeners();

@@ -153,7 +153,7 @@ void main() {
       await settle();
 
       expect(speech.spoken, contains(startsWith('보이는 옷은')));
-      expect(speech.spoken.last, '첫 화면으로 돌아갈게요.');
+      expect(speech.spoken.last, '처음으로 돌아갈게요.');
       expect(finished, isTrue);
     });
 

@@ -6,6 +6,8 @@ import 'package:fashion_agent/agent/voice_picker.dart';
 import 'package:fashion_agent/services/cloud_tts.dart';
 import 'package:fashion_agent/services/speech_service.dart';
 import 'package:fashion_agent/services/voices.dart';
+import 'package:fashion_agent/agent/answer_parsing.dart';
+import 'package:fashion_agent/services/server_stt.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fashion_agent/agent/onboarding_flow.dart';
 
@@ -174,6 +176,25 @@ void main() {
       expect(joinSpelled('심, 청, 이'), '심청이');
       expect(joinSpelled('심 청 이'), '심청이');
       expect(joinSpelled('패션 에이전트'), '패션 에이전트');
+    });
+  });
+
+  group('서버 음성 인식 힌트 따라 적기', () {
+    final hint = sttHint('심청이');
+    test('힌트 낱말이 줄줄이 나오면 버린다', () {
+      expect(looksLikeHintEcho('심청이 옷 추천 날씨 일정 옷 검사', hint, '어'), isTrue);
+      expect(
+          looksLikeHintEcho('시각장애인용 패션 도우미 앱과 나누는 한국어 대화', hint, '음'), isTrue);
+    });
+    test('폰은 "응"만 들었는데 서버 글이 길면 버린다', () {
+      expect(looksLikeHintEcho('응 그리고 오늘 날씨는 맑고 따뜻합니다', hint, '응'), isTrue);
+    });
+    test('보통 말은 그대로 쓴다', () {
+      expect(
+          looksLikeHintEcho('심청이 내일 날씨 알려 줘', hint, '신청이 내일 날씨 알려 줘'), isFalse);
+      expect(looksLikeHintEcho('응', hint, '응'), isFalse);
+      expect(parseYesNo('웅'), isTrue);
+      expect(parseYesNo('넵'), isTrue);
     });
   });
 }

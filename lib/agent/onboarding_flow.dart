@@ -7,12 +7,13 @@ import '../services/speech_service.dart';
 import '../styling/korean.dart';
 import 'agent_speech.dart';
 import 'answer_parsing.dart';
+import 'voice_picker.dart';
 import 'wake_word.dart';
 
 /// 처음 설치했을 때의 음성 대화. 버튼 없이 묻고 듣기만 한다.
 ///
-/// 순서: 인사 → 권한 창(마이크·음성 인식·카메라·위치를 한 번에) → 다른 폰에서 쓰던 계정 확인 → 에이전트 이름 짓기 → 사용자 정보 → 재확인
-/// → 계정 연결 → 기능 설명.
+/// 순서: 인사 → 허용 창(마이크·음성 인식·카메라·위치를 한 번에, 허용하면 동의) → 구글 로그인
+/// → 전에 쓴 정보가 있으면 말 빠르기까지 불러와 바로 시작, 없으면 말 빠르기 → 에이전트 이름 → 사용자 정보 → 재확인 → 호칭 → 기능 설명.
 class OnboardingFlow {
   OnboardingFlow({
     required this.speech,
@@ -38,43 +39,57 @@ class OnboardingFlow {
   static const retries = 2;
 
   Future<UserProfile> run() async {
+    // 2026-11-10 진행 님 순서: 인사 → 허용(허용하면 동의) → 구글 로그인
+    // → 전에 썼으면 이름·정보·말 빠르기를 불러와 묻지 않고 바로 시작(옷장·일정은 서버에 계정별로 있다)
+    // → 처음이면 말 빠르기 → 이름 → 정보.
+    // "다른 폰에서 쓴 적 있나요?"는 묻지 않는다. 로그인하면 서버에 정보가 있는지로 안다.
     await _say(firstGreeting);
     final consent = await askConsent();
+    if (consent == null) return const UserProfile();
 
-    final restored = await _restoreFromOtherPhone();
-    if (restored != null) {
-      if (consent == null) return restored;
-      final withConsent = restored.copyWith(consent: consent);
-      await profiles.save(withConsent);
-      return withConsent;
+    final id = await _signIn();
+    final saved = id == null ? null : await account.restore(id);
+    if (saved != null && saved.isOnboarded) {
+      final rate = saved.speechRate;
+      if (rate != null) await speech.setRate(rate);
+      final restored = saved.copyWith(accountId: id, consent: consent);
+      await profiles.save(restored);
+      await _say(restoredAccount);
+      await _say(
+          restoredGreeting(restored.agentName!, callName: restored.callName));
+      return restored;
     }
+    if (id != null) await _say(newUserHello);
 
+    await askSpeed();
+    await askVoice();
+    final agentName = await _askFirstAgentName();
     var profile =
-        UserProfile(agentName: await _askAgentName(), consent: consent);
-    await _say('좋아요, 이제 제 이름은 ${agentNameWithIda(profile.agentName!)}. '
-        '더 잘 챙겨 드리고 싶어서 몇 가지만 여쭤볼게요. '
-        '말하기 싫은 건 건너뛰기라고 하시면 돼요. 전혀 괜찮아요.');
+        UserProfile(agentName: agentName, consent: consent, accountId: id);
+    await _say(profileIntro);
 
     for (final field in _Field.values) {
       profile = await _askField(profile, field);
     }
     profile = await _confirm(profile);
     final call = await _pickCallName(profile);
-    if (call != null) profile = profile.copyWith(callName: call);
-    await _say('알려 주셔서 고마워요. 이제 더 잘 맞춰서 도와드릴게요.');
+    if (call != null) {
+      profile = profile.copyWith(callName: call);
+      await _say(niceToMeetCall(call));
+    }
 
-    profile = await _connectAccount(profile);
+    profile = profile.copyWith(speechRate: speech.rate);
+    if (id != null) await account.upload(id, profile);
     await profiles.save(profile);
 
-    await _say('$featureIntro $homeHint $askFeature');
+    await _say(firstFeatureGuide);
     return profile;
   }
 
-  /// 처음 켤 때 동의받을 것을 한 번에 읽고, 권한 창을 띄운 뒤 "동의해"를 듣는다.
+  /// 무엇을 하는지 알리고 허용 창을 띄운다. 허용하면 동의로 보고 동의 판([consentVersion])을 돌려준다.
   ///
-  /// 2026-11-09 진행 님: 앱을 처음 깔면 동의할 것(권한, 서버 음성 인식, 사진 판단, GPT 확인·학습 저장)을
-  /// 한 번에 전부 띄워 동의받고 시작한다. 말로 답하려면 마이크가 있어야 해서 권한 창을 먼저 띄운다.
-  /// 동의하면 동의 판([consentVersion]), 끝내 동의하지 않거나 마이크를 막으면 null.
+  /// 2026-11-10 진행 님: 음성으로 "동의해"를 받지 않는다. 허용하면 동의로 본다.
+  /// 마이크나 음성 인식을 막으면 안내하고 null(들을 수 없어서 더 진행하지 않는다).
   Future<String?> askConsent() async {
     await _say(consentIntro);
     final p = permissions;
@@ -86,48 +101,71 @@ class OnboardingFlow {
         return null;
       }
     }
-    for (var i = 0; i <= retries; i++) {
+    await _say(permissionThanks);
+    return consentVersion;
+  }
+
+  /// 말 빠르기를 묻는다. "천천히"/"빠르게"면 바꾸고 다시 묻고, "괜찮아"거나 대답이 없으면 그대로 다음으로 간다.
+  Future<void> askSpeed() async {
+    var prompt = speedQuestion;
+    for (var i = 0; i < 6; i++) {
+      await _say(prompt);
       final heard = await listen.listen(waitFor: const Duration(seconds: 10));
-      final answer = heard == null ? null : parseConsent(heard);
-      if (answer == true) {
-        await _say('동의해 주셔서 고마워요.');
-        return consentVersion;
-      }
-      if (heard != null && RegExp(r'다시|자세|뭐|설명').hasMatch(heard)) {
-        await _say(consentDetail);
-        continue;
-      }
-      if (i < retries) await _say(consentRequired);
+      final answer = heard == null ? null : parseSpeed(heard);
+      if (answer == null || answer == 0) return;
+      await speech.changeRate(answer);
+      prompt = speedChanged;
     }
-    await _say(consentDeclined);
-    return null;
   }
 
-  Future<UserProfile?> _restoreFromOtherPhone() async {
-    final usedBefore =
-        await _ask('혹시 다른 폰에서 저를 쓰신 적이 있나요? 네 또는 아니요로 말씀해 주세요.', parseYesNo);
-    if (usedBefore != true) return null;
-
-    await _say('쓰시던 계정으로 로그인할게요. $signInGuide');
-    final id = await account.signIn();
-    final saved = id == null ? null : await account.restore(id);
-    if (saved == null || !saved.isOnboarded) {
-      await _say('이전 정보를 찾지 못했어요. 처음부터 함께 정해 볼게요.');
-      return null;
-    }
-    final profile = saved.copyWith(accountId: id);
-    await profiles.save(profile);
-    await _say(
-        '다시 만나서 정말 반가워요. 저는 ${agentNameWithIda(profile.agentName!)}. $askFeature');
-    return profile;
+  /// 목소리가 마음에 드는지 묻는다. "바꾸고 싶어"면 하나씩 들려주고 "좋아"로 고른다.
+  /// "괜찮아"거나 대답이 없으면 그대로 다음으로 간다.
+  Future<void> askVoice() async {
+    await _say(voiceQuestion);
+    final heard = await listen.listen(waitFor: const Duration(seconds: 10));
+    if (heard == null || !_wantsOtherVoice(heard)) return;
+    await VoicePicker(speech: speech, listen: listen, intro: voicePickIntro)
+        .run(_say);
   }
 
-  Future<String> _askAgentName() async {
-    final name = await _pickAgentName(askAgentName);
-    if (name != null) return name;
-    const fallback = defaultAgentName;
-    await _say('이름은 나중에 바꿀 수 있어요. 우선 $fallback라고 불러 주세요.');
-    return fallback;
+  static bool _wantsOtherVoice(String text) {
+    final t = text.replaceAll(RegExp(r'\s+'), '');
+    if (RegExp(r'안바꿔|안바꿀|바꾸지').hasMatch(t)) return false;
+    return RegExp(r'바꾸|바꿔|바꿀|별로|싫|다른|안좋|맘에안|마음에안|들려').hasMatch(t);
+  }
+
+  /// 처음 이름은 [firstAgentName]. "좋아"거나 대답이 없으면 그대로, 다른 이름을 말하면 맞는지 확인한다.
+  Future<String> _askFirstAgentName() async {
+    var ask = askAgentName;
+    for (var i = 0; i <= retries; i++) {
+      await _say(ask);
+      final heard = await listen.listen(server: true);
+      if (heard == null || _keepsName(heard)) break;
+      final said = parseName(heard);
+      if (said == null) break;
+      final name = joinSpelled(said);
+      final candidates =
+          [knownNameLike(name), name].whereType<String>().toSet();
+      for (final c in candidates) {
+        final ok = await _ask('제 이름이 $c, 맞나요?', parseYesNo);
+        if (ok == true) {
+          await _say('좋아요, 이제 제 이름은 ${agentNameWithIda(c)}.');
+          return c;
+        }
+      }
+      ask = spellNameAsk;
+    }
+    await _say(keepAgentName);
+    return firstAgentName;
+  }
+
+  /// "좋아", "이대로", "심청이 좋아"처럼 처음 이름을 그대로 쓰겠다는 말.
+  static bool _keepsName(String text) {
+    final t = text.replaceAll(RegExp(r'\s+'), '');
+    return RegExp(r'^(좋아|좋아요|좋네|괜찮|그대로|이대로|네|응|예|그래)').hasMatch(t) ||
+        RegExp(r'이대로|그대로').hasMatch(t) ||
+        t == firstAgentName ||
+        t.startsWith('$firstAgentName좋');
   }
 
   /// 이름을 듣고 맞는지 되묻는다. [first]가 있으면 묻지 않고 그 이름부터 확인한다. 끝내 못 정하면 null.
@@ -155,16 +193,36 @@ class OnboardingFlow {
     return null;
   }
 
-  /// 사용자를 어떻게 부를지 묻는다. 건너뛰면 null(따로 부르지 않음).
+  /// 사용자를 어떻게 부를지 묻는다. 이름이 있으면 그 이름("진행 님")을 먼저 제안한다. 건너뛰면 null(따로 부르지 않음).
   Future<String?> _pickCallName(UserProfile p, {String? first}) async {
-    final example = suggestedCallName(p) ?? '진행 님';
-    final question = '제가 어떻게 불러 드릴까요? 예를 들어 $example처럼 말씀해 주세요.';
+    final suggestion = suggestedCallName(p);
+    final question = suggestion == null
+        ? '제가 어떻게 불러 드릴까요? 불리고 싶은 호칭을 말씀해 주세요.'
+        : '제가 어떻게 불러 드릴까요? ${euro(suggestion)} 불러드리면 될까요? 아니라면 불리고 싶은 호칭을 말씀해 주세요.';
     var heard = first;
     for (var i = 0; i <= retries; i++) {
-      final call =
-          heard ?? await _ask(question, parseCallName, skippable: true);
-      heard = null;
-      if (call == null) return null;
+      String? call;
+      if (heard != null) {
+        call = heard;
+        heard = null;
+      } else {
+        var said = await _askRaw(question, skippable: true);
+        if (said == null) return null;
+        final yes = suggestion == null ? null : parseYesNo(said);
+        if (yes == true) return suggestion;
+        if (yes == false) {
+          // "아니요, 민수라고 불러 줘"면 뒤 호칭만, "아니요"뿐이면 호칭을 다시 듣는다("아니"를 호칭으로 받지 않게).
+          said = said
+              .replaceFirst(RegExp(r'^\s*(아니요|아니에요|아니|아뇨)[\s,.]*'), '')
+              .trim();
+          if (said.isEmpty) {
+            said = await _askRaw('불리고 싶은 호칭을 말씀해 주세요.', skippable: true);
+            if (said == null) return null;
+          }
+        }
+        call = parseCallName(said);
+        if (call == null) continue;
+      }
       final ok = await _ask('앞으로 $call, 이렇게 불러 드릴까요?', parseYesNo);
       if (ok == true) return call;
     }
@@ -254,7 +312,9 @@ class OnboardingFlow {
     for (var round = 0; round < 3; round++) {
       final ok = await _ask(
           '말씀해주신 정보를 읽어 드릴게요. ${summarize(p)} 말씀해주신 정보와 일치할까요?', parseYesNo);
-      if (ok != false) return p;
+      if (ok == true) return p;
+      // 못 알아들었으면 맞다고 치지 않고 다시 묻는다(2026-11-10: 대답 없이 "고마워요"로 넘어갔다).
+      if (ok == null) continue;
 
       final field = await _ask(
           '어느 항목을 고칠까요? 이름, 생년월일, 성별, 직업, 키, 몸무게 중에서 말씀해 주세요.', _Field.match);
@@ -264,17 +324,12 @@ class OnboardingFlow {
     return p;
   }
 
-  Future<UserProfile> _connectAccount(UserProfile p) async {
-    await _say('폰을 바꿔도 이어서 쓸 수 있게 계정에 연결할게요. $signInGuide');
+  /// 구글로 로그인한다. 취소하거나 안 되면 이 폰에만 저장하고 null.
+  Future<String?> _signIn() async {
+    await _say('$signInIntro $signInGuide');
     final id = await account.signIn();
-    if (id == null) {
-      await _say('지금은 계정 연결 없이 이 폰에만 저장할게요.');
-      return p;
-    }
-    final linked = p.copyWith(accountId: id);
-    await account.upload(id, linked);
-    await _say('계정에 연결했어요.');
-    return linked;
+    if (id == null) await _say(signInSkipped);
+    return id;
   }
 
   /// [question]을 읽고 답을 듣는다. 못 알아들으면 [retries]번 더 묻고, 그래도 안 되면 null.
@@ -301,6 +356,10 @@ class OnboardingFlow {
     return null;
   }
 
+  /// [question]을 읽고 들은 말을 그대로 돌려준다(건너뛰기·못 들음은 [_ask]와 같다).
+  Future<String?> _askRaw(String question, {bool skippable = false}) =>
+      _ask(question, (t) => t.trim().isEmpty ? null : t, skippable: skippable);
+
   Future<void> _say(String text) async {
     onSay?.call(text);
     await speech.speak(text);
@@ -325,15 +384,7 @@ String summarize(UserProfile p) {
 String agentNameWithIda(String name) => ieyo(name);
 
 /// 이름을 정하지 못했을 때 쓰는 에이전트 이름.
-const defaultAgentName = '패션 에이전트';
-
-/// "동의해", "네 동의합니다", "응 좋아" → true. "아니", "싫어", "동의 안 해" → false. 모르면 null.
-bool? parseConsent(String text) {
-  final t = text.replaceAll(RegExp(r'\s+'), '');
-  if (RegExp(r'동의(안|하지않|못|를안)|비동의|아니|아뇨|싫').hasMatch(t)) return false;
-  if (RegExp(r'동의|동이|동희').hasMatch(t)) return true;
-  return parseYesNo(text);
-}
+const defaultAgentName = firstAgentName;
 
 /// 이름을 잘못 들었을 때 다시 묻는 말.
 const spellNameAsk =

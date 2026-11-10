@@ -166,7 +166,7 @@ class CameraTurnController extends ChangeNotifier {
   Future<void> _goHome() async {
     _round++;
     await camera.cancel();
-    await _say('첫 화면으로 돌아갈게요.');
+    await _say('처음으로 돌아갈게요.');
     await _end(null);
   }
 

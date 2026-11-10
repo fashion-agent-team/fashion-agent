@@ -7,7 +7,11 @@ import 'command_listener.dart';
 /// "목소리 순서대로 들려줘" → 1번부터 들려주고 "다음", "다음", … "처음부터", "3번 목소리가 좋아",
 /// 또는 듣다가 "지금 목소리 좋아"라고 하면 그 목소리로 바꾼다.
 class VoicePicker {
-  VoicePicker({required this.speech, required this.listen, this.maxMisses = 3});
+  VoicePicker(
+      {required this.speech,
+      required this.listen,
+      this.maxMisses = 3,
+      this.intro = defaultIntro});
 
   final SpeechService speech;
   final ListenService listen;
@@ -15,7 +19,10 @@ class VoicePicker {
   /// 못 알아들은 답이 이만큼 이어지면 그만둔다.
   final int maxMisses;
 
-  static const intro = '목소리를 하나씩 들려 드릴게요. 다음 목소리는 "다음", 처음부터는 "처음부터", '
+  /// 들려주기 전에 하는 안내. 첫 실행 때는 짧게 한다(agent_speech.dart voicePickIntro).
+  final String intro;
+
+  static const defaultIntro = '목소리를 하나씩 들려 드릴게요. 다음 목소리는 "다음", 처음부터는 "처음부터", '
       '마음에 들면 "이 목소리 좋아" 또는 "몇 번 목소리 좋아"라고 말씀해 주세요.';
 
   static String sample(int number, Voice v) =>

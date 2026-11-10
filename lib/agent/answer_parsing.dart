@@ -12,7 +12,7 @@ bool? parseYesNo(String text) {
   final t = _clean(text);
   // "아니"가 "네"보다 먼저다. "아니요 네 번째"처럼 섞여도 부정으로 본다.
   if (RegExp(r'아니|아뇨|틀려|틀렸|다시|싫어').hasMatch(t)) return false;
-  if (RegExp(r'^(네|예|응|어|맞|좋아|그래|그렇|오케이|ok)', caseSensitive: false)
+  if (RegExp(r'^(네|넵|넹|예|응|웅|엉|어|맞|좋아|그래|그렇|그럼|오케이|ok)', caseSensitive: false)
           .hasMatch(t) ||
       RegExp(r'맞아|맞습니다|맞아요|일치|좋아요').hasMatch(t)) {
     return true;
@@ -174,4 +174,28 @@ String? newCallNameIn(String text) {
   final t = parseCallName(text.replaceFirst(RegExp(r'^.*호칭(을|은)?\s*'), ''));
   if (t == null || RegExp(r'호칭|어떻게|뭐라고').hasMatch(t)) return null;
   return t;
+}
+
+/// 말 빠르기 답. 느리게면 -1, 빠르게면 1, 괜찮으면 0, 모르면 null.
+int? parseSpeed(String text) {
+  final t = text.replaceAll(RegExp(r'\s+'), '');
+  if (RegExp(r'천천|느리|느릿|느긋|빨라|빠른데|너무빠').hasMatch(t)) return -1;
+  if (RegExp(r'빠르게|빨리|느려|답답|너무느').hasMatch(t)) return 1;
+  if (RegExp(r'괜찮|좋아|좋네|딱|적당|이대로|됐어|네|응|예|맞아').hasMatch(t)) return 0;
+  return null;
+}
+
+/// "천천히 말해 줘", "말 좀 빠르게"처럼 말 빠르기를 바꾸라는 말이면 -1(느리게)이나 1(빠르게), 아니면 null.
+int? speedCommand(String text) {
+  final t = text.replaceAll(RegExp(r'\s+'), '');
+  if (!RegExp(r'말|읽|속도|빠르기').hasMatch(t)) return null;
+  if (RegExp(r'천천|느리게|느릿|빨라|빠른데|속도(를|좀)?(줄|낮)').hasMatch(t)) return -1;
+  if (RegExp(r'빠르게|빨리|느려|속도(를|좀)?(올|높)').hasMatch(t)) return 1;
+  return null;
+}
+
+/// "다시 말해 줘", "뭐라고?"처럼 방금 한 말을 다시 해 달라는 말.
+bool isRepeatRequest(String text) {
+  final t = text.replaceAll(RegExp(r'\s+'), '');
+  return RegExp(r'다시(말|한번|들려|얘기|해줘)|한번더(말|들려|해)|뭐라고|못들었|못알아들었|놓쳤').hasMatch(t);
 }

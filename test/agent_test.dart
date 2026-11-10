@@ -108,8 +108,11 @@ OnboardingFlow onboardingWith(FakeSpeech speech, List<String?> answers,
         bool consentFirst = true}) =>
     OnboardingFlow(
       speech: speech,
-      // 처음 켤 때 동의부터 받는다.
-      listen: ScriptedListen([if (consentFirst) '동의해', ...answers]),
+      // 처음 켤 때 말 빠르기부터 묻는다(허용하면 동의, 음성 동의는 없음).
+      listen: ScriptedListen([
+        if (consentFirst) ...['괜찮아', '괜찮아'],
+        ...answers
+      ]),
       profiles: store ?? InMemoryProfileStore(),
       account: account ?? FakeAccount(),
       permissions: permissions,
@@ -174,7 +177,6 @@ void main() {
 
   group('온보딩', () {
     const answers = [
-      '아니요', // 다른 폰에서 쓴 적 없음
       '하늘', '네', // 에이전트 이름
       '김민수예요', '1990년 3월 5일', '남자', '회사원이에요', '170', '건너뛰기',
     ];
@@ -191,9 +193,8 @@ void main() {
           speech.spoken,
           contains('말씀해주신 정보를 읽어 드릴게요. 이름 김민수, 생년월일 1990년 3월 5일, '
               '성별 남성, 직업 회사원, 키 170센티미터, 몸무게 건너뜀. 말씀해주신 정보와 일치할까요?'));
-      expect(speech.spoken, contains('알려 주셔서 고마워요. 이제 더 잘 맞춰서 도와드릴게요.'));
       expect(speech.spoken, contains('지금은 계정 연결 없이 이 폰에만 저장할게요.'));
-      expect(speech.spoken.last, '$featureIntro $homeHint $askFeature');
+      expect(speech.spoken.last, firstFeatureGuide);
 
       expect(profile.agentName, '하늘');
       expect(profile.birthDate, DateTime(1990, 3, 5));
@@ -211,54 +212,87 @@ void main() {
       expect(speech.spoken.where((s) => s.contains('일치할까요')).length, 2);
     });
 
-    test('못 들으면 다시 묻는다', () async {
+    test('재확인에 대답을 못 알아들으면 맞다고 치지 않고 다시 묻는다', () async {
       final speech = FakeSpeech();
-      final profile = await onboardingWith(
-          speech, ['아니요', null, '하늘', '네', ...answers.skip(3), '네']).run();
-
-      expect(speech.spoken, contains('제가 잘 못 들었어요. $askAgentName'));
-      expect(profile.agentName, '하늘');
+      await onboardingWith(speech, [...answers, '음', '음', '음', '네']).run();
+      expect(speech.spoken.where((s) => s.contains('일치할까요')).length, 4);
     });
 
-    test('처음에 동의를 받아 저장하고, 동의하지 않으면 다시 묻는다', () async {
+    test('이름에 대답이 없으면 심청이로 정한다', () async {
       final speech = FakeSpeech();
-      final store = InMemoryProfileStore();
-      final flow = OnboardingFlow(
-        speech: speech,
-        listen: ScriptedListen(['싫어', '동의합니다', ...answers, '네']),
-        profiles: store,
-        account: FakeAccount(),
-      );
-      final profile = await flow.run();
-      expect(speech.spoken, contains(consentRequired));
-      expect(profile.consented, isTrue);
-      expect(parseConsent('동의 안 해'), isFalse);
-      expect(parseConsent('네 동의할게요'), isTrue);
+      final profile =
+          await onboardingWith(speech, [null, ...answers.skip(2), '네']).run();
+
+      expect(speech.spoken, contains(keepAgentName));
+      expect(profile.agentName, '심청이');
     });
 
-    test('인사 뒤 첫 질문 전에 권한 창을 미리 알리고 한 번에 띄운다', () async {
+    test('"좋아"라고 하면 심청이 그대로, 비슷한 이름은 맞는지 묻는다', () async {
+      final keep =
+          await onboardingWith(FakeSpeech(), ['좋아', ...answers.skip(2), '네'])
+              .run();
+      expect(keep.agentName, '심청이');
+
+      final speech = FakeSpeech();
+      final guessed =
+          await onboardingWith(speech, ['신청이', '네', ...answers.skip(2), '네'])
+              .run();
+      expect(speech.spoken, contains('제 이름이 심청이, 맞나요?'));
+      expect(guessed.agentName, '심청이');
+    });
+
+    test('허용하면 동의로 보고, 음성으로 동의를 묻지 않는다', () async {
       final speech = FakeSpeech();
       final permissions = FakePermissionService();
-      await onboardingWith(speech, [...answers, '네'], permissions: permissions)
+      final profile = await onboardingWith(speech, [...answers, '네'],
+              permissions: permissions)
           .run();
 
       expect(permissions.requests, 1);
-      expect(speech.spoken.take(4), [
+      expect(profile.consented, isTrue);
+      expect(speech.spoken.take(9), [
         firstGreeting,
         consentIntro,
         permissionIntro,
-        '동의해 주셔서 고마워요.',
+        permissionThanks,
+        '$signInIntro $signInGuide',
+        signInSkipped,
+        speedQuestion,
+        voiceQuestion,
+        askAgentName,
       ]);
-      expect(speech.spoken[4], startsWith('혹시 다른 폰에서'));
+      expect(speech.spoken, isNot(contains(startsWith('혹시 다른 폰에서'))));
+    });
+
+    test('"천천히"라고 하면 느리게 바꾸고 다시 묻는다', () async {
+      final speech = FakeSpeech();
+      final flow = OnboardingFlow(
+        speech: speech,
+        listen: ScriptedListen(['너무 빨라 천천히', '괜찮아', '괜찮아', ...answers, '네']),
+        profiles: InMemoryProfileStore(),
+        account: FakeAccount(),
+      );
+      await flow.run();
+      expect(speech.rate, lessThan(SpeechService.speechRate));
+      expect(speech.spoken, contains(speedChanged));
+      expect(parseSpeed('괜찮아요'), 0);
+      expect(parseSpeed('더 빠르게'), 1);
+      expect(speedCommand('천천히 말해 줘'), -1);
+      expect(speedCommand('말 좀 빠르게 해 줘'), 1);
+      expect(speedCommand('빨리 옷 추천해 줘'), isNull);
+      expect(isRepeatRequest('다시 말해 줘'), isTrue);
+      expect(isRepeatRequest('뭐라고?'), isTrue);
+      expect(isRepeatRequest('다시 찍어 줘'), isFalse);
     });
 
     test('마이크를 막으면 들을 수 없다고 알려 준다', () async {
       final speech = FakeSpeech();
-      await onboardingWith(speech, [...answers, '네'],
+      final profile = await onboardingWith(speech, [...answers, '네'],
               permissions: FakePermissionService(canListen: false))
           .run();
 
-      expect(speech.spoken, contains(permissionDeniedListen));
+      expect(speech.spoken.last, permissionDeniedListen);
+      expect(profile.isOnboarded, isFalse);
     });
 
     test('계정에 연결되면 정보를 올린다', () async {
@@ -271,20 +305,25 @@ void main() {
       expect(account.uploaded?.agentName, '하늘');
     });
 
-    test('다른 폰에서 쓰던 계정이 있으면 이어서 쓴다', () async {
+    test('로그인한 계정에 전에 쓴 정보가 있으면 묻지 않고 불러와 바로 시작한다', () async {
       final speech = FakeSpeech();
       final store = InMemoryProfileStore();
-      final profile = await onboardingWith(speech, ['네'],
+      final profile = await onboardingWith(speech, const [],
               store: store,
               account: FakeAccount(
                   id: 'uid-1',
                   saved: const UserProfile(
-                      name: '김민수', agentName: '하늘', consent: consentVersion)))
+                      name: '김민수', agentName: '하늘', speechRate: 0.36)))
           .run();
 
       expect(profile.agentName, '하늘');
+      expect(profile.consented, isTrue);
       expect(store.profile?.accountId, 'uid-1');
-      expect(speech.spoken.last, startsWith('다시 만나서 정말 반가워요. 저는 하늘이에요.'));
+      expect(speech.rate, 0.36);
+      expect(speech.spoken, contains(restoredAccount));
+      expect(speech.spoken, isNot(contains(speedQuestion)));
+      expect(speech.spoken, isNot(contains(askAgentName)));
+      expect(speech.spoken.last, restoredGreeting('하늘'));
     });
   });
 
@@ -401,7 +440,7 @@ void main() {
       final agent = agentWith(speech, ['첫 화면', '날씨 어때'],
           profile: const UserProfile(agentName: '하늘', consent: consentVersion));
       await agent.start();
-      expect(speech.spoken, contains('첫 화면이에요. $askFeature'));
+      expect(speech.spoken, contains(homeScreen));
       expect(speech.spoken, contains(contains('일교차')));
     });
 
@@ -478,13 +517,96 @@ void main() {
     test('온보딩에서 호칭을 묻는다', () async {
       final speech = FakeSpeech();
       final profile = await onboardingWith(speech, [
-        '아니요', '하늘', '네', //
+        '하늘', '네', //
         '이진행이요', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '네',
         '진행 님', '네',
       ]).run();
 
-      expect(speech.spoken, contains('제가 어떻게 불러 드릴까요? 예를 들어 진행 님처럼 말씀해 주세요.'));
+      expect(
+          speech.spoken,
+          contains(
+              '제가 어떻게 불러 드릴까요? 진행 님으로 불러드리면 될까요? 아니라면 불리고 싶은 호칭을 말씀해 주세요.'));
       expect(profile.callName, '진행 님');
+      expect(speech.spoken, contains('잘 부탁드려요 진행 님.'));
+    });
+
+    test('제안한 호칭에 "아니요"라고 하면 호칭을 다시 듣는다', () async {
+      final speech = FakeSpeech();
+      final profile = await onboardingWith(speech, [
+        '하늘', '네', //
+        '이진행이요', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '네',
+        '아니요', '대표님', '네',
+      ]).run();
+      expect(speech.spoken, contains('불리고 싶은 호칭을 말씀해 주세요.'));
+      expect(profile.callName, '대표님');
+      expect(speech.spoken, contains('잘 부탁드려요 대표님.'));
+    });
+
+    test('제안한 호칭에 "네"라고 하면 그대로 정한다', () async {
+      final speech = FakeSpeech();
+      final profile = await onboardingWith(speech, [
+        '하늘', '네', //
+        '이진행이요', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '네',
+        '네',
+      ]).run();
+      expect(profile.callName, '진행 님');
+      expect(speech.spoken, isNot(contains(startsWith('앞으로'))));
+      expect(speech.spoken.last, firstFeatureGuide);
+    });
+  });
+
+  group('2026-11-10 확정 대본', () {
+    test('호칭 뒤 님은 겹치지 않는다', () {
+      expect(honorific('진행'), '진행님');
+      expect(honorific('진행 님'), '진행 님');
+      expect(honorific('선생님'), '선생님');
+      expect(returningGreeting('하늘', callName: '진행'),
+          startsWith('반가워요, 진행님. 저 하늘이에요.'));
+      expect(restoredGreeting('심청이', callName: '진행 님'),
+          '다시 만나서 반가워요, 진행 님. 저 심청이예요. 오늘은 뭘 같이 해 볼까요?');
+    });
+
+    test('"처음으로"와 "첫 화면"을 알아듣는다', () {
+      expect(isHomeCommand('처음으로'), isTrue);
+      expect(isHomeCommand('처음으로 가 줘'), isTrue);
+      expect(isHomeCommand('첫 화면'), isTrue);
+      expect(isHomeCommand('처음으로 입어 보는 옷이야'), isFalse);
+    });
+
+    test('기능 설명과 기능별 자세히', () {
+      expect(isFeatureExplainCommand('기능 설명'), isTrue);
+      expect(featureDetailFor('이물질 확인 자세히 알려줘'), featureDetails['이물질 확인']);
+      expect(featureDetailFor('옷 추천 자세히 알려 줘'), featureDetails['옷 추천']);
+      expect(featureDetailFor('원하는 옷 확인 자세히'), featureDetails['원하는 옷 확인']);
+      expect(featureDetailFor('일정 추가 설명해 줘'), featureDetails['일정 추가']);
+      expect(featureDetailFor('날씨 알려 줘'), isNull);
+    });
+
+    test('로그인했는데 정보가 없으면 처음 오셨군요', () async {
+      final speech = FakeSpeech();
+      await onboardingWith(speech, [...answersForScript, '네'],
+              account: FakeAccount(id: 'uid-new'))
+          .run();
+      expect(speech.spoken, contains(newUserHello));
+      expect(speech.spoken, isNot(contains(signInSkipped)));
+    });
+
+    test('목소리를 바꾸고 싶다고 하면 하나씩 들려준다', () async {
+      final speech = FakeSpeech();
+      final flow = OnboardingFlow(
+        speech: speech,
+        listen:
+            ScriptedListen(['괜찮아', '바꾸고 싶어', '좋아', ...answersForScript, '네']),
+        profiles: InMemoryProfileStore(),
+        account: FakeAccount(),
+      );
+      await flow.run();
+      expect(speech.spoken, contains(voiceQuestion));
     });
   });
 }
+
+const answersForScript = [
+  '하늘', '네', //
+  '김민수예요', '1990년 3월 5일', '남자', '회사원이에요', '170', '건너뛰기',
+];

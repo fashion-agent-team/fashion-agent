@@ -336,6 +336,7 @@ components:
         weightKg: { type: number, nullable: true }
         agentName: { type: string, nullable: true, description: null이면 온보딩 안 함 }
         callName: { type: string, nullable: true, description: '에이전트가 사용자를 부르는 말(호칭). 예: "진행 님". null이면 따로 부르지 않음' }
+        speechRate: { type: number, nullable: true, minimum: 0.1, maximum: 1.0, description: '앱이 읽어 주는 말 빠르기(iOS 0.5가 보통, 앱 기본 0.42). 다른 폰에서 로그인하면 이 빠르기로 말함. null이면 앱 기본값' }
 
     Location:
       type: object
@@ -353,6 +354,7 @@ components:
         image: { type: string, format: byte, nullable: true, description: "JPEG base64, 최대 약 6MB" }
         imageKind: { type: string, enum: [outfit, worn, face, teeth], nullable: true, description: "outfit=내려놓은 옷, worn=입고 선 모습(camera_worn, 뒤쪽 카메라, 뒤집지 않음). face·teeth 사진은 셀카 화면 방향으로 좌우를 맞춰서 보냄 (사진 왼쪽 = 사용자 왼쪽)" }
         outfitMode: { type: string, enum: [laid, worn], nullable: true, description: "사용자가 고른 옷 보여 주는 방식. 앱이 기억한 값. 없으면 첫 옷 추천에서 agent가 물어봄" }
+        allowGpt: { type: boolean, nullable: true, description: "GPT 확인·학습 저장 동의. true면 애매한 얼룩 조각만 GPT로 확인, false면 안 함, 없으면 아직 안 물음(처음 애매한 얼룩에서 agent가 물음)" }
         autoCaptured: { type: boolean, default: true, description: 앱이 구도를 보고 자동으로 보낸 사진이면 true }
         faceLandmarks: { type: object, nullable: true, description: imageKind=face일 때 ML Kit 윤곽점 (mcp-tools.md의 landmarks) }
         faceFrames:
@@ -375,6 +377,7 @@ components:
         sessionId: { type: string }
         speech: { type: string, description: 앱이 그대로 읽어 줄 한국어 }
         next: { type: string, enum: [listen, camera_outfit, camera_worn, camera_face, camera_teeth, done] }
+        gptConsent: { type: boolean, nullable: true, description: "사용자가 이번 턴에 GPT 확인 질문에 답했으면 그 답. 앱이 기억해 다음부터 allowGpt로 보냄" }
         result:
           nullable: true
           type: object

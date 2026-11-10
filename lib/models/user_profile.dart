@@ -1,4 +1,5 @@
 /// 처음 켤 때 받는 동의 내용의 판. 내용(agent_speech.dart consentIntro)을 바꾸면 올린다.
+/// 2026-11-10부터 허용 창을 허용하면 동의로 본다. GPT 확인·학습 저장은 따로 묻는다(GptConsentStore).
 const consentVersion = '2026-11-09';
 
 /// 첫 실행 때 음성으로 받은 사용자 정보와 에이전트 이름.
@@ -16,6 +17,7 @@ class UserProfile {
     this.callName,
     this.accountId,
     this.consent,
+    this.speechRate,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -31,6 +33,7 @@ class UserProfile {
         callName: json['callName'] as String?,
         accountId: json['accountId'] as String?,
         consent: json['consent'] as String?,
+        speechRate: (json['speechRate'] as num?)?.toDouble(),
       );
 
   final String? name;
@@ -51,12 +54,14 @@ class UserProfile {
   /// 로그인한 계정 id. null이면 이 폰에만 저장된 상태다.
   final String? accountId;
 
-  /// 처음 켤 때 받은 동의(권한, 서버 음성 인식, 사진 판단, GPT 확인·학습 저장)의 판([consentVersion]). null이면 아직.
+  /// 처음 켤 때 받은 동의(권한, 서버에서 말·사진 살펴보기)의 판([consentVersion]). null이면 아직.
   final String? consent;
 
-  /// 지금 동의 내용에 동의했는지. 동의했으면 애매한 얼룩을 GPT로 확인해도 된다(allowGpt).
-  /// 동의 내용을 바꾸면 [consentVersion]을 올려 다시 묻는다.
+  /// 지금 동의 내용에 동의했는지. 동의 내용을 바꾸면 [consentVersion]을 올려 다시 묻는다.
   bool get consented => consent == consentVersion;
+
+  /// 말 빠르기(SpeechService.rate). 다른 폰에서 로그인해도 같은 빠르기로 말하려고 계정에 저장한다. null이면 기본값.
+  final double? speechRate;
 
   /// 온보딩을 마쳤는지. 에이전트 이름까지 정해야 끝난 것으로 본다.
   bool get isOnboarded => agentName != null;
@@ -72,6 +77,7 @@ class UserProfile {
     String? callName,
     String? accountId,
     String? consent,
+    double? speechRate,
   }) =>
       UserProfile(
         name: name ?? this.name,
@@ -84,6 +90,7 @@ class UserProfile {
         callName: callName ?? this.callName,
         accountId: accountId ?? this.accountId,
         consent: consent ?? this.consent,
+        speechRate: speechRate ?? this.speechRate,
       );
 
   Map<String, dynamic> toJson() => {
@@ -97,5 +104,6 @@ class UserProfile {
         'callName': callName,
         'accountId': accountId,
         'consent': consent,
+        'speechRate': speechRate,
       };
 }
