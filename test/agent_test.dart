@@ -108,11 +108,8 @@ OnboardingFlow onboardingWith(FakeSpeech speech, List<String?> answers,
         bool consentFirst = true}) =>
     OnboardingFlow(
       speech: speech,
-      // 처음 켤 때 동의부터 받는다.
-      listen: ScriptedListen([
-        if (consentFirst) ...['좋아', '동의해'],
-        ...answers
-      ]),
+      // 처음 켤 때 말 빠르기부터 묻는다(허용하면 동의, 음성 동의는 없음).
+      listen: ScriptedListen([if (consentFirst) '괜찮아', ...answers]),
       profiles: store ?? InMemoryProfileStore(),
       account: account ?? FakeAccount(),
       permissions: permissions,
@@ -177,8 +174,8 @@ void main() {
 
   group('온보딩', () {
     const answers = [
-      '아니요', // 다른 폰에서 쓴 적 없음
       '하늘', '네', // 에이전트 이름
+      '아니요', // 다른 폰에서 쓴 적 없음
       '김민수예요', '1990년 3월 5일', '남자', '회사원이에요', '170', '건너뛰기',
     ];
 
@@ -220,59 +217,62 @@ void main() {
       expect(speech.spoken.where((s) => s.contains('일치할까요')).length, 4);
     });
 
-    test('못 들으면 다시 묻는다', () async {
+    test('이름에 대답이 없으면 심청이로 정한다', () async {
       final speech = FakeSpeech();
-      final profile = await onboardingWith(
-          speech, ['아니요', null, '하늘', '네', ...answers.skip(3), '네']).run();
+      final profile =
+          await onboardingWith(speech, [null, ...answers.skip(2), '네']).run();
 
-      expect(speech.spoken, contains('제가 잘 못 들었어요. $askAgentName'));
-      expect(profile.agentName, '하늘');
+      expect(speech.spoken, contains(keepAgentName));
+      expect(profile.agentName, '심청이');
     });
 
-    test('처음에 동의를 받아 저장하고, 동의하지 않으면 다시 묻는다', () async {
+    test('"좋아"라고 하면 심청이 그대로, 비슷한 이름은 맞는지 묻는다', () async {
+      final keep =
+          await onboardingWith(FakeSpeech(), ['좋아', ...answers.skip(2), '네'])
+              .run();
+      expect(keep.agentName, '심청이');
+
       final speech = FakeSpeech();
-      final store = InMemoryProfileStore();
-      final flow = OnboardingFlow(
-        speech: speech,
-        listen: ScriptedListen(['좋아', '싫어', '동의합니다', ...answers, '네']),
-        profiles: store,
-        account: FakeAccount(),
-      );
-      final profile = await flow.run();
-      expect(speech.spoken, contains(consentRequired));
-      expect(profile.consented, isTrue);
-      expect(parseConsent('동의 안 해'), isFalse);
-      expect(parseConsent('네 동의할게요'), isTrue);
+      final guessed =
+          await onboardingWith(speech, ['신청이', '네', ...answers.skip(2), '네'])
+              .run();
+      expect(speech.spoken, contains('제 이름이 심청이, 맞나요?'));
+      expect(guessed.agentName, '심청이');
     });
 
-    test('인사 한마디 뒤 권한 창, 말 빠르기, 동의 순서로 묻는다', () async {
+    test('허용하면 동의로 보고, 음성으로 동의를 묻지 않는다', () async {
       final speech = FakeSpeech();
       final permissions = FakePermissionService();
-      await onboardingWith(speech, [...answers, '네'], permissions: permissions)
+      final profile = await onboardingWith(speech, [...answers, '네'],
+              permissions: permissions)
           .run();
 
       expect(permissions.requests, 1);
-      expect(speech.spoken.take(3), [
+      expect(profile.consented, isTrue);
+      expect(speech.spoken.take(8), [
         firstGreeting,
+        consentIntro,
         permissionIntro,
+        permissionThanks,
         speedQuestion,
+        askAgentName,
+        '제 이름이 하늘, 맞나요?',
+        '좋아요, 이제 제 이름은 하늘이에요.',
       ]);
-      expect(speech.spoken[4], consentIntro);
-      expect(speech.spoken[5], '동의해 주셔서 고마워요.');
-      expect(speech.spoken[6], startsWith('혹시 다른 폰에서'));
+      expect(speech.spoken[8], startsWith('혹시 다른 폰에서'));
     });
 
     test('"천천히"라고 하면 느리게 바꾸고 다시 묻는다', () async {
       final speech = FakeSpeech();
       final flow = OnboardingFlow(
         speech: speech,
-        listen: ScriptedListen(['너무 빨라 천천히', '좋아', '동의해', ...answers, '네']),
+        listen: ScriptedListen(['너무 빨라 천천히', '괜찮아', ...answers, '네']),
         profiles: InMemoryProfileStore(),
         account: FakeAccount(),
       );
       await flow.run();
       expect(speech.rate, lessThan(SpeechService.speechRate));
-      expect(speech.spoken, contains(startsWith('이 빠르기는 어떠세요?')));
+      expect(speech.spoken, contains(speedChanged));
       expect(parseSpeed('괜찮아요'), 0);
       expect(parseSpeed('더 빠르게'), 1);
       expect(speedCommand('천천히 말해 줘'), -1);
@@ -285,11 +285,12 @@ void main() {
 
     test('마이크를 막으면 들을 수 없다고 알려 준다', () async {
       final speech = FakeSpeech();
-      await onboardingWith(speech, [...answers, '네'],
+      final profile = await onboardingWith(speech, [...answers, '네'],
               permissions: FakePermissionService(canListen: false))
           .run();
 
-      expect(speech.spoken, contains(permissionDeniedListen));
+      expect(speech.spoken.last, permissionDeniedListen);
+      expect(profile.isOnboarded, isFalse);
     });
 
     test('계정에 연결되면 정보를 올린다', () async {
@@ -305,7 +306,7 @@ void main() {
     test('다른 폰에서 쓰던 계정이 있으면 이어서 쓴다', () async {
       final speech = FakeSpeech();
       final store = InMemoryProfileStore();
-      final profile = await onboardingWith(speech, ['네'],
+      final profile = await onboardingWith(speech, ['좋아', '네'],
               store: store,
               account: FakeAccount(
                   id: 'uid-1',
@@ -509,7 +510,7 @@ void main() {
     test('온보딩에서 호칭을 묻는다', () async {
       final speech = FakeSpeech();
       final profile = await onboardingWith(speech, [
-        '아니요', '하늘', '네', //
+        '하늘', '네', '아니요', //
         '이진행이요', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '네',
         '진행 님', '네',
       ]).run();

@@ -106,6 +106,8 @@ class AgentController extends ChangeNotifier {
       profile = await profiles.load();
       if (profile == null || !profile!.isOnboarded) {
         profile = await onboarding.run();
+        // 마이크나 음성 인식을 막아 시작하지 못했다. 다음에 열면 처음부터 다시 묻는다.
+        if (!profile!.isOnboarded) return;
         if (handsFree) {
           await _say('앞으로는 화면을 누르지 않아도 돼요. "$wakeName" 하고 부르면 언제든 대답할게요.');
         }

@@ -204,6 +204,46 @@ void main() {
       expect(bodies.last['outfitMode'], 'worn');
     });
 
+    test('GPT 확인 동의는 답하기 전엔 보내지 않고, 답이 오면 기억해 보낸다', () async {
+      final bodies = <Map<String, dynamic>>[];
+      var answer = true;
+      final client = MockClient((req) async {
+        bodies.add(jsonDecode(req.body) as Map<String, dynamic>);
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({
+            'sessionId': 's_g',
+            'speech': '고마워요.',
+            'next': 'camera_outfit',
+            if (answer) 'gptConsent': true,
+          })),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final store = MemoryTokenStore()
+        ..tokens = GatewayTokens(
+            accessToken: 'a1',
+            refreshToken: 'r1',
+            expiresAt: DateTime.now().add(const Duration(hours: 1)));
+      final consent = MemoryGptConsentStore();
+      final api = GatewayTurnApi(
+          GatewayAuth(
+              baseUrl: Uri.parse('http://gw:8080'),
+              tokens: store,
+              client: client),
+          modes: MemoryOutfitModeStore(),
+          gptConsent: consent);
+
+      final r = await api.say('s_g', '좋아');
+      expect(bodies.first.containsKey('allowGpt'), isFalse);
+      expect(r.gptConsent, isTrue);
+      expect(consent.value, isTrue);
+
+      answer = false;
+      await api.say('s_g', '오늘 날씨');
+      expect(bodies.last['allowGpt'], isTrue);
+    });
+
     test('위치 권한이 없으면 서울(locationFallback=true)로 보낸다', () async {
       final loc = await LocationProvider(read: () async => null).current();
       expect(loc.toJson(),

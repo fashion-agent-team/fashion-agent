@@ -112,6 +112,7 @@ class TurnReply {
     required this.next,
     this.resultType,
     this.outfitMode,
+    this.gptConsent,
   });
 
   factory TurnReply.fromJson(Map<String, dynamic> json) => TurnReply(
@@ -122,6 +123,7 @@ class TurnReply {
             (json['result'] as Map<String, dynamic>?)?['type'] as String?,
         outfitMode: OutfitMode.parse((json['result']
             as Map<String, dynamic>?)?['outfitMode'] as String?),
+        gptConsent: json['gptConsent'] as bool?,
       );
 
   final String sessionId;
@@ -135,6 +137,9 @@ class TurnReply {
 
   /// agent가 정한(사용자가 고른) 옷 보여 주는 방식. 있으면 앱이 기억한다.
   final OutfitMode? outfitMode;
+
+  /// 사용자가 이번에 "더 정확한 AI에게 물어봐도 될까요?"에 답했으면 그 답. 앱이 기억해 다음부터 allowGpt로 보낸다.
+  final bool? gptConsent;
 }
 
 /// `POST /api/v1/agent/turn`. 게이트웨이에 로그인했을 때만 쓴다.
@@ -155,12 +160,13 @@ class GatewayTurnApi implements TurnApi {
   GatewayTurnApi(this.gateway,
       {this.timeout = const Duration(seconds: 40),
       OutfitModeStore? modes,
-      this.allowGpt})
-      : modes = modes ?? LocalOutfitModeStore();
+      GptConsentStore? gptConsent})
+      : modes = modes ?? LocalOutfitModeStore(),
+        gptConsent = gptConsent ?? LocalGptConsentStore();
 
-  /// 사용자가 처음 켤 때 동의했는지. 동의했으면 요청마다 allowGpt=true를 보내고,
-  /// agent는 애매한 얼룩을 그 부분 조각만 GPT로 확인한다(옷 상태 서버 #10).
-  final Future<bool> Function()? allowGpt;
+  /// GPT 확인·학습 저장 동의. 답했으면 요청마다 allowGpt로 보내고(true면 agent가 애매한 얼룩 조각만 GPT로 확인),
+  /// 아직이면 보내지 않는다. 그러면 agent가 처음 애매한 얼룩에서 묻고, 답을 [TurnReply.gptConsent]로 돌려준다.
+  final GptConsentStore gptConsent;
 
   final GatewayAuth gateway;
 
@@ -195,7 +201,8 @@ class GatewayTurnApi implements TurnApi {
           mouthBox: mouthBox));
 
   Future<TurnReply> _post(Map<String, dynamic> body) async {
-    if (await allowGpt?.call() ?? false) body['allowGpt'] = true;
+    final allow = await gptConsent.load();
+    if (allow != null) body['allowGpt'] = allow;
     final json =
         await gateway.sendJson('POST', _path, json: body).timeout(timeout);
     if (json == null) {
@@ -204,6 +211,8 @@ class GatewayTurnApi implements TurnApi {
     final reply = TurnReply.fromJson(json);
     final mode = reply.outfitMode;
     if (mode != null) await modes.save(mode);
+    final answered = reply.gptConsent;
+    if (answered != null) await gptConsent.save(answered);
     return reply;
   }
 }
@@ -296,4 +305,45 @@ String turnErrorSpeech(Object error) {
     return '서버가 답하는 데 너무 오래 걸렸어요. 잠시 뒤에 다시 말씀해 주세요.';
   }
   return '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.';
+}
+
+/// GPT 확인·학습 저장 동의를 폰에 기억한다(2026-11-10 진행 님: 처음 애매한 얼룩이 나올 때 한 번만 묻는다).
+abstract class GptConsentStore {
+  /// 답하지 않았으면 null.
+  Future<bool?> load();
+  Future<void> save(bool allow);
+}
+
+class LocalGptConsentStore implements GptConsentStore {
+  static const _key = 'gpt.consent';
+
+  @override
+  Future<bool?> load() async {
+    try {
+      return (await SharedPreferences.getInstance()).getBool(_key);
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> save(bool allow) async {
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_key, allow);
+    } on Object {
+      // 저장 못 하면 다음에 다시 물어본다.
+    }
+  }
+}
+
+class MemoryGptConsentStore implements GptConsentStore {
+  MemoryGptConsentStore([this.value]);
+
+  bool? value;
+
+  @override
+  Future<bool?> load() async => value;
+
+  @override
+  Future<void> save(bool allow) async => value = allow;
 }

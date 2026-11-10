@@ -1,4 +1,5 @@
 /// 처음 켤 때 받는 동의 내용의 판. 내용(agent_speech.dart consentIntro)을 바꾸면 올린다.
+/// 2026-11-10부터 허용 창을 허용하면 동의로 본다. GPT 확인·학습 저장은 따로 묻는다(GptConsentStore).
 const consentVersion = '2026-11-09';
 
 /// 첫 실행 때 음성으로 받은 사용자 정보와 에이전트 이름.
@@ -51,11 +52,10 @@ class UserProfile {
   /// 로그인한 계정 id. null이면 이 폰에만 저장된 상태다.
   final String? accountId;
 
-  /// 처음 켤 때 받은 동의(권한, 서버 음성 인식, 사진 판단, GPT 확인·학습 저장)의 판([consentVersion]). null이면 아직.
+  /// 처음 켤 때 받은 동의(권한, 서버에서 말·사진 살펴보기)의 판([consentVersion]). null이면 아직.
   final String? consent;
 
-  /// 지금 동의 내용에 동의했는지. 동의했으면 애매한 얼룩을 GPT로 확인해도 된다(allowGpt).
-  /// 동의 내용을 바꾸면 [consentVersion]을 올려 다시 묻는다.
+  /// 지금 동의 내용에 동의했는지. 동의 내용을 바꾸면 [consentVersion]을 올려 다시 묻는다.
   bool get consented => consent == consentVersion;
 
   /// 온보딩을 마쳤는지. 에이전트 이름까지 정해야 끝난 것으로 본다.
