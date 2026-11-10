@@ -287,7 +287,9 @@ class OnboardingFlow {
     for (var round = 0; round < 3; round++) {
       final ok = await _ask(
           '말씀해주신 정보를 읽어 드릴게요. ${summarize(p)} 말씀해주신 정보와 일치할까요?', parseYesNo);
-      if (ok != false) return p;
+      if (ok == true) return p;
+      // 못 알아들었으면 맞다고 치지 않고 다시 묻는다(2026-11-10: 대답 없이 "고마워요"로 넘어갔다).
+      if (ok == null) continue;
 
       final field = await _ask(
           '어느 항목을 고칠까요? 이름, 생년월일, 성별, 직업, 키, 몸무게 중에서 말씀해 주세요.', _Field.match);

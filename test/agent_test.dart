@@ -214,6 +214,12 @@ void main() {
       expect(speech.spoken.where((s) => s.contains('일치할까요')).length, 2);
     });
 
+    test('재확인에 대답을 못 알아들으면 맞다고 치지 않고 다시 묻는다', () async {
+      final speech = FakeSpeech();
+      await onboardingWith(speech, [...answers, '음', '음', '음', '네']).run();
+      expect(speech.spoken.where((s) => s.contains('일치할까요')).length, 4);
+    });
+
     test('못 들으면 다시 묻는다', () async {
       final speech = FakeSpeech();
       final profile = await onboardingWith(
