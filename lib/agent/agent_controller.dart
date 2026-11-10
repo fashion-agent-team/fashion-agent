@@ -12,6 +12,7 @@ import '../services/weather_service.dart';
 import '../styling/weather_rules.dart';
 import 'acknowledge.dart';
 import 'agent_speech.dart';
+import 'answer_parsing.dart';
 import 'command_listener.dart';
 import 'intent_router.dart';
 import 'onboarding_flow.dart';
@@ -290,6 +291,10 @@ class AgentController extends ChangeNotifier {
       await _listenAndHandle();
       return;
     }
+    if (await _speedOrRepeat(text)) {
+      await _say(_nextHint);
+      return;
+    }
     final setting = profile == null ? null : routeSetting(text);
     if (setting != null) {
       await _changeSetting(setting, text);
@@ -353,7 +358,10 @@ class AgentController extends ChangeNotifier {
         _sessionId = null;
         break;
       }
-      final heard = await _hear();
+      var heard = await _hear();
+      while (heard != null && await _speedOrRepeat(heard)) {
+        heard = await _hear();
+      }
       if (heard == null) break;
       if (isHomeCommand(heard)) {
         _sessionId = null;
@@ -447,7 +455,30 @@ class AgentController extends ChangeNotifier {
     }
   }
 
+  /// 마지막으로 한 안내("다시 말해 줘"에 다시 읽는다). "불러 주세요" 같은 다음 안내는 빼고 기억한다.
+  String? _lastAnswer;
+
+  /// "천천히 말해 줘", "빠르게 말해 줘", "다시 말해 줘"면 처리하고 true(2026-11-10 진행 님).
+  Future<bool> _speedOrRepeat(String text) async {
+    final speed = speedCommand(text);
+    if (speed != null) {
+      final changed = await speech.changeRate(speed);
+      final word = speed < 0 ? '천천히' : '빠르게';
+      await _say(changed
+          ? '네, 이제 조금 더 $word 말할게요.'
+          : '지금이 제가 낼 수 있는 ${speed < 0 ? '가장 느린' : '가장 빠른'} 빠르기예요.');
+      return true;
+    }
+    final last = _lastAnswer;
+    if (isRepeatRequest(text) && last != null) {
+      await _say(last);
+      return true;
+    }
+    return false;
+  }
+
   Future<void> _say(String text) async {
+    if (text != _nextHint && !text.startsWith('네, 이제 조금 더')) _lastAnswer = text;
     message = text;
     _setPhase(AgentPhase.speaking);
     notifyListeners();

@@ -5,6 +5,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cloud_tts.dart';
 import 'gateway_auth.dart' show GatewayException;
@@ -33,12 +34,50 @@ class SpeechService {
       _tts.setSharedInstance(true);
     }
     _tts.setVolume(1.0);
-    // 리허설 때 0.58로 올렸다가, 같은 날 새 목소리로 들어 보니 너무 빠르다고 해서(진행 님) 보통 속도로 되돌린다.
-    _tts.setSpeechRate(speechRate);
+    _tts.setSpeechRate(_rate);
+    unawaited(_loadRate());
   }
 
-  /// 읽는 속도. 0.5가 보통, 클수록 빠르다.
-  static const speechRate = 0.5;
+  /// 처음 읽는 속도. 0.5가 폰의 보통 속도, 클수록 빠르다.
+  ///
+  /// 2026-11-10 진행 님: 0.5도 빨라서 시각장애인은 한 번 놓치면 이해하기 어렵다. 그래서 더 느리게 시작하고,
+  /// 첫 실행 때 빠르기를 묻고, "천천히 말해 줘"/"빠르게 말해 줘"로 바꿀 수 있게 한다([changeRate]).
+  static const speechRate = 0.42;
+
+  /// 한 번에 바꾸는 폭과 바꿀 수 있는 범위.
+  static const rateStep = 0.06, minRate = 0.3, maxRate = 0.6;
+
+  static const _rateKey = 'tts.rate';
+  double _rate = speechRate;
+
+  /// 지금 읽는 속도.
+  double get rate => _rate;
+
+  Future<void> _loadRate() async {
+    try {
+      final saved = (await SharedPreferences.getInstance()).getDouble(_rateKey);
+      if (saved != null) {
+        _rate = saved.clamp(minRate, maxRate);
+        await _tts.setSpeechRate(_rate);
+      }
+    } on Object catch (e) {
+      debugPrint('말 속도 불러오기 실패: $e');
+    }
+  }
+
+  /// 말 속도를 [steps]칸만큼 바꾸고 기억한다(음수면 느리게). 더 바꿀 수 없으면 false.
+  Future<bool> changeRate(int steps) async {
+    final next = (_rate + steps * rateStep).clamp(minRate, maxRate);
+    if ((next - _rate).abs() < 0.001) return false;
+    _rate = next;
+    await _tts.setSpeechRate(_rate);
+    try {
+      await (await SharedPreferences.getInstance()).setDouble(_rateKey, _rate);
+    } on Object catch (e) {
+      debugPrint('말 속도 저장 실패: $e');
+    }
+    return true;
+  }
 
   /// 구글 목소리를 받는 곳. null이면 언제나 폰 목소리.
   TtsApi? cloud;
@@ -279,8 +318,20 @@ class SpeechService {
     }
     if (_deviceVoiceSet == null) await _tts.setLanguage('ko-KR');
     await _loudPlayback();
-    await _tts.speak(text);
+    // 문장 사이에 잠깐 쉰다. 한 번에 이어 읽으면 놓친 말을 따라잡기 어렵다(2026-11-10 진행 님).
+    final gen = _generation;
+    final sentences = splitSentences(text);
+    for (var i = 0; i < sentences.length; i++) {
+      if (gen != _generation) return;
+      await _tts.speak(sentences[i]);
+      if (i < sentences.length - 1 && gen == _generation) {
+        await Future<void>.delayed(sentencePause);
+      }
+    }
   }
+
+  /// 문장 사이에 쉬는 시간.
+  static const sentencePause = Duration(milliseconds: 350);
 
   Future<void> _play(Uint8List bytes, {String? mimeType}) async {
     final player = _player ??= AudioPlayer()..setReleaseMode(ReleaseMode.stop);

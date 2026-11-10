@@ -109,7 +109,10 @@ OnboardingFlow onboardingWith(FakeSpeech speech, List<String?> answers,
     OnboardingFlow(
       speech: speech,
       // 처음 켤 때 동의부터 받는다.
-      listen: ScriptedListen([if (consentFirst) '동의해', ...answers]),
+      listen: ScriptedListen([
+        if (consentFirst) ...['좋아', '동의해'],
+        ...answers
+      ]),
       profiles: store ?? InMemoryProfileStore(),
       account: account ?? FakeAccount(),
       permissions: permissions,
@@ -225,7 +228,7 @@ void main() {
       final store = InMemoryProfileStore();
       final flow = OnboardingFlow(
         speech: speech,
-        listen: ScriptedListen(['싫어', '동의합니다', ...answers, '네']),
+        listen: ScriptedListen(['좋아', '싫어', '동의합니다', ...answers, '네']),
         profiles: store,
         account: FakeAccount(),
       );
@@ -236,20 +239,42 @@ void main() {
       expect(parseConsent('네 동의할게요'), isTrue);
     });
 
-    test('인사 뒤 첫 질문 전에 권한 창을 미리 알리고 한 번에 띄운다', () async {
+    test('인사 한마디 뒤 권한 창, 말 빠르기, 동의 순서로 묻는다', () async {
       final speech = FakeSpeech();
       final permissions = FakePermissionService();
       await onboardingWith(speech, [...answers, '네'], permissions: permissions)
           .run();
 
       expect(permissions.requests, 1);
-      expect(speech.spoken.take(4), [
+      expect(speech.spoken.take(3), [
         firstGreeting,
-        consentIntro,
         permissionIntro,
-        '동의해 주셔서 고마워요.',
+        speedQuestion,
       ]);
-      expect(speech.spoken[4], startsWith('혹시 다른 폰에서'));
+      expect(speech.spoken[4], consentIntro);
+      expect(speech.spoken[5], '동의해 주셔서 고마워요.');
+      expect(speech.spoken[6], startsWith('혹시 다른 폰에서'));
+    });
+
+    test('"천천히"라고 하면 느리게 바꾸고 다시 묻는다', () async {
+      final speech = FakeSpeech();
+      final flow = OnboardingFlow(
+        speech: speech,
+        listen: ScriptedListen(['너무 빨라 천천히', '좋아', '동의해', ...answers, '네']),
+        profiles: InMemoryProfileStore(),
+        account: FakeAccount(),
+      );
+      await flow.run();
+      expect(speech.rate, lessThan(SpeechService.speechRate));
+      expect(speech.spoken, contains(startsWith('이 빠르기는 어떠세요?')));
+      expect(parseSpeed('괜찮아요'), 0);
+      expect(parseSpeed('더 빠르게'), 1);
+      expect(speedCommand('천천히 말해 줘'), -1);
+      expect(speedCommand('말 좀 빠르게 해 줘'), 1);
+      expect(speedCommand('빨리 옷 추천해 줘'), isNull);
+      expect(isRepeatRequest('다시 말해 줘'), isTrue);
+      expect(isRepeatRequest('뭐라고?'), isTrue);
+      expect(isRepeatRequest('다시 찍어 줘'), isFalse);
     });
 
     test('마이크를 막으면 들을 수 없다고 알려 준다', () async {

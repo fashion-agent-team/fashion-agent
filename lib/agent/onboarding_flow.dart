@@ -39,7 +39,11 @@ class OnboardingFlow {
 
   Future<UserProfile> run() async {
     await _say(firstGreeting);
-    final consent = await askConsent();
+    // 빠르기를 말로 물으려면 마이크가 있어야 해서 허용 창을 먼저 띄운다.
+    final canListen = await _requestPermissions();
+    if (canListen) await askSpeed();
+    final consent =
+        canListen ? await askConsent(requestPermissions: false) : null;
 
     final restored = await _restoreFromOtherPhone();
     if (restored != null) {
@@ -75,17 +79,9 @@ class OnboardingFlow {
   /// 2026-11-09 진행 님: 앱을 처음 깔면 동의할 것(권한, 서버 음성 인식, 사진 판단, GPT 확인·학습 저장)을
   /// 한 번에 전부 띄워 동의받고 시작한다. 말로 답하려면 마이크가 있어야 해서 권한 창을 먼저 띄운다.
   /// 동의하면 동의 판([consentVersion]), 끝내 동의하지 않거나 마이크를 막으면 null.
-  Future<String?> askConsent() async {
+  Future<String?> askConsent({bool requestPermissions = true}) async {
     await _say(consentIntro);
-    final p = permissions;
-    if (p != null) {
-      await _say(permissionIntro);
-      final result = await p.requestAll();
-      if (!result.canListen) {
-        await _say(permissionDeniedListen);
-        return null;
-      }
-    }
+    if (requestPermissions && !await _requestPermissions()) return null;
     for (var i = 0; i <= retries; i++) {
       var heard = await listen.listen(waitFor: const Duration(seconds: 10));
       // 2026-11-10 진행 님: "동의해"라고 하지 않았는데 고맙다고 했다. 폰이 제 안내 끝("…라고 해 주세요")을
@@ -106,6 +102,38 @@ class OnboardingFlow {
     }
     await _say(consentDeclined);
     return null;
+  }
+
+  /// 허용 창을 띄운다. 마이크나 음성 인식을 막으면 안내하고 false.
+  Future<bool> _requestPermissions() async {
+    final p = permissions;
+    if (p == null) return true;
+    await _say(permissionIntro);
+    final result = await p.requestAll();
+    if (result.canListen) return true;
+    await _say(permissionDeniedListen);
+    return false;
+  }
+
+  /// 말 빠르기를 묻고, "천천히"/"빠르게"면 바꿔서 다시 묻는다. "좋아"거나 대답이 없으면 지금 빠르기로 간다.
+  Future<void> askSpeed() async {
+    var prompt = speedQuestion;
+    for (var i = 0; i < 5; i++) {
+      await _say(prompt);
+      final heard = await listen.listen(waitFor: const Duration(seconds: 10));
+      final answer = heard == null ? null : parseSpeed(heard);
+      if (answer == null) {
+        if (heard == null || i >= retries) break;
+        prompt = '제가 잘 못 알아들었어요. $speedQuestion';
+        continue;
+      }
+      if (answer == 0) break;
+      final changed = await speech.changeRate(answer);
+      prompt = changed
+          ? '이 빠르기는 어떠세요? 괜찮으면 "좋아"라고 해 주세요.'
+          : '이게 제가 낼 수 있는 ${answer < 0 ? '가장 느린' : '가장 빠른'} 빠르기예요. 괜찮으면 "좋아"라고 해 주세요.';
+    }
+    await _say('좋아요, 이 빠르기로 말할게요. 나중에도 "천천히 말해 줘"라고 하시면 바꿀 수 있어요.');
   }
 
   Future<UserProfile?> _restoreFromOtherPhone() async {
