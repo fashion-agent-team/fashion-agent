@@ -211,7 +211,12 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ### `closet_save`
 옷 추천을 마칠 때("이걸로 할게") agent가 2단계에서 본 옷을 모아 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다: 종류·색 계열이 같고, 임베딩 유사도 0.90 이상이고, 이름이 같은 묶음(니트=스웨터, 운동화=스니커즈 …)일 때. e5는 같은 색 비슷한 옷(니트와 가디건)을 유사도만으로 못 가려서 이름 조건을 더했습니다(mcp-closet `docs/DEVELOPMENT.md`).
 
-입력 `{ "userId": "…", "garments": [Garment, ...] }`
+같은 색 같은 이름의 옷이 여러 벌일 수 있어서 이럴 때는 합치지 않습니다.
+- 톤이 밝음↔어두움으로 다르거나, 둘 다 무늬가 적혀 있는데 다를 때(무지↔스트라이프, 스트라이프↔체크). 무늬를 모르면(null) 다르다고 보지 않고, 합칠 때 전에 본 무늬를 남깁니다.
+- 한 번에 넘긴 옷끼리(한 사진에 같이 있으면 다른 옷), 그리고 두 벌을 같은 옛 옷 하나에 합치지 않습니다.
+- `forceNewIds`에 넣은 입력 id. 합쳤다고 알렸는데 사용자가 "그건 다른 옷이에요"라고 하면 agent가 그 옷을 이 목록에 넣어 다시 부릅니다.
+
+입력 `{ "userId": "…", "garments": [Garment, ...], "forceNewIds": ["g2"] }` (`forceNewIds`는 선택)
 
 출력 `{ "saved": [{ "inputId": "g1", "garmentId": "c_17", "isNew": false }] }`
 
@@ -262,6 +267,27 @@ RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(�
       { "garmentId": "c_05", "category": "bottom", "name": "슬랙스", "colorName": "검은색", "formality": "formal" } ] } ] }
 ```
 한 날 안의 옷은 겉옷·상의·원피스·하의·신발 순입니다. 기록이 없으면 `{ "outfits": [] }`. 남의 옷 `garmentId`는 `not_found`. 하루에 두 번 갈아입어도 한 벌로 묶입니다(표를 바꾸지 않으려고 `wears`만 씀).
+
+### `closet_list`
+옷장에 있는 옷 목록입니다. 개별 기능("내 옷장에 뭐 있어?", "바지 뭐 있지?")에 쓰고, 지울 옷을 사용자와 확인할 때도 씁니다.
+
+입력 `{ "userId": "…", "category": "bottom", "limit": 50 }` (`category`·`limit` 선택, `limit` 기본 50)
+
+출력
+```json
+{ "garments": [
+    { "garmentId": "c_21", "category": "outer", "name": "자켓", "colorName": "남색", "formality": "smart",
+      "lastWorn": "2026-10-28", "wearCount": 3 } ],
+  "total": 14 }
+```
+겉옷·상의·원피스·하의·신발 순, 같은 종류는 최근에 본 옷부터. `lastWorn`은 입은 기록이 없으면 null. `total`은 전체(또는 그 종류) 벌 수. 모르는 `category`는 `bad_request`.
+
+### `closet_remove`
+옷을 지웁니다(버린 옷, 잘못 저장된 옷). 되돌릴 수 없고 그 옷의 입은 날 기록도 함께 지워져 `closet_outfits`에서 빠집니다. agent는 어떤 옷인지 읽어 주고 사용자가 "지워"라고 한 뒤에만 부릅니다.
+
+입력 `{ "userId": "…", "garmentIds": ["c_17"] }` → 출력 `{ "removed": 1 }`
+
+남의 옷이나 없는 id가 섞이면 `not_found`이고 아무것도 지우지 않습니다.
 
 ## mcp-helper
 
