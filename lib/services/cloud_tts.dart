@@ -25,7 +25,7 @@ class GatewayTtsApi implements TtsApi {
   final Duration timeout;
 
   @override
-  Future<bool> get available => gateway.isSignedIn;
+  Future<bool> get available => gateway.ensureSignedIn();
 
   /// 게이트웨이가 알려 준 엔진(X-Tts-Engine: cloud | gemini). 처음에는 모른다.
   String? engine;

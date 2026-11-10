@@ -325,6 +325,15 @@ void main() {
       expect(speech.spoken.last, startsWith('옷 다 봤어요.'));
     });
 
+    test('서버 없이 옷 검사를 말하면 예전 프록시로 보내지 않고 서버가 필요하다고 말한다', () async {
+      final speech = FakeSpeech();
+      final agent = agentWith(speech, ['옷 검사해 줘'],
+          profile: const UserProfile(agentName: '하늘', consent: consentVersion));
+      await agent.start();
+
+      expect(speech.spoken, contains(noServerOutfitSpeech));
+    });
+
     test('준비 중인 기능은 그렇다고 말한다', () async {
       final speech = FakeSpeech();
       final agent = agentWith(speech, ['얼굴 좀 봐 줘'],

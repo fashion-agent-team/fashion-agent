@@ -19,7 +19,7 @@ class AgentScreen extends StatefulWidget {
   const AgentScreen(
       {super.key,
       required this.agent,
-      required this.outfitCheck,
+      this.outfitCheck,
       this.cameraTurn,
       this.heardNow});
 
@@ -27,7 +27,9 @@ class AgentScreen extends StatefulWidget {
 
   /// 지금 듣고 있는 말(중간 결과). 화면에 보여 준다.
   final ValueListenable<String>? heardNow;
-  final SessionController outfitCheck;
+
+  /// 서버 없이 도는 옷 검사 화면(데모용). null이면 옷 검사는 서버 대화로만 한다.
+  final SessionController? outfitCheck;
 
   /// agent와 대화할 때 쓰는 카메라. 게이트웨이를 쓰지 않으면 null.
   final CameraTurnController? cameraTurn;
@@ -44,13 +46,13 @@ class _AgentScreenState extends State<AgentScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _keepAwake(true);
-    _a.openOutfitCheck = _openOutfitCheck;
+    if (widget.outfitCheck != null) _a.openOutfitCheck = _openOutfitCheck;
     if (widget.cameraTurn != null) _a.openCamera = _openCamera;
     WidgetsBinding.instance.addPostFrameCallback((_) => _a.start());
   }
 
   Future<void> _openOutfitCheck() async {
-    final session = widget.outfitCheck;
+    final session = widget.outfitCheck!;
     final navigator = Navigator.of(context);
     session.onFinished = navigator.pop;
     await navigator.push(MaterialPageRoute<void>(

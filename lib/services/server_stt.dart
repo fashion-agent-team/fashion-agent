@@ -36,7 +36,7 @@ class GatewayServerStt implements ServerStt {
   @override
   Future<String> transcribe(
       Uint8List audio, String mimeType, String hint) async {
-    if (!await gateway.isSignedIn) {
+    if (!await gateway.ensureSignedIn()) {
       throw GatewayException(401, 'unauthorized', '로그인하지 않았어요');
     }
     final res = await gateway.send('POST', '/api/v1/stt', json: {

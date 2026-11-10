@@ -405,7 +405,8 @@ class AgentController extends ChangeNotifier {
       case Intent.outfitCheck:
         final open = openOutfitCheck;
         if (open == null) {
-          await _say('옷 검사 화면을 열 수 없어요.');
+          await _say(noServerOutfitSpeech);
+          await _say(_nextHint);
           return;
         }
         await _say('좋아요, 옷 같이 볼게요.');
