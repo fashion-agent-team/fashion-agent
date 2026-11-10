@@ -65,6 +65,17 @@ class SpeechService {
     }
   }
 
+  /// 계정에 저장된 빠르기로 맞춘다(다른 폰에서 로그인했을 때).
+  Future<void> setRate(double rate) async {
+    _rate = rate.clamp(minRate, maxRate);
+    await _tts.setSpeechRate(_rate);
+    try {
+      await (await SharedPreferences.getInstance()).setDouble(_rateKey, _rate);
+    } on Object catch (e) {
+      debugPrint('말 속도 저장 실패: $e');
+    }
+  }
+
   /// 말 속도를 [steps]칸만큼 바꾸고 기억한다(음수면 느리게). 더 바꿀 수 없으면 false.
   Future<bool> changeRate(int steps) async {
     final next = (_rate + steps * rateStep).clamp(minRate, maxRate);

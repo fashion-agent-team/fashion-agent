@@ -41,6 +41,10 @@ mixin FakeSpeechExtras implements SpeechService {
   double rate = SpeechService.speechRate;
 
   @override
+  Future<void> setRate(double value) async =>
+      rate = value.clamp(SpeechService.minRate, SpeechService.maxRate);
+
+  @override
   Future<bool> changeRate(int steps) async {
     final next = (rate + steps * SpeechService.rateStep)
         .clamp(SpeechService.minRate, SpeechService.maxRate);

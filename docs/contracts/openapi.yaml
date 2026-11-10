@@ -336,6 +336,7 @@ components:
         weightKg: { type: number, nullable: true }
         agentName: { type: string, nullable: true, description: null이면 온보딩 안 함 }
         callName: { type: string, nullable: true, description: '에이전트가 사용자를 부르는 말(호칭). 예: "진행 님". null이면 따로 부르지 않음' }
+        speechRate: { type: number, nullable: true, minimum: 0.1, maximum: 1.0, description: '앱이 읽어 주는 말 빠르기(iOS 0.5가 보통, 앱 기본 0.42). 다른 폰에서 로그인하면 이 빠르기로 말함. null이면 앱 기본값' }
 
     Location:
       type: object

@@ -17,6 +17,7 @@ class UserProfile {
     this.callName,
     this.accountId,
     this.consent,
+    this.speechRate,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -32,6 +33,7 @@ class UserProfile {
         callName: json['callName'] as String?,
         accountId: json['accountId'] as String?,
         consent: json['consent'] as String?,
+        speechRate: (json['speechRate'] as num?)?.toDouble(),
       );
 
   final String? name;
@@ -58,6 +60,9 @@ class UserProfile {
   /// 지금 동의 내용에 동의했는지. 동의 내용을 바꾸면 [consentVersion]을 올려 다시 묻는다.
   bool get consented => consent == consentVersion;
 
+  /// 말 빠르기(SpeechService.rate). 다른 폰에서 로그인해도 같은 빠르기로 말하려고 계정에 저장한다. null이면 기본값.
+  final double? speechRate;
+
   /// 온보딩을 마쳤는지. 에이전트 이름까지 정해야 끝난 것으로 본다.
   bool get isOnboarded => agentName != null;
 
@@ -72,6 +77,7 @@ class UserProfile {
     String? callName,
     String? accountId,
     String? consent,
+    double? speechRate,
   }) =>
       UserProfile(
         name: name ?? this.name,
@@ -84,6 +90,7 @@ class UserProfile {
         callName: callName ?? this.callName,
         accountId: accountId ?? this.accountId,
         consent: consent ?? this.consent,
+        speechRate: speechRate ?? this.speechRate,
       );
 
   Map<String, dynamic> toJson() => {
@@ -97,5 +104,6 @@ class UserProfile {
         'callName': callName,
         'accountId': accountId,
         'consent': consent,
+        'speechRate': speechRate,
       };
 }

@@ -93,6 +93,7 @@ Map<String, dynamic> profileToGateway(UserProfile p) => {
       'weightKg': p.weightKg,
       'agentName': p.agentName,
       'callName': p.callName,
+      'speechRate': p.speechRate,
     };
 
 @visibleForTesting

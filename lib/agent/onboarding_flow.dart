@@ -11,8 +11,8 @@ import 'wake_word.dart';
 
 /// 처음 설치했을 때의 음성 대화. 버튼 없이 묻고 듣기만 한다.
 ///
-/// 순서: 인사 → 권한 창(마이크·음성 인식·카메라·위치를 한 번에) → 다른 폰에서 쓰던 계정 확인 → 에이전트 이름 짓기 → 사용자 정보 → 재확인
-/// → 계정 연결 → 기능 설명.
+/// 순서: 인사 → 허용 창(마이크·음성 인식·카메라·위치를 한 번에, 허용하면 동의) → 구글 로그인
+/// → 전에 쓴 정보가 있으면 말 빠르기까지 불러와 바로 시작, 없으면 말 빠르기 → 에이전트 이름 → 사용자 정보 → 재확인 → 호칭 → 기능 설명.
 class OnboardingFlow {
   OnboardingFlow({
     required this.speech,
@@ -38,21 +38,31 @@ class OnboardingFlow {
   static const retries = 2;
 
   Future<UserProfile> run() async {
-    // 2026-11-10 진행 님 순서: 인사 → 허용(허용하면 동의) → 말 속도 → 이름.
+    // 2026-11-10 진행 님 순서: 인사 → 허용(허용하면 동의) → 구글 로그인
+    // → 전에 썼으면 이름·정보·말 빠르기를 불러와 묻지 않고 바로 시작(옷장·일정은 서버에 계정별로 있다)
+    // → 처음이면 말 빠르기 → 이름 → 정보.
+    // "다른 폰에서 쓴 적 있나요?"는 묻지 않는다. 로그인하면 서버에 정보가 있는지로 안다.
     await _say(firstGreeting);
     final consent = await askConsent();
     if (consent == null) return const UserProfile();
-    await askSpeed();
 
-    final agentName = await _askFirstAgentName();
-    final restored = await _restoreFromOtherPhone();
-    if (restored != null) {
-      final withConsent = restored.copyWith(consent: consent);
-      await profiles.save(withConsent);
-      return withConsent;
+    final id = await _signIn();
+    final saved = id == null ? null : await account.restore(id);
+    if (saved != null && saved.isOnboarded) {
+      final rate = saved.speechRate;
+      if (rate != null) await speech.setRate(rate);
+      final restored = saved.copyWith(accountId: id, consent: consent);
+      await profiles.save(restored);
+      await _say(restoredAccount);
+      await _say(
+          returningGreeting(restored.agentName!, callName: restored.callName));
+      return restored;
     }
 
-    var profile = UserProfile(agentName: agentName, consent: consent);
+    await askSpeed();
+    final agentName = await _askFirstAgentName();
+    var profile =
+        UserProfile(agentName: agentName, consent: consent, accountId: id);
     await _say('더 잘 챙겨 드리고 싶어서 몇 가지만 여쭤볼게요. '
         '말하기 싫은 건 건너뛰기라고 하시면 돼요. 전혀 괜찮아요.');
 
@@ -64,7 +74,8 @@ class OnboardingFlow {
     if (call != null) profile = profile.copyWith(callName: call);
     await _say('알려 주셔서 고마워요. 이제 더 잘 맞춰서 도와드릴게요.');
 
-    profile = await _connectAccount(profile);
+    profile = profile.copyWith(speechRate: speech.rate);
+    if (id != null) await account.upload(id, profile);
     await profiles.save(profile);
 
     await _say('$featureIntro $homeHint $askFeature');
@@ -135,25 +146,6 @@ class OnboardingFlow {
         RegExp(r'이대로|그대로').hasMatch(t) ||
         t == firstAgentName ||
         t.startsWith('$firstAgentName좋');
-  }
-
-  Future<UserProfile?> _restoreFromOtherPhone() async {
-    final usedBefore =
-        await _ask('혹시 다른 폰에서 저를 쓰신 적이 있나요? 네 또는 아니요로 말씀해 주세요.', parseYesNo);
-    if (usedBefore != true) return null;
-
-    await _say('쓰시던 계정으로 로그인할게요. $signInGuide');
-    final id = await account.signIn();
-    final saved = id == null ? null : await account.restore(id);
-    if (saved == null || !saved.isOnboarded) {
-      await _say('이전 정보를 찾지 못했어요. 처음부터 함께 정해 볼게요.');
-      return null;
-    }
-    final profile = saved.copyWith(accountId: id);
-    await profiles.save(profile);
-    await _say(
-        '다시 만나서 정말 반가워요. 저는 ${agentNameWithIda(profile.agentName!)}. $askFeature');
-    return profile;
   }
 
   /// 이름을 듣고 맞는지 되묻는다. [first]가 있으면 묻지 않고 그 이름부터 확인한다. 끝내 못 정하면 null.
@@ -292,17 +284,12 @@ class OnboardingFlow {
     return p;
   }
 
-  Future<UserProfile> _connectAccount(UserProfile p) async {
-    await _say('폰을 바꿔도 이어서 쓸 수 있게 계정에 연결할게요. $signInGuide');
+  /// 구글로 로그인한다. 취소하거나 안 되면 이 폰에만 저장하고 null.
+  Future<String?> _signIn() async {
+    await _say('$signInIntro $signInGuide');
     final id = await account.signIn();
-    if (id == null) {
-      await _say('지금은 계정 연결 없이 이 폰에만 저장할게요.');
-      return p;
-    }
-    final linked = p.copyWith(accountId: id);
-    await account.upload(id, linked);
-    await _say('계정에 연결했어요.');
-    return linked;
+    if (id == null) await _say(signInSkipped);
+    return id;
   }
 
   /// [question]을 읽고 답을 듣는다. 못 알아들으면 [retries]번 더 묻고, 그래도 안 되면 null.

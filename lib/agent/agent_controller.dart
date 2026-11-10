@@ -465,6 +465,7 @@ class AgentController extends ChangeNotifier {
     final speed = speedCommand(text);
     if (speed != null) {
       final changed = await speech.changeRate(speed);
+      if (changed) unawaited(_saveRate());
       final word = speed < 0 ? '천천히' : '빠르게';
       await _say(changed
           ? '네, 이제 조금 더 $word 말할게요.'
@@ -477,6 +478,22 @@ class AgentController extends ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  /// 바꾼 말 빠르기를 정보에 넣어 폰과 계정에 저장한다(다른 폰에서도 같은 빠르기).
+  Future<void> _saveRate() async {
+    final p = profile;
+    if (p == null || !p.isOnboarded) return;
+    final after = p.copyWith(speechRate: speech.rate);
+    profile = after;
+    await profiles.save(after);
+    final id = after.accountId;
+    if (id == null) return;
+    try {
+      await onboarding.account.upload(id, after);
+    } catch (_) {
+      // 폰에는 저장했다.
+    }
   }
 
   Future<void> _say(String text) async {

@@ -175,7 +175,6 @@ void main() {
   group('온보딩', () {
     const answers = [
       '하늘', '네', // 에이전트 이름
-      '아니요', // 다른 폰에서 쓴 적 없음
       '김민수예요', '1990년 3월 5일', '남자', '회사원이에요', '170', '건너뛰기',
     ];
 
@@ -254,12 +253,12 @@ void main() {
         consentIntro,
         permissionIntro,
         permissionThanks,
+        '$signInIntro $signInGuide',
+        signInSkipped,
         speedQuestion,
         askAgentName,
-        '제 이름이 하늘, 맞나요?',
-        '좋아요, 이제 제 이름은 하늘이에요.',
       ]);
-      expect(speech.spoken[8], startsWith('혹시 다른 폰에서'));
+      expect(speech.spoken, isNot(contains(startsWith('혹시 다른 폰에서'))));
     });
 
     test('"천천히"라고 하면 느리게 바꾸고 다시 묻는다', () async {
@@ -303,20 +302,25 @@ void main() {
       expect(account.uploaded?.agentName, '하늘');
     });
 
-    test('다른 폰에서 쓰던 계정이 있으면 이어서 쓴다', () async {
+    test('로그인한 계정에 전에 쓴 정보가 있으면 묻지 않고 불러와 바로 시작한다', () async {
       final speech = FakeSpeech();
       final store = InMemoryProfileStore();
-      final profile = await onboardingWith(speech, ['좋아', '네'],
+      final profile = await onboardingWith(speech, const [],
               store: store,
               account: FakeAccount(
                   id: 'uid-1',
                   saved: const UserProfile(
-                      name: '김민수', agentName: '하늘', consent: consentVersion)))
+                      name: '김민수', agentName: '하늘', speechRate: 0.36)))
           .run();
 
       expect(profile.agentName, '하늘');
+      expect(profile.consented, isTrue);
       expect(store.profile?.accountId, 'uid-1');
-      expect(speech.spoken.last, startsWith('다시 만나서 정말 반가워요. 저는 하늘이에요.'));
+      expect(speech.rate, 0.36);
+      expect(speech.spoken, contains(restoredAccount));
+      expect(speech.spoken, isNot(contains(speedQuestion)));
+      expect(speech.spoken, isNot(contains(askAgentName)));
+      expect(speech.spoken.last, returningGreeting('하늘'));
     });
   });
 
@@ -510,7 +514,7 @@ void main() {
     test('온보딩에서 호칭을 묻는다', () async {
       final speech = FakeSpeech();
       final profile = await onboardingWith(speech, [
-        '하늘', '네', '아니요', //
+        '하늘', '네', //
         '이진행이요', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '네',
         '진행 님', '네',
       ]).run();
