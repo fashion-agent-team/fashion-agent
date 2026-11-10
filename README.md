@@ -68,7 +68,7 @@
 - 음성 안내: flutter_tts / 음성 인식: speech_to_text (iOS Speech, 한국어)
 - 카메라: camera (이미지 스트림) + ML Kit 물체 인식으로 구도 실시간 안내·자동 전송 (예정)
 - 날씨: Open-Meteo (API 키 없음)
-- 옷 분석: 지금은 비전 LLM (앱 → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) 서버 → Gemini). 자체 학습 모델로 바꾸는 중이고, 예비 서버의 Gemini도 GPT로 옮길 예정
+- 옷 분석: 앱 → 게이트웨이 → agent → [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state)(자체 학습 모델, 애매할 때만 얼룩 조각을 GPT로). 예전 Gemini 프록시(Cloudflare Worker)는 2026-11-10에 앱에서 뺐음
 - 저장: shared_preferences (옷 설명만, 사진은 저장 안 함)
 - 백엔드 언어: **Java** (2026-11-04 확정)
 - API Gateway: **Spring Cloud Gateway** (2026-11-04 확정)
@@ -101,10 +101,10 @@ git clone https://github.com/fashion-agent-team/fashion-agent.git
 cd fashion-agent
 git checkout develop
 flutter pub get
-flutter run                                  # 배포된 비전 서버(Gemini)로 실행
-flutter run --dart-define=FAKE_VISION=true   # 서버 없이 예시 응답으로 실행
+flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080   # 게이트웨이로 실행 (옷 검사·얼굴 확인은 서버가 있어야 함)
+flutter run                                  # 서버 없이 폰 안 기능(날씨 등)만
+flutter run --dart-define=FAKE_VISION=true   # 서버 없이 예시 응답으로 옷 검사 화면 돌려 보기
 flutter run --dart-define=FAKE_CAMERA=true   # 카메라 없는 시뮬레이터
-flutter run --dart-define=VISION_URL=http://localhost:8787   # 로컬 서버
 flutter test
 ```
 

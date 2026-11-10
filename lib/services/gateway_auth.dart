@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -99,11 +101,20 @@ class GatewayAuth {
     required this.tokens,
     http.Client? client,
     DateTime Function()? now,
+    this.devDeviceId,
   })  : _client = client ?? http.Client(),
         _now = now ?? DateTime.now;
 
   final Uri baseUrl;
   final TokenStore tokens;
+
+  /// 구글 로그인을 안 했을 때 개발용 로그인(`POST /api/v1/auth/dev`)에 쓸 이 폰의 id.
+  /// null이면 개발용 로그인을 하지 않는다. 게이트웨이가 `APP_ENV=dev`일 때만 받아 준다.
+  final Future<String> Function()? devDeviceId;
+
+  /// 개발용 로그인을 게이트웨이가 거절했으면(발표 빌드 등) 이번 실행에서는 다시 묻지 않는다.
+  bool _devRefused = false;
+  Future<bool>? _devLoggingIn;
   final http.Client _client;
   final DateTime Function() _now;
 
@@ -116,6 +127,40 @@ class GatewayAuth {
   Uri _url(String path) => baseUrl.resolve(path);
 
   Future<bool> get isSignedIn async => await tokens.read() != null;
+
+  /// 토큰이 있으면 true. 없으면 개발용 로그인을 해 본다.
+  ///
+  /// 2026-11-09 정지원: 로그인 안 했을 때도 로그인 상태와 똑같이 서버(옷 상태 모델 등)를 쓴다.
+  /// 그래서 구글 로그인 전이거나 Firebase가 안 될 때는 이 폰의 id로 개발용 로그인을 한다.
+  Future<bool> ensureSignedIn() async {
+    if (await isSignedIn) return true;
+    final id = devDeviceId;
+    if (id == null || _devRefused) return false;
+    return _devLoggingIn ??=
+        _devLogin(id).whenComplete(() => _devLoggingIn = null);
+  }
+
+  Future<bool> _devLogin(Future<String> Function() deviceId) async {
+    try {
+      final res = await _client.post(
+        _url('/api/v1/auth/dev'),
+        headers: {'content-type': 'application/json'},
+        body: jsonEncode({'deviceId': await deviceId()}),
+      );
+      await tokens.write(_tokensFrom(_decode(res)));
+      return true;
+    } on GatewayException catch (e) {
+      // 404·403 등: 게이트웨이가 개발용 로그인을 꺼 두었다. 401·5xx는 다음에 다시 해 본다.
+      if (e.status >= 400 && e.status < 500 && e.status != 429) {
+        _devRefused = true;
+      }
+      debugPrint('개발용 로그인 실패: $e');
+      return false;
+    } on Object catch (e) {
+      debugPrint('개발용 로그인 실패(연결): $e');
+      return false;
+    }
+  }
 
   /// Firebase ID 토큰으로 로그인한다. 새로 가입했으면 true.
   Future<bool> login(String firebaseIdToken) async {
@@ -217,4 +262,17 @@ class GatewayAuth {
     }
     return body ?? const {};
   }
+}
+
+/// 이 폰의 개발용 로그인 id. 처음 한 번 만들어 키체인/키스토어에 둔다(앱을 지우면 새로 만든다).
+Future<String> secureDeviceId([FlutterSecureStorage? storage]) async {
+  final store = storage ?? const FlutterSecureStorage();
+  const key = 'dev_device_id';
+  final saved = await store.read(key: key);
+  if (saved != null && saved.isNotEmpty) return saved;
+  final rnd = Random.secure();
+  final id =
+      'phone-${List.generate(16, (_) => rnd.nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
+  await store.write(key: key, value: id);
+  return id;
 }

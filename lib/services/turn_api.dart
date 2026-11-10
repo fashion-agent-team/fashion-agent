@@ -173,7 +173,7 @@ class GatewayTurnApi implements TurnApi {
   static const _path = '/api/v1/agent/turn';
 
   @override
-  Future<bool> get available => gateway.isSignedIn;
+  Future<bool> get available => gateway.ensureSignedIn();
 
   @override
   Future<TurnReply> say(String? sessionId, String utterance,

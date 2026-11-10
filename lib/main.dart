@@ -24,19 +24,12 @@ import 'services/profile_store.dart';
 import 'services/schedule_store.dart';
 import 'services/speech_service.dart';
 import 'services/turn_api.dart';
-import 'services/vision_service.dart';
 import 'services/wardrobe_store.dart';
 import 'services/weather_service.dart';
 import 'session/session_controller.dart';
 
-/// 비전 프록시 주소. 기본은 팀이 배포한 Cloudflare Worker다.
-/// 로컬 서버: `flutter run --dart-define=VISION_URL=http://localhost:8787`
-const _visionUrl = String.fromEnvironment(
-  'VISION_URL',
-  defaultValue: 'https://fashion-agent-vision.fashion-agent-team.workers.dev',
-);
-
-/// 서버 없이 예시 응답으로 돌릴 때: `--dart-define=FAKE_VISION=true`
+/// 서버 없이 예시 응답으로 옷 검사 화면을 돌려 볼 때: `--dart-define=FAKE_VISION=true`
+/// 실제 옷 사진은 게이트웨이(`GATEWAY_URL`)로만 보낸다. 예전 Gemini 프록시는 쓰지 않는다(2026-11-10).
 const _fakeVision = bool.fromEnvironment('FAKE_VISION');
 
 /// 카메라 없는 시뮬레이터에서 돌릴 때: `--dart-define=FAKE_CAMERA=true`
@@ -48,22 +41,27 @@ const _handsFree = bool.fromEnvironment('HANDS_FREE', defaultValue: true);
 /// 구글 Cloud TTS 목소리 켜기. 게이트웨이에 GOOGLE_TTS_API_KEY가 있을 때만: `--dart-define=CLOUD_TTS=true`
 const _cloudTts = bool.fromEnvironment('CLOUD_TTS');
 
-/// 게이트웨이 주소. 비우면 로그인 없이 이 폰에만 저장한다.
+/// 게이트웨이 주소. 비우면 서버 없이 폰 안 기능(날씨 등)만 쓴다. 옷 검사·얼굴 확인은 서버가 있어야 한다.
 /// 노트북에서 띄운 게이트웨이: `flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080`
 const _gatewayUrl = String.fromEnvironment('GATEWAY_URL');
 
 /// 게이트웨이와 Firebase가 준비되면 구글 로그인, 아니면 이 폰에만 저장.
+///
+/// 로그인하지 않아도(구글 로그인 전, Firebase 실패) 게이트웨이는 쓴다. 개발용 로그인으로 들어가서
+/// 로그인한 것과 똑같이 옷 검사·얼굴 확인을 서버로 한다(2026-11-09 정지원).
 Future<(AccountService, GatewayAuth?)> _account() async {
   if (_gatewayUrl.isEmpty) return (DeviceOnlyAccountService(), null);
+  final gateway = GatewayAuth(
+      baseUrl: Uri.parse(_gatewayUrl),
+      tokens: SecureTokenStore(),
+      devDeviceId: secureDeviceId);
   try {
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);
   } on Object catch (e) {
-    debugPrint('Firebase 시작 실패, 이 폰에만 저장합니다: $e');
-    return (DeviceOnlyAccountService(), null);
+    debugPrint('Firebase 시작 실패, 구글 로그인 없이 게이트웨이를 씁니다: $e');
+    return (DeviceOnlyAccountService(), gateway);
   }
-  final gateway =
-      GatewayAuth(baseUrl: Uri.parse(_gatewayUrl), tokens: SecureTokenStore());
   return (FirebaseAccountService(gateway: gateway), gateway);
 }
 
@@ -124,17 +122,18 @@ Future<void> main() async {
             : DevicePermissionService(listen: listen, camera: capture),
       ),
     ),
-    outfitCheck: SessionController(
-      speech: speech,
-      weatherService: weather,
-      schedule: LocalScheduleStore(),
-      capture: capture,
-      vision: _fakeVision || _visionUrl.isEmpty
-          ? FakeVisionService()
-          : HttpVisionService(Uri.parse(_visionUrl)),
-      wardrobe: LocalWardrobeStore(),
-      listen: listen,
-    ),
+    // 서버 없이 쓰는 옷 검사 화면은 데모(FAKE_VISION)일 때만 연다. 진짜 사진 분석은 서버로만 한다.
+    outfitCheck: _fakeVision
+        ? SessionController(
+            speech: speech,
+            weatherService: weather,
+            schedule: LocalScheduleStore(),
+            capture: capture,
+            vision: FakeVisionService(),
+            wardrobe: LocalWardrobeStore(),
+            listen: listen,
+          )
+        : null,
   ));
 }
 
@@ -142,12 +141,12 @@ class FashionAgentApp extends StatelessWidget {
   const FashionAgentApp(
       {super.key,
       required this.agent,
-      required this.outfitCheck,
+      this.outfitCheck,
       this.cameraTurn,
       this.heardNow});
 
   final AgentController agent;
-  final SessionController outfitCheck;
+  final SessionController? outfitCheck;
   final CameraTurnController? cameraTurn;
   final ValueListenable<String>? heardNow;
 

@@ -14,6 +14,8 @@ class FakeGateway {
   var refreshCalls = 0;
   var n = 0;
   final calls = <String>[];
+  var devEnabled = true;
+  final devIds = <String>[];
 
   Map<String, dynamic> _issue() {
     n++;
@@ -30,6 +32,12 @@ class FakeGateway {
     calls.add('${req.method} ${req.url.path}');
     switch (req.url.path) {
       case '/api/v1/auth/login':
+        return _json(200, _issue());
+      case '/api/v1/auth/dev':
+        if (!devEnabled) {
+          return _json(404, {'code': 'not_found', 'message': 'dev off'});
+        }
+        devIds.add((jsonDecode(req.body) as Map)['deviceId'] as String);
         return _json(200, _issue());
       case '/api/v1/auth/refresh':
         refreshCalls++;
@@ -124,6 +132,43 @@ void main() {
     await expectLater(auth.send('GET', '/api/v1/me/profile'),
         throwsA(isA<GatewayException>()));
     expect(gw.calls, isEmpty);
+  });
+
+  group('로그인 안 했을 때 개발용 로그인', () {
+    late GatewayAuth guest;
+    setUp(() {
+      guest = GatewayAuth(
+          baseUrl: Uri.parse('http://gw:8080'),
+          tokens: store,
+          client: gw.client,
+          now: () => now,
+          devDeviceId: () async => 'phone-1');
+    });
+
+    test('토큰이 없으면 이 폰 id로 개발용 로그인을 하고 그 토큰으로 보낸다', () async {
+      expect(await guest.ensureSignedIn(), isTrue);
+      expect(gw.devIds, ['phone-1']);
+      final json = await guest.sendJson('GET', '/api/v1/me/profile');
+      expect(json!['agentName'], '코디');
+    });
+
+    test('이미 로그인했으면 개발용 로그인을 하지 않는다', () async {
+      await guest.login('firebase-id');
+      expect(await guest.ensureSignedIn(), isTrue);
+      expect(gw.devIds, isEmpty);
+    });
+
+    test('게이트웨이가 개발용 로그인을 꺼 두었으면 false이고 다시 묻지 않는다', () async {
+      gw.devEnabled = false;
+      expect(await guest.ensureSignedIn(), isFalse);
+      expect(await guest.ensureSignedIn(), isFalse);
+      expect(gw.calls.where((c) => c == 'POST /api/v1/auth/dev'), hasLength(1));
+    });
+
+    test('기기 id가 없으면 개발용 로그인을 하지 않는다', () async {
+      expect(await auth.ensureSignedIn(), isFalse);
+      expect(gw.calls, isEmpty);
+    });
   });
 
   test('회원정보는 게이트웨이 모양으로 주고받는다', () {

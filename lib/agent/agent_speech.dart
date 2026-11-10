@@ -57,3 +57,7 @@ String returningGreeting(String agentName, {String? callName}) =>
 /// 창은 앱이 없앨 수 없어서 미리 무엇을 누를지 알려 준다(2026-11-06 진행 님 요청).
 const signInGuide = '곧 구글 로그인 창이 떠요. 오른쪽 계속 버튼을 누르고 쓰실 계정을 고르면 돼요. '
     'VoiceOver를 쓰시면 오른쪽으로 쓸어 넘겨 계속에서 두 번 탭하세요.';
+
+/// 서버에 연결되지 않았을 때 옷 검사를 부탁받으면. 옷 사진은 서버의 옷 상태 모델로만 본다.
+const noServerOutfitSpeech = '지금은 서버에 연결되지 않아서 옷을 볼 수가 없어요. '
+    '인터넷 연결과 로그인을 확인하고 조금 뒤에 다시 말씀해 주세요.';
