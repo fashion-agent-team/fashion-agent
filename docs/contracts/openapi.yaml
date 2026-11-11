@@ -15,7 +15,6 @@ tags:
   - name: profile
   - name: agent
   - name: schedule
-  - name: helper
 
 paths:
   /api/v1/auth/login:
@@ -195,43 +194,6 @@ paths:
                 properties:
                   events: { type: array, items: { $ref: '#/components/schemas/ScheduleEvent' } }
 
-  /api/v1/me/contacts:
-    get:
-      tags: [helper]
-      summary: 확인을 부탁할 가족·친구 목록
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  contacts: { type: array, items: { $ref: '#/components/schemas/Contact' } }
-    post:
-      tags: [helper]
-      summary: 가족·친구 추가 (보호자가 대신 등록해도 됨)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/Contact' }
-      responses:
-        '201':
-          description: 추가됨
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Contact' }
-
-  /api/v1/me/contacts/{contactId}:
-    delete:
-      tags: [helper]
-      summary: 가족·친구 삭제
-      parameters:
-        - { name: contactId, in: path, required: true, schema: { type: string } }
-      responses:
-        '204': { description: 삭제됨 }
-
   /api/v1/stt:
     post:
       tags: [voice]
@@ -383,7 +345,7 @@ components:
           type: object
           description: 화면·기록용 구조화 결과. 앱은 speech만 읽어도 동작해야 함
           properties:
-            type: { type: string, enum: [outfit_mode, outfit_advice, outfit_check, face_makeup_check, teeth_check, weather, schedule, helper] }
+            type: { type: string, enum: [outfit_mode, outfit_advice, outfit_check, face_makeup_check, teeth_check, weather, schedule] }
             outfitMode: { type: string, enum: [laid, worn], nullable: true, description: "정해진 방식. 오면 앱이 기억해서 다음부터 outfitMode로 보냄" }
             outfitAdvice: { $ref: '#/components/schemas/OutfitAdvice' }
             outfitCheck: { $ref: '#/components/schemas/OutfitCheck' }
@@ -484,11 +446,3 @@ components:
         place: { type: string, nullable: true }
         occasion: { type: string, enum: [mourning, wedding, formal, business, active, casual] }
 
-    Contact:
-      type: object
-      required: [name, phone]
-      properties:
-        contactId: { type: string, readOnly: true }
-        name: { type: string, example: 엄마 }
-        phone: { type: string, example: "010-0000-0000", writeOnly: true, description: 응답에는 내보내지 않음 }
-        relation: { type: string, nullable: true, example: 가족 }

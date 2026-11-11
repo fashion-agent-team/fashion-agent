@@ -125,7 +125,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "garments": [Garment, ...],
   "framing": null,              // 구도가 안 맞으면 "옷이 오른쪽에 잘렸어요. 폰을 오른쪽으로 조금 옮겨 주세요."
   "lighting": "ok",             // ok | dark
-  "source": "model",            // model(우리 모델) | helper(지인 확인)
+  "source": "model",            // model(우리 모델)
   "modelVersion": "yolo26n-v6",
   "pendingHelper": null,        // 애매한 결함이 있을 때만 값이 있음(아래)
   "embeddingModel": "marqo-fashionSigLIP"   // garments[].embedding을 만든 모델. 없으면 null
@@ -133,7 +133,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ```
 판단 기준은 결함(`defects`) 하나하나의 모델 확신도로 정합니다(2026-11-06 결정. 근거는 mcp-clothes-state PR #2 `docs/model-comparison.md` "판단 기준 제안". 2026-11-08 확정: 모델 yolo26n v6 하나, 기준 0.5 / 0.3. 실험 기록은 mcp-clothes-state PR #5).
 
-**옷 사진은 GPT 비전으로 보내지 않습니다**(2026-11-06 결정). 모델이 애매하면 지어내지 않고, 사용자가 원할 때 지인에게만 묻습니다.
+**옷 사진은 GPT 비전으로 보내지 않습니다**(2026-11-06 결정). 모델이 애매하면 지어내지 않고, 사용자가 허락했을 때만 애매한 조각을 GPT로 한 번 더 확인합니다(`allowGpt`, 2026-11-10).
 
 | 확신도 | 처리 |
 |---|---|
@@ -152,10 +152,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "note": "확실하지 않은 부분이 있어요."
 }
 ```
-- agent는 확실한 결함(0.5 이상)을 먼저 말하고, `note`를 읽은 뒤 "지인에게 물어볼까요?"라고 묻습니다. `note`에는 위치를 넣지 않습니다. `where`는 다른 결함과 같이 사용자가 "어디야?"라고 물을 때만 말합니다.
-- 사용자가 원할 때만 `helper_ask`를 부릅니다. agent는 clothes_inspect에 보냈던 원본 사진에서 그 옷 한 벌(`garmentId`의 `box`)만 잘라 내고, 후보 `box`마다 테두리를 그린 **한 장**을 `imageBase64`로 넣습니다. 후보가 여러 개여도 한 벌에 한 번만 묻습니다(helper_ask 입력은 바꾸지 않음). 질문은 "표시한 곳이 얼룩인지 봐 줄래?"처럼 씁니다. 얼굴이 들어가지 않게 옷 부분만 보냅니다.
-- 답은 지금은 사용자가 "답 왔어?"라고 물으면 agent가 `helper_answer`로 확인합니다(FCM 알림은 gateway가 생긴 뒤, helper_answer 절과 같음). 답으로 알릴 때 `source`는 `helper`입니다. 기다리는 동안 다른 안내는 그대로 이어 갑니다.
-- 등록된 지인이 없거나 사용자가 묻지 않겠다고 하면 "확실하지 않은 부분이 있어요"까지만 말하고 끝냅니다.
+- agent는 확실한 결함(0.5 이상)을 먼저 말하고, 처음 애매한 결함이 나오면 GPT 확인·학습 저장 동의를 한 번 묻습니다(앱이 답을 기억해 `allowGpt`로 보냄). `where`는 다른 결함과 같이 사용자가 "어디야?"라고 물을 때만 말합니다.
+- 가족·지인에게 묻기(mcp-helper)는 2026-11-11에 뺐습니다.
 
 ## mcp-face-check
 
@@ -165,7 +163,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 
 사진은 앱이 카메라 영상에서 구도가 맞는 순간 한 장면만 꺼내 보낸 것이고, 서버는 판단에만 쓰고 남기지 않습니다.
 
-**얼굴·치아 사진은 GPT 같은 외부 AI로 보내지 않습니다**(개인정보, 2026-11-06 결정). 대칭은 윤곽점 계산으로, 치아는 우리가 학습한 모델(ONNX)을 이 서버에서 돌려서 봅니다. 그래서 두 도구에는 `source` 값이 없습니다. 모델이 애매하면 지어내지 않고 "잘 모르겠다"고 돌려주고, agent가 가족·친구에게 물어볼지(helper) 제안합니다.
+**얼굴·치아 사진은 GPT 같은 외부 AI로 보내지 않습니다**(개인정보, 2026-11-06 결정). 대칭은 윤곽점 계산으로, 치아는 우리가 학습한 모델(ONNX)을 이 서버에서 돌려서 봅니다. 그래서 두 도구에는 `source` 값이 없습니다. 모델이 애매하면 지어내지 않고 "잘 모르겠다"고 돌려주고, agent가 다시 찍어 보라고 권합니다.
 
 ### `face_makeup_check`
 "얼굴 볼래" → 앱이 얼굴을 실시간으로 비추며 구도를 안내하고, 잘 잡혀 1초 멈추면 그동안 찍은 3~5장을 보냅니다(2026-11-05 결정). 화장 대칭(눈썹, 입술 선, 볼·입술 색 좌우)을 장마다 재고 항목별 중간값으로 판단합니다. GPT는 쓰지 않습니다.
@@ -217,7 +215,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 }
 ```
 `foreignObject`는 모델 확률로 정합니다. 0.7 이상이면 `true`, 0.3 이하면 `false`, 그 사이는 `null`(애매함)입니다(첫 기준, 실제 사진으로 평가한 뒤 조정).
-애매하면 `{"foreignObject": null, "confidence": 0.5, "note": "잘 보이지 않아서 확실하지 않아요."}`를 돌려주고, agent는 note를 읽은 뒤 "가족에게 사진 보내서 물어볼까요?"라고 묻습니다. 사용자가 원할 때만 `helper_ask`로 넘깁니다.
+애매하면 `{"foreignObject": null, "confidence": 0.5, "note": "잘 보이지 않아서 확실하지 않아요."}`를 돌려주고, agent는 note를 읽은 뒤 밝은 곳에서 다시 찍어 보라고 권합니다.
 
 ## mcp-closet
 
@@ -309,36 +307,3 @@ closet_save는 사진 벡터가 있으면 그것으로 옷 이름(청바지·블
 
 남의 옷이나 없는 id가 섞이면 `not_found`이고 아무것도 지우지 않습니다.
 
-## mcp-helper
-
-개별 기능입니다. 사용자가 "엄마한테 물어봐 줘"라고 할 때만 씁니다. 옷 추천 흐름에서 자동으로 부르지 않습니다.
-
-### `helper_contacts`
-입력 `{ "userId": "…" }` → 출력 `{ "contacts": [{ "contactId": "h_1", "name": "엄마", "relation": "가족" }] }`
-
-### `helper_ask`
-입력
-```json
-{ "userId": "…", "contactId": "h_1", "imageBase64": "<JPEG base64>", "question": "이 옷 오늘 결혼식에 괜찮은지 봐 줄래?" }
-```
-출력 `{ "requestId": "r_9", "expiresAt": "2026-11-05T09:00:00+09:00", "sentTo": "엄마" }`
-
-사진을 R2에 24시간 두고, `옷 확인 부탁해요 https://<도메인>/h/<token>` 한 줄을 SMS(90바이트 이하)로 보냅니다(솔라피). 질문은 문자에 넣지 않고 답장 페이지에서 보여 줍니다. 가족이 웹 페이지에서 "괜찮아 / 얼룩 있어 / 직접 쓰기"로 답하면 저장하고, 사진은 그때 바로 지웁니다. 답이 오지 않아도 24시간 뒤에 지웁니다.
-
-- 사진은 JPEG만, 약 6MB까지. 질문은 200자까지. 한 사용자가 한 시간에 10번까지 보낼 수 있습니다.
-- 오류 `code`: `bad_request`(userId·질문이 틀림), `no_image`, `bad_image`(JPEG 아님), `image_too_large`, `not_found`(등록하지 않은 contactId), `rate_limited`, `upstream_failed`(문자·R2 실패. 이때는 요청을 남기지 않음).
-- 답이 왔을 때 사용자에게 보내는 FCM 알림은 gateway가 생긴 뒤에 붙입니다(푸시 토큰이 gateway의 `account` 스키마에 있음). 그 전까지는 사용자가 "답 왔어?"라고 물으면 agent가 `helper_answer`로 확인합니다.
-
-### `helper_answer`
-입력 `{ "userId": "…", "requestId": "r_9" }`
-
-출력
-```json
-// 답이 왔을 때
-{ "requestId": "r_9", "status": "answered", "answer": "얼룩 없어, 그림자야.", "answeredBy": "엄마",
-  "answeredAt": "2026-11-04T14:20:00+09:00", "sentTo": "엄마", "expiresAt": "2026-11-05T09:00:00+09:00" }
-// 아직일 때
-{ "requestId": "r_9", "status": "pending", "answer": null, "answeredBy": null, "answeredAt": null,
-  "sentTo": "엄마", "expiresAt": "2026-11-05T09:00:00+09:00" }
-```
-`status`: pending | answered | expired. `answer`·`answeredBy`·`answeredAt`은 answered일 때만 값이 있고 나머지는 null입니다. `sentTo`·`expiresAt`은 항상 있어서, agent가 "엄마가 아직 답하지 않았어요. 내일 오전 9시까지 기다릴게요"처럼 말할 수 있습니다. 다른 사용자의 requestId면 `not_found`.

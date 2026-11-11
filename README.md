@@ -122,7 +122,6 @@ flutter test
 | [mcp-clothes-state](https://github.com/fashion-agent-team/mcp-clothes-state) | 옷 사진에서 종류·색·얼룩·찢어짐 찾기 | 8093 | YOLO+FashionCLIP(ONNX Runtime Java), GPT 비전 폴백 | 미정 |
 | [mcp-face-check](https://github.com/fashion-agent-team/mcp-face-check) | 얼굴 화장 대칭·이에 낀 것 확인 | 8094 | ML Kit 윤곽점 규칙, 치아 분류 모델 | 미정 |
 | [mcp-closet](https://github.com/fashion-agent-team/mcp-closet) | 내 옷 기록, 비슷한 옷·코디 찾기(RAG) | 8095 | pgvector, multilingual-e5 임베딩 | 미정 |
-| [mcp-helper](https://github.com/fashion-agent-team/mcp-helper) | 사용자가 원할 때 가족·친구에게 사진 확인 요청 | 8096 | 문자 API, 웹 답장 링크, FCM | 미정 |
 
 1차는 agent·mcp-weather·mcp-schedule이고(2026-11-04), 끝나면 나머지를 다시 나눕니다. weather·schedule 담당은 임시 배정이라 서로 바꿔도 됩니다. 서버끼리 주고받는 약속은 [docs/contracts/](docs/contracts/README.md)에 있고, 팀이 정할 것은 [docs/contracts/README.md](docs/contracts/README.md)의 "아직 안 정한 것"에 모아 두었습니다.
 
@@ -140,8 +139,7 @@ flutter test
                     ├─ MCP schedule      일정, 장소 분위기
                     ├─ MCP clothes_state 옷 이물질·이염·찢어짐 (자체 학습 YOLO, 애매하면 GPT 비전)
                     ├─ MCP face_check    화장 대칭, 이에 낀 음식물 (윤곽점 규칙 + 치아 분류 모델)
-                    ├─ MCP closet        전용 옷장, RAG로 추천
-                    └─ MCP helper        지인 확인 요청
+                    └─ MCP closet        전용 옷장, RAG로 추천
 DB: 계정, 회원정보, 일정, 옷장 (PostgreSQL + pgvector)
 ```
 
@@ -189,7 +187,7 @@ DB: 계정, 회원정보, 일정, 옷장 (PostgreSQL + pgvector)
 - 첫날: [docs/contracts/](docs/contracts/README.md) 약속 같이 읽고 확정, 버전·담당자 정하기, 학습용 옷 사진 찍기·라벨링 시작
 - 데모 경로 먼저: fashion-agent-gateway, fashion-agent-agent(+mcp-weather), mcp-clothes-state(모델 학습 + Spring AI MCP)
 - 앱이 비전 서버를 직접 부르던 것을 Gateway → agent 경유로 바꾸기
-- 그다음 mcp-schedule, mcp-closet(RAG), mcp-face-check, mcp-helper
+- 그다음 mcp-schedule, mcp-closet(RAG), mcp-face-check (mcp-helper는 2026-11-11 뺌, 레포 보관)
 
 ## 브랜치 전략
 

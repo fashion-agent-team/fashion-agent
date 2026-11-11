@@ -42,7 +42,7 @@ services:
     <<: *spring
     image: ghcr.io/fashion-agent-team/fashion-agent-agent:dev
     expose: ["8081"]
-    depends_on: [redis, mcp-weather, mcp-schedule, mcp-clothes-state, mcp-face-check, mcp-closet, mcp-helper]
+    depends_on: [redis, mcp-weather, mcp-schedule, mcp-clothes-state, mcp-face-check, mcp-closet]
 
   mcp-weather:
     <<: *spring
@@ -69,12 +69,6 @@ services:
     <<: *spring
     image: ghcr.io/fashion-agent-team/mcp-closet:dev
     expose: ["8095"]
-    depends_on: [postgres]
-
-  mcp-helper:
-    <<: *spring
-    image: ghcr.io/fashion-agent-team/mcp-helper:dev
-    expose: ["8096"]
     depends_on: [postgres]
 
 volumes:
