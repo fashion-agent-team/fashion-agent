@@ -85,6 +85,9 @@ erDiagram
     varchar formality
     jsonb description
     vector embedding "384"
+    vector image_embedding "768, 옷 사진 벡터 평균"
+    varchar image_model
+    int image_count
     timestamptz first_seen_at
     timestamptz last_seen_at
   }
@@ -154,14 +157,19 @@ mcp-schedule#3에 이미 들어간 `V1__init.sql`과 같습니다(복사본).
 
 | 표 | 규칙 |
 | --- | --- |
-| garments | 검색·필터에 쓰는 값(category·color_family·tone·formality)은 컬럼, 나머지 Garment 전체는 `description jsonb`(객체만). `embedding public.vector(384)`은 null 허용(모델 준비 전). 벡터 근사 인덱스 없음(research R3) |
+| garments | 검색·필터에 쓰는 값(category·color_family·tone·formality)은 컬럼, 나머지 Garment 전체는 `description jsonb`(객체만). `embedding public.vector(384)`은 null 허용(모델 준비 전). 벡터 근사 인덱스 없음(research R3). 2026-11-11 V2: `image_embedding public.vector(768)`·`image_model`·`image_count` — clothes_inspect가 준 옷 사진 벡터(지금까지 본 사진의 평균, 최대 10장 비중)와 만든 모델. 같은 옷 판단에 씀. 사진은 저장하지 않음 |
 | wears | `(garment_id, worn_on)` UNIQUE. 넣을 때 `ON CONFLICT ON CONSTRAINT wears_garment_day_uq DO NOTHING`. FK는 `(garment_id, user_id) → garments(id, user_id)`라 남의 옷에 입은 날을 붙일 수 없음 |
 | style_docs | Spring AI PgVectorStore 표 모양(`id uuid, content text, metadata json, embedding vector(384)`) + HNSW 코사인 인덱스. `source`·`chunkNo`·`occasion`은 metadata에. `(source, chunkNo)` 유니크 식 인덱스로 같은 조각 두 번 넣기 방지(다시 넣을 때는 id를 source+chunkNo로 만든 UUID로) |
 
 자주 쓰는 쿼리(모두 `checks.sql`에서 확인):
 
 ```sql
--- 같은 옷 찾기 (closet_save): 1 - 거리 >= 기준값이면 합침, 헷갈리면 새 옷
+-- 같은 옷 찾기 (closet_save, 사진 벡터가 있을 때): 같은 종류·같은 모델 벡터를 가져와 서버가 비교
+-- (보정 행렬을 쓰면 DB 거리로는 못 재서 자바에서 계산. 한 사람 한 종류 수십 벌이라 충분히 빠름)
+SELECT id, image_embedding::text, image_count FROM closet.garments
+ WHERE user_id = :userId AND category = :category AND image_model = :model AND image_embedding IS NOT NULL;
+
+-- 같은 옷 찾기 (closet_save, 사진 벡터가 없을 때): 1 - 거리 >= 기준값이면 합침, 헷갈리면 새 옷
 SELECT id, 1 - (embedding <=> :q) AS similarity FROM closet.garments
  WHERE user_id = :userId AND category = :category AND color_family = :colorFamily AND embedding IS NOT NULL
  ORDER BY embedding <=> :q LIMIT 1;

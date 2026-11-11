@@ -31,9 +31,12 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   ],
   "box": { "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4 },
   "position": "left",           // left | center | right (사진 기준 = 사용자 기준). clothes_inspect가 box로 계산
-  "confidence": 0.96
+  "confidence": 0.96,
+  "embedding": [0.01234, -0.0567, …]   // 옷 박스 사진 벡터 768개(길이 1). 벡터 모델이 없으면 null. 아래 참고
 }
 ```
+
+**`embedding`은 사람에게 읽어 줄 값이 아닙니다**(2026-11-11 추가, mcp-clothes-state 이슈 #15). clothes_inspect가 옷 박스를 Marqo FashionSigLIP으로 바꾼 숫자이고, 옷장이 "같은 옷인지" 판단할 때만 씁니다. agent는 이 값을 closet_save에 그대로 넘기고, **GPT에게 넘길 때는 빼세요**(옷 한 벌에 숫자 768개). 사진은 어디에도 저장하지 않습니다.
 
 **왼쪽·오른쪽은 바라보는 사람(사진) 기준 하나입니다.** 옷을 내려놓고 위에서 비추므로 사진 왼쪽이 사용자 왼쪽입니다.
 - `position`(옷이 화면 어디에 있나): box 중심 x가 0.4 미만이면 left, 0.6 초과면 right, 그 사이는 center.
@@ -115,7 +118,8 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "lighting": "ok",             // ok | dark
   "source": "model",            // model(우리 모델) | helper(지인 확인)
   "modelVersion": "yolo26n-v6",
-  "pendingHelper": null         // 애매한 결함이 있을 때만 값이 있음(아래)
+  "pendingHelper": null,        // 애매한 결함이 있을 때만 값이 있음(아래)
+  "embeddingModel": "marqo-fashionSigLIP"   // garments[].embedding을 만든 모델. 없으면 null
 }
 ```
 판단 기준은 결함(`defects`) 하나하나의 모델 확신도로 정합니다(2026-11-06 결정. 근거는 mcp-clothes-state PR #2 `docs/model-comparison.md` "판단 기준 제안". 2026-11-08 확정: 모델 yolo26n v6 하나, 기준 0.5 / 0.3. 실험 기록은 mcp-clothes-state PR #5).
@@ -209,14 +213,17 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ## mcp-closet
 
 ### `closet_save`
-옷 추천을 마칠 때("이걸로 할게") agent가 2단계에서 본 옷을 모아 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다: 종류·색 계열이 같고, 임베딩 유사도 0.90 이상이고, 이름이 같은 묶음(니트=스웨터, 운동화=스니커즈 …)일 때. e5는 같은 색 비슷한 옷(니트와 가디건)을 유사도만으로 못 가려서 이름 조건을 더했습니다(mcp-closet `docs/DEVELOPMENT.md`).
+옷 추천을 마칠 때("이걸로 할게") agent가 2단계에서 본 옷을 모아 부릅니다. 같은 옷이면 새로 만들지 않고 합칩니다(`isNew: false`).
 
-같은 색 같은 이름의 옷이 여러 벌일 수 있어서 이럴 때는 합치지 않습니다.
-- 톤이 밝음↔어두움으로 다르거나, 둘 다 무늬가 적혀 있는데 다를 때(무지↔스트라이프, 스트라이프↔체크). 무늬를 모르면(null) 다르다고 보지 않고, 합칠 때 전에 본 무늬를 남깁니다.
+**옷 사진 벡터로 판단합니다**(2026-11-11 바뀜). clothes_inspect가 준 `garments[].embedding`과 `embeddingModel`을 그대로 넘기면, 같은 종류(category)이고 같은 모델로 만든 벡터가 있는 내 옷 중 가장 가까운 옷이 기준 이상일 때 합칩니다. 색 이름·색 계열·톤은 보지 않습니다. 같은 옷도 사진마다 색 판별이 달라져서 예전 규칙은 다시 찍은 옷을 36%만 맞게 합쳤고, 흰 티셔츠처럼 흔한 옷은 엉뚱한 옷에 합쳤습니다. 사진 벡터로는 DeepFashion 옷 600벌 측정에서 73%(보정 행렬을 쓰면 85%)를 맞게 합치고 엉뚱하게 합치는 경우는 2.2%(0.4%)입니다(새 옷을 잘못 합치는 비율 5% 기준, mcp-closet `docs/DEVELOPMENT.md`). 합칠 때마다 그 옷의 벡터를 지금까지 본 사진의 평균으로 바꿔서 볼수록 더 잘 알아봅니다.
+
+벡터가 없으면(clothes_inspect에 벡터 모델이 없거나, 길이가 768이 아니거나, `embeddingModel`을 안 넘김) 예전 규칙을 씁니다: 종류·색 계열이 같고, 글 임베딩 유사도 0.90 이상이고, 이름이 같은 묶음(니트=스웨터 …)이고, 톤(밝음↔어두움)과 무늬가 부딪히지 않을 때.
+
+어느 쪽이든 이럴 때는 합치지 않습니다.
 - 한 번에 넘긴 옷끼리(한 사진에 같이 있으면 다른 옷), 그리고 두 벌을 같은 옛 옷 하나에 합치지 않습니다.
 - `forceNewIds`에 넣은 입력 id. 합쳤다고 알렸는데 사용자가 "그건 다른 옷이에요"라고 하면 agent가 그 옷을 이 목록에 넣어 다시 부릅니다.
 
-입력 `{ "userId": "…", "garments": [Garment, ...], "forceNewIds": ["g2"] }` (`forceNewIds`는 선택)
+입력 `{ "userId": "…", "garments": [Garment, ...], "forceNewIds": ["g2"], "embeddingModel": "marqo-fashionSigLIP" }` (`forceNewIds`, `embeddingModel`은 선택)
 
 출력 `{ "saved": [{ "inputId": "g1", "garmentId": "c_17", "isNew": false }] }`
 
