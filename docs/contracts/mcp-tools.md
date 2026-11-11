@@ -238,9 +238,13 @@ RAG의 **검색 단계**입니다. 옷 추천 1단계에서 agent가 부르고(�
 입력
 ```json
 { "userId": "…", "situation": "오늘 오전 면접, 체감 9도", "occasion": "formal", "apparentTemperature": 9.5,
-  "excludeGarmentIds": ["c_17"], "limit": 8 }
+  "excludeGarmentIds": ["c_17"], "limit": 8, "imageQuery": "formal office attire for a job interview" }
 ```
 `situation`은 agent가 일정·날씨로 만든 문장이고 임베딩 검색에 씁니다. `occasion`, `apparentTemperature`는 있으면 필터로 씁니다(앱 `schedule_rules`·`weather_rules`가 "맞지 않아요"라고 하는 옷만 뺌, 예: 면접에 운동복, 체감 23도 이상에 겉옷). `excludeGarmentIds`는 꼭 빼고 싶은 옷입니다.
+
+`imageQuery`(선택, 200자 이내)는 찾는 옷을 **짧은 영어**로 쓴 것입니다(예: `jeans`, `striped clothes`, `warm winter clothes`). agent의 GPT가 `situation`을 영어로 옮겨 채웁니다. closet이 FashionSigLIP 글 모델로 옷 사진 벡터(closet_save 때 받은 `embedding`)와 비교해 점수에 더하므로, 이름·상황 질문 모두 더 잘 찾습니다(실측 위 5개 정답: 이름 44→57%, 상황 28→37%). 서버에 글 모델이 없으면 무시합니다.
+
+closet_save는 사진 벡터가 있으면 그것으로 옷 이름(청바지·블라우스·카디건 …)을 다시 고르고 비어 있는 무늬·격식을 채웁니다. 그래서 후보의 `name`이 clothes_inspect가 준 이름과 다를 수 있습니다(예: 티셔츠 → 블라우스).
 
 `score`는 임베딩 유사도에 자리에 맞는 격식이면 최대 0.06을 더하고, 최근에 입은 옷이면 뺀 값입니다(어제 0.06, 그제 0.04, 일주일 안 0.02). 최근 입은 옷은 빼지 않고 뒤로만 보냅니다(옷이 적은 사람도 추천을 받게). 후보는 종류(상의·하의·겉옷·신발)를 돌아가며 골라 한 종류로 몰리지 않습니다.
 
