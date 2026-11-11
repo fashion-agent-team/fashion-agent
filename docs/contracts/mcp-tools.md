@@ -27,7 +27,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
   "notes": null,
   "formality": "smart",         // formal | smart | casual | sporty | unknown
   "defects": [
-    { "kind": "stain", "where": "오른쪽 소매 끝", "confidence": 0.85 }   // stain | tear | lint | other
+    { "kind": "stain", "where": "오른쪽 소매 끝", "confidence": 0.85, "checkedBy": "model" }   // kind: stain | tear | lint | other, checkedBy: model | gpt
   ],
   "box": { "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4 },
   "position": "left",           // left | center | right (사진 기준 = 사용자 기준). clothes_inspect가 box로 계산
