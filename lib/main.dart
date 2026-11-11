@@ -21,6 +21,7 @@ import 'services/server_stt.dart';
 import 'services/mouth_finder.dart';
 import 'services/permission_service.dart';
 import 'services/profile_store.dart';
+import 'services/schedule_reminders.dart';
 import 'services/schedule_store.dart';
 import 'services/speech_service.dart';
 import 'services/turn_api.dart';
@@ -86,6 +87,16 @@ Future<void> main() async {
   unawaited(weather.prefetch());
   final turns = gateway == null ? null : GatewayTurnApi(gateway);
   final location = LocationProvider();
+  // 일정 전날 저녁·당일 아침 알림. 서버 일정을 받아 폰 안에 예약한다(원격 푸시는 유료 Apple 계정이 필요해서).
+  LocalReminderScheduler? reminderScheduler;
+  ScheduleReminders? reminders;
+  if (gateway != null && !kIsWeb && !_fakeCamera) {
+    reminderScheduler = LocalReminderScheduler();
+    reminders = ScheduleReminders(
+      source: GatewayScheduleSource(gateway),
+      scheduler: reminderScheduler,
+    );
+  }
   runApp(FashionAgentApp(
     cameraTurn: turns == null
         ? null
@@ -107,6 +118,7 @@ Future<void> main() async {
       profiles: profiles,
       weatherService: weather,
       turns: turns,
+      reminders: reminders,
       location: location,
       handsFree: _handsFree,
       onboarding: OnboardingFlow(
@@ -116,7 +128,11 @@ Future<void> main() async {
         account: account,
         permissions: _fakeCamera
             ? FakePermissionService()
-            : DevicePermissionService(listen: listen, camera: capture),
+            : DevicePermissionService(
+                listen: listen,
+                camera: capture,
+                reminders: reminderScheduler,
+              ),
       ),
     ),
     // 서버 없이 쓰는 옷 검사 화면은 데모(FAKE_VISION)일 때만 연다. 진짜 사진 분석은 서버로만 한다.

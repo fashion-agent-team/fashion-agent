@@ -79,7 +79,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 ```json
 { "eventId": "e_01", "occasion": "wedding", "placeCategory": "예식장", "spokenSummary": "11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식을 등록했어요." }
 ```
-`occasion`은 **제목 키워드를 먼저** 보고, 제목으로 못 정하면 `place`를 카카오 로컬 API로 찾은 장소 종류로 정하고, 둘 다 아니면 `casual`입니다(2026-11-04 정함). "친구 결혼식"은 장소가 호텔이어도 결혼식이기 때문입니다. 어느 쪽으로 정했는지는 DB의 `occasion_source`(title·place·fallback)에 남깁니다. 일정 당일 아침 8시에 FCM 알림을 보냅니다(도구가 아니라 서버 스케줄러).
+`occasion`은 **제목 키워드를 먼저** 보고, 제목으로 못 정하면 `place`를 카카오 로컬 API로 찾은 장소 종류로 정하고, 둘 다 아니면 `casual`입니다(2026-11-04 정함). "친구 결혼식"은 장소가 호텔이어도 결혼식이기 때문입니다. 어느 쪽으로 정했는지는 DB의 `occasion_source`(title·place·fallback)에 남깁니다. 일정 알림은 지금은 **앱이 폰 안에서 예약**합니다(2026-11-11): 앱이 `GET /api/v1/schedules?date=`로 오늘부터 8일 일정을 받아 전날 저녁 8시와 당일 아침 8시(첫 일정이 9시보다 이르면 1시간 전)에 로컬 알림을 겁니다. 앱을 열 때, agent와 대화를 마칠 때, 앱으로 돌아올 때 다시 맞춥니다(`lib/services/schedule_reminders.dart`). 원격 푸시(FCM·APNs)는 유료 Apple 개발자 계정이 생기면 서버 스케줄러(`MorningReminder`)로 옮길 수 있습니다.
 
 ### `schedule_list`
 옷 추천 1단계에서 agent가 오늘 날짜로 부르고, "오늘 일정 뭐야?"에도 씁니다.
