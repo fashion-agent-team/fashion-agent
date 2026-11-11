@@ -3,10 +3,11 @@ import 'package:geolocator/geolocator.dart';
 
 import 'capture_service.dart';
 import 'listen_service.dart';
+import 'schedule_reminders.dart';
 
 /// 처음 실행할 때 권한 창을 한 번에 띄운다. 쓰는 도중에 갑자기 창이 뜨지 않게 하려는 것.
 abstract class PermissionService {
-  /// 마이크·음성 인식, 카메라, 위치를 차례로 묻는다. 말을 들을 수 있게 됐는지(마이크·음성 인식 허용) 돌려준다.
+  /// 마이크·음성 인식, 카메라, 위치, 알림을 차례로 묻는다. 말을 들을 수 있게 됐는지(마이크·음성 인식 허용) 돌려준다.
   Future<PermissionResult> requestAll();
 }
 
@@ -19,10 +20,14 @@ class PermissionResult {
 
 /// 기기 권한. 각 기능이 쓰는 플러그인으로 직접 물어서, 나중에 그 기능을 쓸 때 다시 묻지 않게 한다.
 class DevicePermissionService implements PermissionService {
-  DevicePermissionService({required this.listen, required this.camera});
+  DevicePermissionService(
+      {required this.listen, required this.camera, this.reminders});
 
   final DeviceListenService listen;
   final CaptureService camera;
+
+  /// 일정 알림(전날 저녁·당일 아침). 서버가 없으면 null이고 묻지 않는다.
+  final ReminderScheduler? reminders;
 
   @override
   Future<PermissionResult> requestAll() async {
@@ -47,6 +52,9 @@ class DevicePermissionService implements PermissionService {
     } on Object catch (e) {
       debugPrint('위치 권한 확인 실패: $e');
     }
+
+    // 4. 알림 (일정 전날·당일)
+    await reminders?.requestPermission();
 
     return PermissionResult(canListen: canListen);
   }

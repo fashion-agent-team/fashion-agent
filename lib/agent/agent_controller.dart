@@ -6,6 +6,7 @@ import '../models/user_profile.dart';
 import '../services/listen_service.dart';
 import '../services/gateway_auth.dart';
 import '../services/profile_store.dart';
+import '../services/schedule_reminders.dart';
 import '../services/speech_service.dart';
 import '../services/turn_api.dart';
 import '../services/weather_service.dart';
@@ -48,6 +49,7 @@ class AgentController extends ChangeNotifier {
     required this.onboarding,
     required this.weatherService,
     this.turns,
+    this.reminders,
     LocationProvider? location,
     this.handsFree = false,
   }) : location = location ?? LocationProvider() {
@@ -76,6 +78,10 @@ class AgentController extends ChangeNotifier {
   final WeatherService weatherService;
   final TurnApi? turns;
   final LocationProvider location;
+
+  /// 일정 전날·당일 폰 알림. 서버에서 일정을 받아 예약하므로 [turns]가 있을 때만 쓴다.
+  final ScheduleReminders? reminders;
+  bool _askedNotifications = false;
 
   /// 화면을 누르지 않고 에이전트 이름을 불러 말하기. 켜 두면 앱이 화면에 있는 동안 계속 듣는다.
   final bool handsFree;
@@ -124,6 +130,8 @@ class AgentController extends ChangeNotifier {
           }
         }
       }
+      await _askNotifications();
+      unawaited(_syncReminders());
       unawaited(speech.prefetch(const [
         '말씀해 주세요.',
         '네, 말씀해 주세요.',
@@ -189,6 +197,7 @@ class AgentController extends ChangeNotifier {
   /// 앱이 다시 화면에 오면 이름 듣기를 다시 시작한다.
   void resumeHandsFree() {
     _paused = false;
+    unawaited(_syncReminders());
     unawaited(_wakeLoop());
   }
 
@@ -311,6 +320,8 @@ class AgentController extends ChangeNotifier {
     }
     final api = turns;
     if (api != null && await api.available && await _converse(api, text)) {
+      // 말로 일정을 넣거나 지웠을 수 있다. 알림을 다시 맞춘다.
+      unawaited(_syncReminders());
       return;
     }
     await _handleLocally(text);
@@ -448,6 +459,32 @@ class AgentController extends ChangeNotifier {
       return '${weather.toSpeech()} ${dailyRangeAdvice(weather) ?? ''}'.trim();
     } catch (_) {
       return '미안해요, 날씨를 못 가져왔어요. 인터넷이 연결돼 있는지 한번 봐 주실래요?';
+    }
+  }
+
+  /// 알림 권한을 이번 실행에 한 번 묻는다. 처음 실행의 허용 창에서 이미 답했으면 창이 뜨지 않는다.
+  /// 알림 기능이 생기기 전에 깔았던 사용자는 다음에 앱을 열 때 한 번 창이 뜬다.
+  Future<void> _askNotifications() async {
+    final r = reminders;
+    if (r == null || turns == null || _askedNotifications) return;
+    _askedNotifications = true;
+    try {
+      await r.scheduler.requestPermission();
+    } on Object catch (e) {
+      debugPrint('알림 권한 확인 실패: $e');
+    }
+  }
+
+  /// 서버 일정으로 전날·당일 알림을 다시 예약한다. 실패해도 대화는 그대로 이어 간다.
+  Future<void> _syncReminders() async {
+    final r = reminders;
+    final api = turns;
+    if (r == null || api == null) return;
+    try {
+      if (!await api.available) return;
+      await r.sync(agentName: wakeName);
+    } on Object catch (e) {
+      debugPrint('일정 알림 맞추기 실패: $e');
     }
   }
 

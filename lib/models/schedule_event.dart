@@ -4,7 +4,7 @@ class ScheduleEvent {
 
   factory ScheduleEvent.fromJson(Map<String, dynamic> json) => ScheduleEvent(
         title: json['title'] as String,
-        start: DateTime.parse(json['start'] as String),
+        start: DateTime.parse(json['start'] as String).toLocal(),
         place: json['place'] as String?,
       );
 
