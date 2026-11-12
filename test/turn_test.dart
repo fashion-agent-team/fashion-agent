@@ -488,18 +488,17 @@ void main() {
       expect(turns.sent, ['show:face:3', 'show:teeth:3']);
     });
 
-    test('입고 한 바퀴는 뒤쪽 카메라로 앞·옆·뒤를 차례로 보낸다', () async {
+    test('입고 한 바퀴는 뒤쪽 카메라로 앞·뒤를 차례로 보낸다', () async {
       final speech = FakeSpeech();
       final turns = FakeTurnApi([
-        reply('앞모습을 봤어요. 이제 천천히 옆으로 돌아서 잠시 멈춰 주세요.', TurnNext.cameraWorn),
-        reply('옆모습도 봤어요. 이제 뒤로 돌아서 잠시 멈춰 주세요.', TurnNext.cameraWorn),
+        reply('앞모습을 봤어요. 이제 뒤로 돌아서 잠시 멈춰 주세요.', TurnNext.cameraWorn),
         reply('잘 어울려요.', TurnNext.listen),
       ]);
-      final camera = FakeAutoCaptureCamera([photo, photo, photo]);
+      final camera = FakeAutoCaptureCamera([photo, photo]);
       final end =
           await cameraWith(speech, turns, camera).run('s_1', ImageKind.worn);
       expect(camera.opened, [false]);
-      expect(turns.sent, ['show:worn:3', 'show:worn:3', 'show:worn:3']);
+      expect(turns.sent, ['show:worn:3', 'show:worn:3']);
       expect(end?.speech, '잘 어울려요.');
     });
 
