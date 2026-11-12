@@ -242,7 +242,7 @@ paths:
               required: [text]
               properties:
                 text: { type: string, maxLength: 500 }
-                voice: { type: string, description: '목소리 이름. SunHi(기본), InJoon, Hyunsu(엣지), YuJin, JiMin, SeoHyeon, SoonBok(Azure) 또는 구글 목소리 Achernar 등. Azure 키가 없으면 구글 기본 목소리' }
+                voice: { type: string, description: '목소리 이름. YuJin(기본), JiMin, SeoHyeon, SoonBok(Azure), SunHi, InJoon, Hyunsu(엣지) 또는 구글 목소리 Achernar 등. Azure 키가 없으면 구글 기본 목소리' }
       responses:
         '200':
           description: 소리 파일. Azure·Cloud TTS는 MP3, Gemini TTS는 WAV(24kHz 16비트 모노). 엣지는 MP3. X-Tts-Engine 헤더는 edge, azure, cloud, gemini.
