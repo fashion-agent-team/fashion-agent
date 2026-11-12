@@ -466,9 +466,9 @@ class AgentController extends ChangeNotifier {
         await _say('옷 다 봤어요. $_nextHint');
         return;
       case Intent.faceCheck:
-        await _say('얼굴 확인 기능은 지금 준비 중이에요.');
+        await _say(noServerFaceSpeech);
       case Intent.schedule:
-        await _say('일정 기능은 지금 준비 중이에요.');
+        await _say(noServerScheduleSpeech);
       case Intent.help:
         await _say(featureIntro);
       case Intent.unknown:
