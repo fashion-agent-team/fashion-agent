@@ -36,7 +36,10 @@ import 'session/session_controller.dart';
 const _fakeVision = bool.fromEnvironment('FAKE_VISION');
 
 /// 카메라 없는 시뮬레이터에서 돌릴 때: `--dart-define=FAKE_CAMERA=true`
-const _fakeCamera = bool.fromEnvironment('FAKE_CAMERA');
+///
+/// 시뮬레이터는 release로 못 돌리므로 release 빌드에서는 무시한다. 2026-11-12 실기기에
+/// `flutter run --release ... FAKE_CAMERA=true`로 깔려서 가짜 사진만 보내고 얼굴을 못 찾은 일이 있었다.
+const _fakeCamera = bool.fromEnvironment('FAKE_CAMERA') && !kReleaseMode;
 
 /// 화면을 누르지 않고 에이전트 이름을 불러 말하기. 끄려면 `--dart-define=HANDS_FREE=false`
 const _handsFree = bool.fromEnvironment('HANDS_FREE', defaultValue: true);
