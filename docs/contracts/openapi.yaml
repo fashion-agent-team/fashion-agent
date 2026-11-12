@@ -242,6 +242,7 @@ paths:
               required: [text]
               properties:
                 text: { type: string, maxLength: 500 }
+                rate: { type: number, minimum: 0.5, maximum: 2.0, default: 1.0, description: '빠르기 배수(2026-11-12). 앱 말 빠르기 기본 0.42가 1.0. Gemini는 무시' }
                 voice: { type: string, description: '목소리 이름. YuJin(기본), JiMin, SeoHyeon, SoonBok(Azure), SunHi, InJoon, Hyunsu(엣지) 또는 구글 목소리 Achernar 등. Azure 키가 없으면 구글 기본 목소리' }
       responses:
         '200':

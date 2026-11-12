@@ -11,8 +11,8 @@ abstract class TtsApi {
   /// 게이트웨이에 로그인했으면 true.
   Future<bool> get available;
 
-  /// [text]를 [voice] 목소리로 읽은 소리 파일 바이트.
-  Future<Uint8List> synthesize(String text, String voice);
+  /// [text]를 [voice] 목소리로 읽은 소리 파일 바이트. [rate]는 빠르기 배수(1.0 보통, 2026-11-12).
+  Future<Uint8List> synthesize(String text, String voice, {double rate = 1.0});
 
   /// 서버가 Gemini TTS로 읽으면 true. 무료 횟수가 하루 15번쯤이라 문장으로 나누지 않고 한 번에 받는다.
   bool get wholeText;
@@ -34,9 +34,13 @@ class GatewayTtsApi implements TtsApi {
   bool get wholeText => engine == 'gemini';
 
   @override
-  Future<Uint8List> synthesize(String text, String voice) async {
-    final res = await gateway.send('POST', '/api/v1/tts',
-        json: {'text': text, 'voice': voice}).timeout(timeout);
+  Future<Uint8List> synthesize(String text, String voice,
+      {double rate = 1.0}) async {
+    final res = await gateway.send('POST', '/api/v1/tts', json: {
+      'text': text,
+      'voice': voice,
+      if (rate != 1.0) 'rate': rate,
+    }).timeout(timeout);
     engine = res.headers['x-tts-engine'] ?? engine;
     if (res.bodyBytes.isEmpty) {
       throw GatewayException(502, 'empty_audio', '소리가 비어 있어요');

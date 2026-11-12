@@ -50,6 +50,15 @@ class SpeechService {
   static const _rateKey = 'tts.rate';
   double _rate = speechRate;
 
+  /// 서버 목소리 빠르기 배수. 폰 빠르기 기본값(0.42)이 1.0이다(0.30 → 0.71, 0.60 → 1.43).
+  /// 2026-11-12 진행 님: "천천히/빠르게 말해 줘"가 서버 목소리(유진 등)에도 먹게.
+  double get _serverRate =>
+      double.parse((_rate / speechRate).toStringAsFixed(2));
+
+  /// 빠르기마다 소리가 다르니 기억해 둘 때 목소리 이름에 빠르기를 붙인다.
+  String _cacheVoice(Voice v) =>
+      _serverRate == 1.0 ? v.id : '${v.id}@$_serverRate';
+
   /// 지금 읽는 속도.
   double get rate => _rate;
 
@@ -136,7 +145,8 @@ class SpeechService {
       final v = await voice;
       if (v.device || !await api.available) return;
       final watch = Stopwatch()..start();
-      await _cache.get(v.id, '네.', () => api.synthesize('네.', v.id));
+      await _cache.get(_cacheVoice(v), '네.',
+          () => api.synthesize('네.', v.id, rate: _serverRate));
       _cloudWarm = true;
       debugPrint('[시간] 서버 목소리 미리 연결 ${watch.elapsedMilliseconds}ms');
     } on Object catch (e) {
@@ -286,8 +296,8 @@ class SpeechService {
     }
     // Gemini TTS는 하루 횟수가 적어서 한 번에 받는다. Cloud TTS는 문장으로 나눠 첫 문장부터 읽는다.
     final sentences = api.wholeText ? [text.trim()] : splitSentences(text);
-    Future<Uint8List> fetch(int i) => _cache.get(
-        v.id, sentences[i], () => api.synthesize(sentences[i], v.id));
+    Future<Uint8List> fetch(int i) => _cache.get(_cacheVoice(v), sentences[i],
+        () => api.synthesize(sentences[i], v.id, rate: _serverRate));
     // 한 번에 하나만 앞서 받는다. 2026-11-12: 모든 문장을 한꺼번에 받았더니 Azure 무료 등급(1분 20번)에 걸려
     // 두세 번째 문장부터 폰 목소리로 넘어갔다.
     var next = fetch(0);
@@ -344,7 +354,8 @@ class SpeechService {
     for (final t in texts) {
       for (final s in splitSentences(t)) {
         try {
-          await _cache.get(v.id, s, () => api.synthesize(s, v.id));
+          await _cache.get(_cacheVoice(v), s,
+              () => api.synthesize(s, v.id, rate: _serverRate));
         } on Object catch (_) {
           return;
         }
