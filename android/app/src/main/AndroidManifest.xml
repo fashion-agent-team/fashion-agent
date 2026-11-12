@@ -7,7 +7,7 @@
     <!-- 일정 알림: 폰을 다시 켜도 예약한 알림을 다시 건다. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
-        android:label="fashion_agent"
+        android:label="심청이"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
