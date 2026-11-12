@@ -165,6 +165,28 @@ void main() {
       expect(gw.calls.where((c) => c == 'POST /api/v1/auth/dev'), hasLength(1));
     });
 
+    test('예전 서버 토큰이라 갱신이 거절되면 개발용 로그인을 해서 같은 요청을 이어 간다', () async {
+      await guest.login('old-server');
+      gw.valid.clear();
+      gw.usedRefresh.add('r1');
+      final json = await guest.sendJson('GET', '/api/v1/me/profile');
+      expect(json!['agentName'], '코디');
+      expect(gw.devIds, ['phone-1']);
+      expect(store.tokens!.accessToken, 'a2');
+    });
+
+    test('갱신이 거절되고 개발용 로그인도 꺼져 있으면 unauthorized를 던진다', () async {
+      await guest.login('old-server');
+      gw.valid.clear();
+      gw.usedRefresh.add('r1');
+      gw.devEnabled = false;
+      await expectLater(
+          guest.send('GET', '/api/v1/me/profile'),
+          throwsA(isA<GatewayException>()
+              .having((e) => e.code, 'code', 'unauthorized')));
+      expect(await guest.isSignedIn, isFalse);
+    });
+
     test('기기 id가 없으면 개발용 로그인을 하지 않는다', () async {
       expect(await auth.ensureSignedIn(), isFalse);
       expect(gw.calls, isEmpty);
