@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../agent/agent_controller.dart' show AgentPhase;
 
-/// 앱 마스코트 "심청이". 연꽃 위에 앉은 댕기머리 소녀(노랑 저고리, 색동 소매, 다홍 치마).
+/// 앱 마스코트 "심청이". 연꽃 위에 앉은 요즘 느낌의 소녀.
 ///
 /// 2026-11-09 발표 피드백: 시각장애인용이지만 발표 때 보여지는 것도 있어야 한다. 마스코트를 심청이 느낌으로.
+/// 2026-11-12 화면 개편: 더 어리고 요즘 캐릭터처럼 다시 그렸다. 긴 생머리에 다홍 리본 머리핀,
+/// 짧은 노랑 저고리와 색동 소매 끝, 무선 이어폰(말로 대화하는 친구), 흰 운동화.
 /// 화면을 못 보는 사용자에게는 꾸밈이라 읽지 않는다(ExcludeSemantics). 상태는 소리로 알린다.
 ///
 /// - 기다림: 천천히 숨 쉬듯 위아래로, 가끔 눈을 깜빡인다.
-/// - 듣는 중: 물결(인당수)이 퍼진다.
+/// - 듣는 중: 물결(인당수)이 퍼지고 눈이 조금 커진다.
 /// - 생각 중: 머리 위 점 세 개가 차례로 뛴다.
 /// - 말하는 중: 입이 움직인다.
 class MascotView extends StatefulWidget {
@@ -57,317 +59,273 @@ class _MascotViewState extends State<MascotView>
   }
 }
 
-/// 심청이 그리기. [t]는 초 단위 시간(0~6 반복).
+/// 심청이 그리기. [t]는 초 단위 시간(0~6 반복). 220×220 칸 기준으로 그리고 위쪽 여백에 생각 점을 둔다.
 class MascotPainter extends CustomPainter {
   MascotPainter({required this.phase, required this.t});
 
   final AgentPhase phase;
   final double t;
 
-  static const skin = Color(0xFFFFE3CF);
-  static const hair = Color(0xFF2A2633);
-  static const jeogori = Color(0xFFFFD86B);
-  static const chima = Color(0xFFE0474C);
-  static const goreum = Color(0xFFC62F45);
-  static const lotus = Color(0xFFF7A1B5);
-  static const lotusDeep = Color(0xFFEA6F8E);
-  static const leaf = Color(0xFF5BAE7E);
+  static const skin = Color(0xFFFFE1CC);
+  static const hair = Color(0xFF3A2A4A);
+  static const hairShine = Color(0xFF6E5A8A);
+  static const eye = Color(0xFF2B2440);
+  static const jeogori = Color(0xFFFFD23F);
+  static const chima = Color(0xFFFF5A6E);
+  static const ribbonDeep = Color(0xFFE23A52);
+  static const lotus = Color(0xFFFF8FB1);
+  static const lotusLight = Color(0xFFFFB3C9);
+  static const leaf = Color(0xFF4FB286);
+  static const leafLight = Color(0xFF7FD3A8);
+  static const sky = Color(0xFF3EC6FF);
   static const water = Color(0xFF6FB7D6);
-  static const saekdong = [
-    Color(0xFFE0474C),
-    Color(0xFFFFB347),
-    Color(0xFFFFE066),
-    Color(0xFF6CC28A),
-    Color(0xFF5B8DEF),
-    Color(0xFFB57EDC),
-  ];
+  static const saekdong = [chima, sky, Color(0xFF7B6CFF)];
 
   @override
   void paint(Canvas canvas, Size size) {
-    final s = size.width / 220; // 220 기준으로 그린다
+    final s = size.width / 220;
     canvas.save();
     canvas.scale(s);
-    const w = 220.0;
     final h = size.height / s;
-
-    if (phase == AgentPhase.listening) _ripples(canvas, w, h);
-
-    // 숨쉬기
+    final top = h - 220; // 생각 점이 들어갈 위쪽 여백
     final bob = math.sin(t * math.pi / 1.5) * 2.5;
-    _lotus(canvas, w, h);
+
+    if (phase == AgentPhase.thinking) _thinkingDots(canvas, bob);
+    canvas.translate(0, top);
+    if (phase == AgentPhase.listening) _ripples(canvas);
+
+    _lotusBack(canvas);
     canvas.save();
     canvas.translate(0, bob);
-    _body(canvas, w, h);
-    _head(canvas, w, h);
+    _hairBack(canvas);
+    _body(canvas);
+    _head(canvas);
     canvas.restore();
-    _frontPetals(canvas, w, h);
-
-    if (phase == AgentPhase.thinking) _thinkingDots(canvas, w, bob);
+    _sneakers(canvas);
+    _fill(canvas, 'M56 198 Q44 178 62 162 Q80 180 76 198Z', lotusLight);
+    _fill(canvas, 'M164 198 Q176 178 158 162 Q140 180 144 198Z', lotusLight);
+    _sparkles(canvas);
     canvas.restore();
   }
 
-  void _ripples(Canvas canvas, double w, double h) {
-    final center = Offset(w / 2, h - 40);
+  void _ripples(Canvas canvas) {
+    const center = Offset(110, 200);
     for (var i = 0; i < 3; i++) {
       final p = ((t / 1.6) + i / 3) % 1.0;
-      final paint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = water.withValues(alpha: (1 - p) * 0.7);
       canvas.drawOval(
           Rect.fromCenter(
-              center: center, width: 120 + p * 120, height: 30 + p * 40),
-          paint);
+              center: center, width: 184 + p * 60, height: 26 + p * 30),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3
+            ..color = water.withValues(alpha: (1 - p) * 0.7));
     }
   }
 
-  void _lotus(Canvas canvas, double w, double h) {
-    final base = h - 40;
-    // 연잎
+  void _lotusBack(Canvas canvas) {
     canvas.drawOval(
-        Rect.fromCenter(
-            center: Offset(w / 2, base + 8), width: 190, height: 34),
+        Rect.fromCenter(center: const Offset(110, 200), width: 184, height: 26),
         Paint()..color = leaf);
     canvas.drawOval(
-        Rect.fromCenter(
-            center: Offset(w / 2, base + 4), width: 170, height: 22),
-        Paint()..color = const Color(0xFF7CC79A));
-    // 꽃잎: 뒤쪽은 진하게, 앞쪽은 밝게
-    for (final (dx, angle, color) in [
-      (-58.0, -0.9, lotusDeep),
-      (58.0, 0.9, lotusDeep),
-      (-36.0, -0.45, lotus),
-      (36.0, 0.45, lotus),
-      (0.0, 0.0, lotus),
-    ]) {
-      canvas.save();
-      canvas.translate(w / 2 + dx, base - 6);
-      canvas.rotate(angle);
-      final petal = Path()
-        ..moveTo(0, 14)
-        ..quadraticBezierTo(-22, -6, 0, -34)
-        ..quadraticBezierTo(22, -6, 0, 14)
-        ..close();
-      canvas.drawPath(petal, Paint()..color = color);
-      canvas.drawPath(
-          petal,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.2
-            ..color = Colors.white.withValues(alpha: 0.6));
-      canvas.restore();
-    }
+        Rect.fromCenter(center: const Offset(110, 197), width: 152, height: 16),
+        Paint()..color = leafLight);
+    _fill(canvas, 'M40 192 Q24 160 52 140 Q70 168 64 192Z', lotus);
+    _fill(canvas, 'M180 192 Q196 160 168 140 Q150 168 156 192Z', lotus);
   }
 
-  /// 치마 앞을 감싸는 앞쪽 꽃잎. 연꽃 위에 앉은 것처럼 보이게.
-  void _frontPetals(Canvas canvas, double w, double h) {
-    final base = h - 40;
-    for (final (dx, angle) in [
-      (-44.0, -0.35),
-      (44.0, 0.35),
-      (-16.0, -0.1),
-      (16.0, 0.1)
-    ]) {
-      canvas.save();
-      canvas.translate(w / 2 + dx, base + 8);
-      canvas.rotate(angle);
-      final petal = Path()
-        ..moveTo(0, 8)
-        ..quadraticBezierTo(-17, -6, 0, -26)
-        ..quadraticBezierTo(17, -6, 0, 8)
-        ..close();
-      canvas.drawPath(petal, Paint()..color = lotus);
-      canvas.drawPath(
-          petal,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.2
-            ..color = lotusDeep.withValues(alpha: 0.5));
-      canvas.restore();
-    }
+  void _hairBack(Canvas canvas) {
+    _fill(
+        canvas,
+        'M64 84 Q60 34 110 32 Q160 34 156 84 Q160 120 166 146 Q170 160 158 162 '
+        'Q160 150 150 152 Q154 140 146 142 L74 142 Q66 140 70 152 '
+        'Q60 150 62 162 Q50 160 54 146 Q60 120 64 84Z',
+        hair);
   }
 
-  void _body(Canvas canvas, double w, double h) {
-    final base = h - 46;
-    final cx = w / 2;
-    // 다홍 치마(종 모양)
-    final skirt = Path()
-      ..moveTo(cx - 34, base - 74)
-      ..quadraticBezierTo(cx - 70, base - 20, cx - 66, base)
-      ..quadraticBezierTo(cx, base + 12, cx + 66, base)
-      ..quadraticBezierTo(cx + 70, base - 20, cx + 34, base - 74)
-      ..close();
-    canvas.drawPath(skirt, Paint()..color = chima);
-    // 치마 주름
-    final fold = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..color = const Color(0xFFB8333A).withValues(alpha: 0.6);
-    for (final x in [-30.0, -10.0, 10.0, 30.0]) {
-      canvas.drawLine(Offset(cx + x * 0.6, base - 66),
-          Offset(cx + x * 1.3, base - 4), fold);
-    }
-    // 저고리
-    final jacket = RRect.fromRectAndCorners(
-      Rect.fromCenter(center: Offset(cx, base - 84), width: 78, height: 42),
-      topLeft: const Radius.circular(22),
-      topRight: const Radius.circular(22),
-      bottomLeft: const Radius.circular(10),
-      bottomRight: const Radius.circular(10),
-    );
-    canvas.drawRRect(jacket, Paint()..color = jeogori);
-    // 색동 소매(양쪽)
-    for (final side in [-1.0, 1.0]) {
+  void _body(Canvas canvas) {
+    // 치마, 짧은 저고리, 소매
+    _fill(canvas, 'M78 168 Q78 140 110 136 Q142 140 142 168Z', chima);
+    _fill(
+        canvas,
+        'M80 150 Q82 122 110 118 Q138 122 140 150 Q126 158 110 156 Q94 158 80 150Z',
+        jeogori);
+    _fill(canvas, 'M84 126 Q66 134 62 156 L78 160 Q80 144 90 136Z', jeogori);
+    _fill(canvas, 'M136 126 Q154 134 158 156 L142 160 Q140 144 130 136Z',
+        jeogori);
+    // 색동 소매 끝
+    for (final x in [60.0, 140.0]) {
       for (var i = 0; i < saekdong.length; i++) {
-        final x = cx + side * (40 + i * 5.0);
         canvas.drawRRect(
-          RRect.fromRectAndRadius(
-              Rect.fromCenter(
-                  center: Offset(x, base - 78 + i * 2.0), width: 6, height: 26),
-              const Radius.circular(3)),
-          Paint()..color = saekdong[i],
-        );
+            RRect.fromRectAndRadius(Rect.fromLTWH(x, 154 + i * 4.0, 20, 4),
+                const Radius.circular(2)),
+            Paint()..color = saekdong[i]);
       }
-      // 손
-      canvas.drawCircle(
-          Offset(cx + side * 72, base - 64), 6.5, Paint()..color = skin);
     }
-    // 깃과 동정
-    final collar = Path()
-      ..moveTo(cx - 16, base - 104)
-      ..lineTo(cx + 6, base - 82)
-      ..lineTo(cx + 16, base - 104);
-    canvas.drawPath(
-        collar,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 5
-          ..strokeCap = StrokeCap.round
-          ..color = Colors.white);
-    // 고름(리본)
-    final ribbon = Paint()..color = goreum;
-    canvas.drawOval(
-        Rect.fromCenter(
-            center: Offset(cx + 10, base - 80), width: 14, height: 9),
-        ribbon);
-    final tails = Path()
-      ..moveTo(cx + 10, base - 80)
-      ..quadraticBezierTo(cx + 4, base - 62, cx + 2, base - 50)
-      ..moveTo(cx + 10, base - 80)
-      ..quadraticBezierTo(cx + 18, base - 64, cx + 14, base - 52);
-    canvas.drawPath(
-        tails,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
-          ..strokeCap = StrokeCap.round
-          ..color = goreum);
+    // 손
+    canvas.drawCircle(const Offset(70, 169), 7, Paint()..color = skin);
+    canvas.drawCircle(const Offset(150, 169), 7, Paint()..color = skin);
+    // 고름 리본
+    _fill(
+        canvas,
+        'M110 132 Q100 126 98 134 Q100 140 110 136 Q120 140 122 134 Q120 126 110 132Z',
+        chima);
+    _stroke(canvas, 'M108 136 L104 150 M112 136 L117 148', chima, 4);
   }
 
-  void _head(Canvas canvas, double w, double h) {
-    final cx = w / 2;
-    final cy = h - 46 - 140;
-    // 댕기머리(뒤로 늘어진 땋은 머리) + 빨간 댕기
-    final braid = Paint()..color = hair;
-    for (var i = 0; i < 5; i++) {
-      canvas.drawOval(
-          Rect.fromCenter(
-              center: Offset(cx + 40 + i * 2.0, cy + 18 + i * 13.0),
-              width: 13,
-              height: 16),
-          braid);
-    }
-    final daenggi = Path()
-      ..moveTo(cx + 48, cy + 78)
-      ..lineTo(cx + 40, cy + 100)
-      ..lineTo(cx + 50, cy + 94)
-      ..lineTo(cx + 58, cy + 100)
-      ..close();
-    canvas.drawPath(daenggi, Paint()..color = goreum);
-
-    // 얼굴
-    canvas.drawCircle(Offset(cx, cy), 42, Paint()..color = skin);
-    // 머리카락(가운데 가르마)
-    final hairTop = Path()
-      ..moveTo(cx - 44, cy + 4)
-      ..quadraticBezierTo(cx - 46, cy - 46, cx, cy - 46)
-      ..quadraticBezierTo(cx + 46, cy - 46, cx + 44, cy + 4)
-      ..quadraticBezierTo(cx + 30, cy - 26, cx + 2, cy - 30)
-      ..lineTo(cx - 2, cy - 30)
-      ..quadraticBezierTo(cx - 30, cy - 26, cx - 44, cy + 4)
-      ..close();
-    canvas.drawPath(hairTop, Paint()..color = hair);
-    // 머리 윤기
-    canvas.drawArc(
-        Rect.fromCenter(
-            center: Offset(cx - 18, cy - 30), width: 26, height: 12),
-        math.pi * 1.1,
-        math.pi * 0.6,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3
-          ..strokeCap = StrokeCap.round
-          ..color = Colors.white.withValues(alpha: 0.35));
-
-    // 볼
-    final blush = Paint()
-      ..color = const Color(0xFFFF9FB0).withValues(alpha: 0.55);
+  void _head(Canvas canvas) {
     canvas.drawOval(
-        Rect.fromCenter(center: Offset(cx - 24, cy + 14), width: 16, height: 9),
-        blush);
-    canvas.drawOval(
-        Rect.fromCenter(center: Offset(cx + 24, cy + 14), width: 16, height: 9),
-        blush);
+        Rect.fromCenter(center: const Offset(110, 80), width: 84, height: 80),
+        Paint()..color = skin);
+    // 앞머리와 옆머리
+    _fill(
+        canvas,
+        'M68 86 Q64 40 110 38 Q156 40 152 86 Q146 66 136 60 Q132 70 124 72 '
+        'Q122 62 116 60 Q112 70 104 72 Q102 64 96 64 Q90 72 82 72 Q74 74 68 86Z',
+        hair);
+    _fill(canvas, 'M68 84 Q62 110 70 132 Q76 112 78 92Z', hair);
+    _fill(canvas, 'M152 84 Q158 110 150 132 Q144 112 142 92Z', hair);
+    _stroke(canvas, 'M88 48 Q100 42 114 43', hairShine, 3.5);
+    // 다홍 리본 머리핀
+    _fill(canvas, 'M140 52 Q156 38 162 52 Q154 60 142 56Z', chima);
+    _fill(canvas, 'M140 54 Q130 40 122 50 Q128 60 140 56Z', chima);
+    canvas.drawCircle(const Offset(141, 54), 4.5, Paint()..color = ribbonDeep);
 
-    // 눈: 듣는 중에는 동그랗게, 그 밖에는 가끔 깜빡인다.
+    // 눈: 듣는 중에는 조금 크게, 그 밖에는 가끔 깜빡인다.
     final blink = phase != AgentPhase.listening && (t % 3.2) < 0.14;
-    final eye = Paint()..color = hair;
-    for (final side in [-1.0, 1.0]) {
-      final at = Offset(cx + side * 15, cy + 2);
+    final grow = phase == AgentPhase.listening ? 1.12 : 1.0;
+    for (final x in [94.0, 126.0]) {
       if (blink) {
         canvas.drawLine(
-            at.translate(-5, 0),
-            at.translate(5, 0),
-            eye
-              ..strokeWidth = 2.5
+            Offset(x - 6, 89),
+            Offset(x + 6, 89),
+            Paint()
+              ..color = eye
+              ..strokeWidth = 3
               ..strokeCap = StrokeCap.round);
-      } else {
-        final r = phase == AgentPhase.listening ? 5.5 : 4.8;
-        canvas.drawCircle(at, r, eye);
-        canvas.drawCircle(
-            at.translate(1.6, -1.8), 1.6, Paint()..color = Colors.white);
+        continue;
       }
+      canvas.drawOval(
+          Rect.fromCenter(
+              center: Offset(x, 88), width: 13 * grow, height: 17 * grow),
+          Paint()..color = eye);
+      canvas.drawCircle(
+          Offset(x + 2.5, 85), 2.6, Paint()..color = Colors.white);
+      canvas.drawCircle(
+          Offset(x - 1.5, 92), 1.2, Paint()..color = Colors.white);
     }
-
+    // 볼
+    final blush = Paint()..color = lotus.withValues(alpha: 0.7);
+    canvas.drawOval(
+        Rect.fromCenter(center: const Offset(84, 100), width: 14, height: 9),
+        blush);
+    canvas.drawOval(
+        Rect.fromCenter(center: const Offset(136, 100), width: 14, height: 9),
+        blush);
     // 입
-    final mouth = Offset(cx, cy + 22);
     if (phase == AgentPhase.speaking) {
-      final open = 3 + (math.sin(t * math.pi * 5) + 1) * 3;
-      canvas.drawOval(Rect.fromCenter(center: mouth, width: 11, height: open),
-          Paint()..color = const Color(0xFFB8454F));
+      final open = 4 + (math.sin(t * math.pi * 5) + 1) * 3;
+      canvas.drawOval(
+          Rect.fromCenter(
+              center: const Offset(110, 103), width: 11, height: open),
+          Paint()..color = ribbonDeep);
     } else {
-      canvas.drawArc(
-          Rect.fromCenter(center: mouth.translate(0, -3), width: 14, height: 9),
-          0.15 * math.pi,
-          0.7 * math.pi,
-          false,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.4
-            ..strokeCap = StrokeCap.round
-            ..color = const Color(0xFFB8454F));
+      _fill(canvas, 'M104 100 Q110 108 116 100Z', ribbonDeep);
+    }
+    // 무선 이어폰
+    final white = Paint()..color = Colors.white;
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            const Rect.fromLTWH(65, 90, 10, 14), const Radius.circular(5)),
+        white);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            const Rect.fromLTWH(68, 101, 4, 9), const Radius.circular(2)),
+        white);
+  }
+
+  void _sneakers(Canvas canvas) {
+    for (final x in [78.0, 108.0]) {
+      canvas.drawRRect(
+          RRect.fromRectAndCorners(Rect.fromLTWH(x, 176, 34, 10),
+              topLeft: const Radius.circular(6),
+              topRight: const Radius.circular(6)),
+          Paint()..color = Colors.white);
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromLTWH(x, 186, 34, 4), const Radius.circular(2)),
+          Paint()..color = sky);
     }
   }
 
-  void _thinkingDots(Canvas canvas, double w, double bob) {
+  /// 반짝이 두 개. 천천히 커졌다 작아진다.
+  void _sparkles(Canvas canvas) {
+    final pulse = 1 + math.sin(t * math.pi / 1.5) * 0.15;
+    _star(canvas, const Offset(43, 63), 12 * pulse, jeogori);
+    _star(canvas, const Offset(184, 110), 8 * (2 - pulse), lotusLight);
+  }
+
+  void _star(Canvas canvas, Offset c, double r, Color color) {
+    final k = r / 4;
+    final path = Path()
+      ..moveTo(c.dx, c.dy - r)
+      ..lineTo(c.dx + k, c.dy - k)
+      ..lineTo(c.dx + r, c.dy)
+      ..lineTo(c.dx + k, c.dy + k)
+      ..lineTo(c.dx, c.dy + r)
+      ..lineTo(c.dx - k, c.dy + k)
+      ..lineTo(c.dx - r, c.dy)
+      ..lineTo(c.dx - k, c.dy - k)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  void _thinkingDots(Canvas canvas, double bob) {
     for (var i = 0; i < 3; i++) {
       final jump = math.max(0.0, math.sin((t * 4 - i * 0.6) * math.pi)) * 6;
-      canvas.drawCircle(Offset(w / 2 + 50 + i * 13.0, 16 - jump + bob), 4.5,
-          Paint()..color = goreum.withValues(alpha: 0.85));
+      canvas.drawCircle(Offset(150 + i * 13.0, 14 - jump + bob), 4.5,
+          Paint()..color = jeogori);
     }
   }
+
+  void _fill(Canvas canvas, String d, Color color) =>
+      canvas.drawPath(svgPath(d), Paint()..color = color);
+
+  void _stroke(Canvas canvas, String d, Color color, double width) =>
+      canvas.drawPath(
+          svgPath(d),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = width
+            ..strokeCap = StrokeCap.round
+            ..color = color);
 
   @override
   bool shouldRepaint(MascotPainter old) => old.t != t || old.phase != phase;
+}
+
+/// 마스코트 그림에 쓰는 SVG 경로 중 M, L, Q, Z(절대 좌표)만 읽는다.
+Path svgPath(String d) {
+  final tokens = RegExp(r'[MLQZ]|-?\d+(?:\.\d+)?')
+      .allMatches(d)
+      .map((m) => m.group(0)!)
+      .toList();
+  final path = Path();
+  var i = 0;
+  var cmd = 'M';
+  double n() => double.parse(tokens[i++]);
+  while (i < tokens.length) {
+    if (RegExp(r'[MLQZ]').hasMatch(tokens[i])) cmd = tokens[i++];
+    switch (cmd) {
+      case 'M':
+        path.moveTo(n(), n());
+        cmd = 'L';
+      case 'L':
+        path.lineTo(n(), n());
+      case 'Q':
+        path.quadraticBezierTo(n(), n(), n(), n());
+      case 'Z':
+        path.close();
+    }
+  }
+  return path;
 }

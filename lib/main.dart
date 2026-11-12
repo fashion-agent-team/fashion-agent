@@ -9,6 +9,7 @@ import 'agent/camera_turn.dart';
 import 'agent/onboarding_flow.dart';
 import 'firebase_options.dart';
 import 'screens/agent_screen.dart';
+import 'screens/palette.dart';
 import 'services/account_service.dart';
 import 'services/auto_capture.dart';
 import 'services/capture_service.dart';
@@ -168,14 +169,18 @@ class FashionAgentApp extends StatelessWidget {
     return MaterialApp(
       title: '패션 에이전트',
       debugShowCheckedModeBanner: false,
-      // 심청이 마스코트에 맞춘 색: 다홍(주), 남색(보조), 한지 바탕.
+      // 2026-11-12 화면 개편 "인당수의 밤": 쪽빛 바탕, 저고리 노랑 글씨(저시력 대비), 글꼴 Gothic A1.
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFC62F45),
-          secondary: const Color(0xFF283A6B),
-          surface: const Color(0xFFFFF8EC),
+          seedColor: SeaColors.jeogori,
+          brightness: Brightness.dark,
+          primary: SeaColors.jeogori,
+          onPrimary: SeaColors.sea,
+          surface: SeaColors.sea,
+          onSurface: SeaColors.hanji,
         ),
-        scaffoldBackgroundColor: const Color(0xFFFFF8EC),
+        scaffoldBackgroundColor: SeaColors.sea,
+        fontFamily: SeaFonts.gothic,
         useMaterial3: true,
       ),
       home: AgentScreen(
