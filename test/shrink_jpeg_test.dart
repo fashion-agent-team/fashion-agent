@@ -26,8 +26,8 @@ void main() {
   });
 
   test('세로 사진은 높이를 긴 변으로 본다', () {
-    final d = img.decodeJpg(
-        shrinkJpeg((jpeg: jpeg(1080, 1920), maxSide: sendMaxSide)))!;
+    final d = img
+        .decodeJpg(shrinkJpeg((jpeg: jpeg(1080, 1920), maxSide: sendMaxSide)))!;
     expect(d.height, 1280);
     expect(d.width, 720);
   });
