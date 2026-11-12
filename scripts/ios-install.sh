@@ -11,18 +11,19 @@ GATEWAY_URL="${GATEWAY_URL:-https://team4.tail2d734d.ts.net}"
 DEVICE="${1:-}"
 
 echo "▶ develop 최신 받기"
-git fetch origin develop
-# 로컬 서명 설정(ios/Runner.xcodeproj 등) 변경은 그대로 두고 받는다.
-git stash push -q -m ios-install-local || true
-git checkout -q develop
-git pull -q --no-rebase origin develop
-if git stash list | grep -q ios-install-local; then
-  git stash pop -q || {
-    echo "✖ 로컬 변경과 충돌했어요. 'git status'로 확인해 주세요(서명 설정은 Xcode에서 다시 골라도 돼요)."
-    exit 1
-  }
+# 지금 브랜치에 develop을 합친다. 브랜치를 바꾸거나 변경을 치우지 않아서
+# 각자 맥의 서명 설정(팀·번들 ID, 커밋했든 안 했든)이 그대로 남는다.
+# 커밋 안 한 변경은 --autostash가 잠깐 치웠다가 바로 되돌린다.
+if ! git pull -q --no-rebase --autostash origin develop; then
+  echo "✖ develop을 합치다 충돌했어요. 'git status'로 확인해 주세요."
+  echo "  서명 설정 충돌이면 develop 쪽을 고른 뒤 Xcode에서 팀만 다시 골라도 돼요."
+  exit 1
 fi
 echo "  $(git log -1 --oneline)"
+if ! git merge-base --is-ancestor origin/develop HEAD; then
+  echo "✖ develop 최신이 들어오지 않았어요."
+  exit 1
+fi
 
 if [[ -z "$DEVICE" ]]; then
   DEVICE=$(flutter devices --machine 2>/dev/null |
