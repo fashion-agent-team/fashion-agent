@@ -303,8 +303,8 @@ class SpeechService {
         final coldSlow = e is TimeoutException && !_cloudWarm;
         debugPrint('서버 목소리 실패${quota ? '(무료 횟수 끝)' : ''}, 폰 목소리로 읽어요: $e');
         if (!coldSlow) {
-          _cloudPausedUntil = DateTime.now().add(
-              quota ? const Duration(minutes: 30) : _retryAfter);
+          _cloudPausedUntil = DateTime.now()
+              .add(quota ? const Duration(minutes: 30) : _retryAfter);
         }
         if (gen == _generation) {
           await _speakDevice(sentences.sublist(i).join(' '), _bestDevice);
