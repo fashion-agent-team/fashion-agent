@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/garment.dart';
 import 'gateway_auth.dart';
 import 'mouth_finder.dart';
 
@@ -114,7 +113,6 @@ class TurnReply {
     this.resultType,
     this.outfitMode,
     this.gptConsent,
-    this.garments = const [],
   });
 
   factory TurnReply.fromJson(Map<String, dynamic> json) => TurnReply(
@@ -126,27 +124,7 @@ class TurnReply {
         outfitMode: OutfitMode.parse((json['result']
             as Map<String, dynamic>?)?['outfitMode'] as String?),
         gptConsent: json['gptConsent'] as bool?,
-        garments: _garments(json['result']),
       );
-
-  /// `result.outfitCheck.garments`. 모양이 다르거나 없으면 빈 목록(화면용이라 대화는 막지 않는다).
-  static List<Garment> _garments(Object? result) {
-    if (result is! Map<String, dynamic>) return const [];
-    final check = result['outfitCheck'];
-    if (check is! Map<String, dynamic>) return const [];
-    final list = check['garments'];
-    if (list is! List) return const [];
-    final out = <Garment>[];
-    for (final g in list) {
-      if (g is! Map<String, dynamic> || g['id'] is! String) continue;
-      try {
-        out.add(Garment.fromJson(g));
-      } on Object catch (e) {
-        debugPrint('옷 결과 읽기 실패: $e');
-      }
-    }
-    return out;
-  }
 
   final String sessionId;
 
@@ -162,9 +140,6 @@ class TurnReply {
 
   /// 사용자가 이번에 "더 정확한 AI에게 물어봐도 될까요?"에 답했으면 그 답. 앱이 기억해 다음부터 allowGpt로 보낸다.
   final bool? gptConsent;
-
-  /// 옷 검사(`outfit_check`)에서 본 옷들. 화면 "오늘의 색동"에 색을 쌓아 보여 준다.
-  final List<Garment> garments;
 }
 
 /// `POST /api/v1/agent/turn`. 게이트웨이에 로그인했을 때만 쓴다.
