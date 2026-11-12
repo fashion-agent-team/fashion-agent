@@ -1,12 +1,16 @@
 # 젯슨 배포 (jetson-deploy)
 
 맥북에서 `bootRun`으로 돌리던 서버 8개 + PostgreSQL + Redis를 팀 젯슨(team4, Jetson Orin Nano 8GB)에 Docker Compose로 옮긴 설정입니다.
-앱은 `https://simcheong.java21.net` 하나로 접속하고, 맥북이 꺼져 있어도, 와이파이·LTE 어디서든 됩니다.
+앱은 젯슨 Funnel 주소 `https://team4.tail2d734d.ts.net`으로 바로 접속하고, 맥북이 꺼져 있어도, 와이파이·LTE 어디서든 됩니다.
+2026-11-12부터 앱은 강사님 프록시(`simcheong.java21.net`)를 거치지 않습니다. 프록시를 거치면 요청마다 1~1.5초가 더 걸렸습니다(TTS 한 문장 2.2~2.5초 → 바로 붙으면 0.7~0.9초). 프록시 주소도 그대로 열려 있습니다.
 
 ## 전체 흐름
 
 ```
-아이폰 앱 (GATEWAY_URL=https://simcheong.java21.net)
+아이폰 앱 (GATEWAY_URL=https://team4.tail2d734d.ts.net, 바로 Funnel로)
+
+(예전 경로, 지금도 열려 있음)
+아이폰·브라우저 (https://simcheong.java21.net)
   │ https
   ▼
 강사님 서버 java21.net ─ Nginx Proxy Manager (simcheong.java21.net, Let's Encrypt 인증서)
@@ -115,7 +119,7 @@ Nginx Proxy Manager(java21.net)의 사이트: 도메인 `simcheong.java21.net`, 
 | 로그 | `docker compose logs -f agent` |
 | 코드 바꾼 뒤 한 서비스만 다시 | 맥북 `./scripts/sync.sh` → 젯슨 `./scripts/up.sh mcp-closet` |
 | 전부 멈춤 | `docker compose stop` |
-| 바깥 확인 | `curl https://simcheong.java21.net/actuator/health` |
+| 바깥 확인 | `curl https://team4.tail2d734d.ts.net/actuator/health` (프록시: `https://simcheong.java21.net/actuator/health`) |
 
 `sync.sh`는 **`origin/develop`**을 보냅니다. 내 브랜치를 올려 보려면 `DEPLOY_REF=origin/<브랜치> ./scripts/sync.sh`.
 
@@ -131,7 +135,8 @@ Nginx Proxy Manager(java21.net)의 사이트: 도메인 `simcheong.java21.net`, 
 ## 앱 빌드
 
 ```bash
-flutter build ios --release --dart-define=GATEWAY_URL=https://simcheong.java21.net
+flutter build ios --release --dart-define=GATEWAY_URL=https://team4.tail2d734d.ts.net
+# 또는 연결된 아이폰에 바로: ./scripts/ios-install.sh
 flutter install --release            # 연결된 폰에 설치(앱 데이터가 초기화될 수 있음)
 ```
 
