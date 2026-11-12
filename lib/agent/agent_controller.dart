@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/garment.dart';
 import '../models/user_profile.dart';
 import '../services/listen_service.dart';
 import '../services/gateway_auth.dart';
@@ -102,6 +103,24 @@ class AgentController extends ChangeNotifier {
 
   /// 화면에 크게 보여 줄 마지막 안내.
   String message = '';
+
+  /// 이번 옷 검사에서 본 옷(종류마다 한 벌). 비어 있지 않으면 첫 화면이 "오늘의 색동"으로 바뀐다.
+  /// 새 대화를 시작하거나 처음으로 돌아가면 비운다.
+  List<Garment> outfit = const [];
+
+  /// 카메라 화면에서 본 옷을 더한다.
+  void addOutfit(List<Garment> seen) {
+    final merged = mergeOutfit(outfit, seen);
+    if (identical(merged, outfit)) return;
+    outfit = merged;
+    notifyListeners();
+  }
+
+  void _clearOutfit() {
+    if (outfit.isEmpty) return;
+    outfit = const [];
+    notifyListeners();
+  }
 
   /// 묻거나 듣는 중이면 true. 그동안 버튼을 막는다.
   bool busy = false;
@@ -298,6 +317,7 @@ class AgentController extends ChangeNotifier {
     if (isHomeCommand(text)) {
       // 처음 화면에서 "처음으로": 하던 대화를 끝내고 처음부터 듣는다.
       _sessionId = null;
+      _clearOutfit();
       await _say(homeScreen);
       await _listenAndHandle();
       return;
@@ -331,6 +351,8 @@ class AgentController extends ChangeNotifier {
   Future<bool> _converse(TurnApi api, String text) async {
     var utterance = text;
     TurnReply? fromCamera;
+    // 새 대화면 지난 옷 검사 결과를 치운다.
+    if (_sessionId == null) _clearOutfit();
     while (true) {
       TurnReply reply;
       if (fromCamera != null) {
@@ -356,6 +378,7 @@ class AgentController extends ChangeNotifier {
         }
       }
       _sessionId = reply.sessionId;
+      addOutfit(reply.garments);
       await _say(reply.speech);
 
       final camera = reply.next.camera;
@@ -385,6 +408,7 @@ class AgentController extends ChangeNotifier {
       if (heard == null) break;
       if (isHomeCommand(heard)) {
         _sessionId = null;
+        _clearOutfit();
         await _say('처음으로 돌아왔어요. $homeScreen');
         break;
       }
