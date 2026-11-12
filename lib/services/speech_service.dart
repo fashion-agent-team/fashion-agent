@@ -158,11 +158,16 @@ class SpeechService {
   List<Voice> _deviceVoices = const [];
   bool _deviceVoicesLoaded = false;
 
-  /// 고를 수 있는 목소리: 폰 목소리(좋은 것부터) 다음 구글 목소리.
-  List<Voice> get voices => [
-        ...(_deviceVoices.isEmpty ? const [deviceVoice] : _deviceVoices),
-        if (cloud != null) ...cloudVoices,
-      ];
+  /// 고를 수 있는 목소리. 서버 목소리가 있으면 서버 목소리만(유진부터) 고른다.
+  ///
+  /// 2026-11-12 진행 님: 목소리 고르기에 폰 목소리는 빼 달라(앞에 9개나 나와 로봇 같은 목소리를 들어야 했다).
+  /// 폰 목소리는 서버가 안 될 때 대신 읽는 데만 쓴다. 서버가 없으면 폰 목소리(좋은 것 3개까지)를 고른다.
+  List<Voice> get voices {
+    if (cloud != null) return cloudVoices;
+    return _deviceVoices.isEmpty
+        ? const [deviceVoice]
+        : _deviceVoices.take(3).toList();
+  }
 
   /// 폰에 받아 둔 한국어 목소리를 읽는다. 한 번만 읽는다.
   Future<void> loadDeviceVoices() async {
@@ -176,6 +181,11 @@ class SpeechService {
         if (item is! Map) continue;
         final v = item.map((k, val) => MapEntry('$k', '$val'));
         if (!(v['locale'] ?? '').toLowerCase().startsWith('ko')) continue;
+        // 아이폰의 장난감 같은 목소리(Eddy, Grandma, Rocko 등)는 뺀다. 시각장애인 안내에 맞지 않는다.
+        final id = (v['identifier'] ?? '').toLowerCase();
+        if (id.contains('eloquence') || id.contains('speech.synthesis')) {
+          continue;
+        }
         final voice = Voice.fromDevice(v);
         if (seen.add(voice.id)) list.add(voice);
       }
