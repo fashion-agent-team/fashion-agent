@@ -151,9 +151,11 @@ abstract class TurnApi {
   Future<TurnReply> say(String? sessionId, String utterance,
       {TurnLocation? location});
 
-  /// 자동으로 찍은 사진 한 장(JPEG)을 보낸다. 이 사진이면 [mouthBox]를 같이 보낼 수 있다.
+  /// 자동으로 찍은 사진 한 장(JPEG)을 보낸다. 이 사진이면 [mouthBox], 얼굴 사진이면 [faceLandmarks]를 같이 보낼 수 있다.
   Future<TurnReply> show(String? sessionId, ImageKind kind, Uint8List jpeg,
-      {TurnLocation? location, MouthBox? mouthBox});
+      {TurnLocation? location,
+      MouthBox? mouthBox,
+      Map<String, Object>? faceLandmarks});
 }
 
 class GatewayTurnApi implements TurnApi {
@@ -192,13 +194,16 @@ class GatewayTurnApi implements TurnApi {
 
   @override
   Future<TurnReply> show(String? sessionId, ImageKind kind, Uint8List jpeg,
-          {TurnLocation? location, MouthBox? mouthBox}) =>
+          {TurnLocation? location,
+          MouthBox? mouthBox,
+          Map<String, Object>? faceLandmarks}) =>
       _post(turnRequestJson(
           sessionId: sessionId,
           kind: kind,
           jpeg: jpeg,
           location: location,
-          mouthBox: mouthBox));
+          mouthBox: mouthBox,
+          faceLandmarks: faceLandmarks));
 
   Future<TurnReply> _post(Map<String, dynamic> body) async {
     final allow = await gptConsent.load();
@@ -227,6 +232,7 @@ Map<String, dynamic> turnRequestJson({
   TurnLocation? location,
   OutfitMode? outfitMode,
   MouthBox? mouthBox,
+  Map<String, Object>? faceLandmarks,
 }) =>
     {
       if (sessionId != null) 'sessionId': sessionId,
@@ -236,6 +242,7 @@ Map<String, dynamic> turnRequestJson({
         'imageKind': (kind ?? ImageKind.outfit).name,
         'autoCaptured': true,
         if (mouthBox != null) 'mouthBox': mouthBox.toJson(),
+        if (faceLandmarks != null) 'faceLandmarks': faceLandmarks,
       },
       if (location != null) 'location': location.toJson(),
       if (outfitMode != null) 'outfitMode': outfitMode.name,

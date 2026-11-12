@@ -19,6 +19,7 @@ import 'services/firebase_account_service.dart';
 import 'services/gateway_auth.dart';
 import 'services/listen_service.dart';
 import 'services/server_stt.dart';
+import 'services/face_landmark_finder.dart';
 import 'services/mouth_finder.dart';
 import 'services/permission_service.dart';
 import 'services/profile_store.dart';
@@ -108,6 +109,7 @@ Future<void> main() async {
             location: location,
             handsFree: _handsFree,
             mouths: _fakeCamera || kIsWeb ? null : MlKitMouthFinder(),
+            faces: _fakeCamera || kIsWeb ? null : MlKitFaceLandmarkFinder(),
             camera: _fakeCamera
                 ? FakeAutoCaptureCamera()
                 : DeviceAutoCaptureCamera(),

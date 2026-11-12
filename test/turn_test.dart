@@ -9,6 +9,7 @@ import 'package:fashion_agent/models/user_profile.dart';
 import 'package:fashion_agent/services/auto_capture.dart';
 import 'package:fashion_agent/services/framing.dart';
 import 'package:fashion_agent/services/gateway_auth.dart';
+import 'package:fashion_agent/services/face_landmark_finder.dart';
 import 'package:fashion_agent/services/mouth_finder.dart';
 import 'package:fashion_agent/services/profile_store.dart';
 import 'package:fashion_agent/services/turn_api.dart';
@@ -38,6 +39,7 @@ class FakeTurnApi implements TurnApi {
   final sessions = <String?>[];
   final locations = <TurnLocation?>[];
   final mouthBoxes = <MouthBox?>[];
+  final faceLandmarks = <Map<String, Object>?>[];
 
   @override
   Future<bool> get available async => signedIn;
@@ -59,8 +61,11 @@ class FakeTurnApi implements TurnApi {
 
   @override
   Future<TurnReply> show(String? sessionId, ImageKind kind, Uint8List jpeg,
-      {TurnLocation? location, MouthBox? mouthBox}) {
+      {TurnLocation? location,
+      MouthBox? mouthBox,
+      Map<String, Object>? faceLandmarks}) {
     mouthBoxes.add(mouthBox);
+    this.faceLandmarks.add(faceLandmarks);
     sent.add('show:${kind.name}:${jpeg.length}');
     sessions.add(sessionId);
     locations.add(location);
@@ -114,6 +119,24 @@ void main() {
           jpeg: Uint8List.fromList([1, 2, 3]),
           mouthBox: const MouthBox(0.25, 0.5, 0.5, 0.125));
       expect(json['mouthBox'], {'x': 0.25, 'y': 0.5, 'w': 0.5, 'h': 0.125});
+    });
+
+    test('얼굴 윤곽점이 있으면 faceLandmarks로 같이 보낸다', () {
+      final json = turnRequestJson(
+          kind: ImageKind.face,
+          jpeg: Uint8List.fromList([1, 2, 3]),
+          faceLandmarks: const {
+            'leftEye': [
+              [0.3, 0.4]
+            ],
+            'yaw': 2.0,
+          });
+      expect(json['faceLandmarks'], {
+        'leftEye': [
+          [0.3, 0.4]
+        ],
+        'yaw': 2.0,
+      });
     });
 
     test('답의 next를 읽는다', () {
@@ -439,7 +462,9 @@ void main() {
 
     CameraTurnController cameraWith(
             FakeSpeech speech, FakeTurnApi turns, FakeAutoCaptureCamera camera,
-            {List<String?> heard = const [], MouthFinder? mouths}) =>
+            {List<String?> heard = const [],
+            MouthFinder? mouths,
+            FaceLandmarkFinder? faces}) =>
         CameraTurnController(
           speech: speech,
           listen: ScriptedListen(heard),
@@ -447,6 +472,7 @@ void main() {
           camera: camera,
           location: here,
           mouths: mouths,
+          faces: faces,
         );
 
     test('멈추면 찍어 보내고, camera_outfit이면 읽고 계속 보다가 done이면 돌려준다', () async {
@@ -525,6 +551,27 @@ void main() {
 
       expect(turns.mouthBoxes, [null, box]);
       expect(mouths.calls, 1);
+    });
+
+    test('얼굴 사진에만 윤곽점을 찾아 같이 보낸다', () async {
+      const marks = <String, Object>{
+        'leftEye': [
+          [0.3, 0.4]
+        ],
+        'yaw': 1.5,
+      };
+      final faces = FakeFaceLandmarkFinder(marks);
+      final turns = FakeTurnApi([
+        reply('입을 보여 주세요.', TurnNext.cameraTeeth),
+        reply('이에 낀 것은 없어 보여요.', TurnNext.listen),
+      ]);
+      final camera = FakeAutoCaptureCamera([photo, photo]);
+      final c = cameraWith(FakeSpeech(), turns, camera, faces: faces);
+
+      await c.run('s_1', ImageKind.face);
+
+      expect(turns.faceLandmarks, [marks, null]);
+      expect(faces.calls, 1);
     });
 
     test('입을 못 찾으면 박스 없이 보낸다', () async {
