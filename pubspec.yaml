@@ -39,3 +39,15 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # 2026-11-12 화면 개편 글꼴. 한글·영문만 남겨 크기를 줄였다(OFL, assets/fonts/OFL-*.txt).
+  # 누르는 것·상태는 고딕(Gothic A1), 에이전트가 하는 말은 명조(고운바탕).
+  fonts:
+    - family: GothicA1
+      fonts:
+        - asset: assets/fonts/GothicA1-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/GothicA1-Black.ttf
+          weight: 900
+    - family: GowunBatang
+      fonts:
+        - asset: assets/fonts/GowunBatang-Regular.ttf
