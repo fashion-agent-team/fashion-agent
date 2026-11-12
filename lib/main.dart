@@ -166,7 +166,7 @@ class FashionAgentApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '패션 에이전트',
+      title: '심청이',
       debugShowCheckedModeBanner: false,
       // 심청이 마스코트에 맞춘 색: 다홍(주), 남색(보조), 한지 바탕.
       theme: ThemeData(
