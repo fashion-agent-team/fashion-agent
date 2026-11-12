@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../agent/agent_controller.dart';
 import '../agent/camera_turn.dart';
+import '../models/garment.dart';
 import '../services/turn_api.dart';
 import '../session/session_controller.dart';
 import 'camera_turn_screen.dart';
@@ -105,6 +106,8 @@ class _AgentScreenState extends State<AgentScreen> with WidgetsBindingObserver {
           CameraTurnScreen(controller: camera, camera: camera.camera),
     )));
     final reply = await camera.run(sessionId, kind);
+    // 카메라에서 본 옷은 첫 화면 "오늘의 색동"에 남긴다.
+    _a.addOutfit(camera.garments);
     if (mounted && navigator.canPop()) navigator.pop();
     return reply;
   }
@@ -180,7 +183,7 @@ class _TalkArea extends StatelessWidget {
         AgentPhase.thinking => '알아보는 중이에요',
         AgentPhase.speaking => '말하는 중이에요',
         AgentPhase.idle =>
-          agent.handsFree ? '"${agent.wakeName}" 하고 불러 주세요' : '화면을 눌러 말씀해 주세요',
+          agent.handsFree ? '“${agent.wakeName}” 하고 불러 주세요' : '화면을 눌러 말씀해 주세요',
       };
 
   @override
@@ -197,6 +200,11 @@ class _TalkArea extends StatelessWidget {
           onTap: onTap,
           child: LayoutBuilder(
             builder: (context, box) {
+              // 옷 검사 결과가 있으면 "오늘의 색동". 다시 들을 때는 평소 화면으로.
+              if (agent.outfit.isNotEmpty && !listening) {
+                return _OutfitResult(
+                    garments: agent.outfit, message: agent.message);
+              }
               final mascot = (box.maxHeight * 0.34).clamp(110.0, 236.0);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -239,6 +247,13 @@ class _TalkArea extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // 듣는 중: 소리 막대. 멀리서도 "듣고 있다"가 보이게.
+                            if (listening)
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 6),
+                                child: Icon(Icons.graphic_eq_rounded,
+                                    size: 52, color: SeaColors.sea),
+                              ),
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 200),
                               child: Text(
@@ -270,7 +285,7 @@ class _TalkArea extends StatelessWidget {
                                                 fontFamily: SeaFonts.batang,
                                                 fontSize: 32,
                                                 height: 1.45,
-                                                color: Colors.white)),
+                                                color: SeaColors.hanji)),
                                       ),
                               ),
                             if (!listening && agent.message.isNotEmpty)
@@ -295,6 +310,115 @@ class _TalkArea extends StatelessWidget {
                 ],
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 새 화면 "오늘의 색동": 찍은 옷의 실제 색을 상의·하의·신발 순서로 화면 가득 쌓는다.
+///
+/// 마스코트 소매의 색동처럼. 저시력 사용자는 색 덩어리로, 돕는 사람은 조합을 한눈에 본다.
+/// 화면 읽기는 위쪽 영역 전체("말하기")가 마지막 안내를 읽으므로 따로 읽지 않는다.
+class _OutfitResult extends StatelessWidget {
+  const _OutfitResult({required this.garments, required this.message});
+
+  final List<Garment> garments;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: Text('오늘의 색동',
+                style: TextStyle(
+                    fontFamily: SeaFonts.gothic,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                    color: SeaColors.jeogori)),
+          ),
+          if (message.isNotEmpty)
+            Flexible(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 18),
+                child: SingleChildScrollView(
+                  child: Text(message,
+                      style: const TextStyle(
+                          fontFamily: SeaFonts.batang,
+                          fontSize: 24,
+                          height: 1.55,
+                          color: SeaColors.hanji)),
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 18),
+          Expanded(
+            flex: 5,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final g in garments)
+                    Expanded(child: _ColorBand(garment: g)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 옷 한 벌의 색 띠. 작은 글씨로 "상의, 니트", 큰 글씨로 색 이름.
+class _ColorBand extends StatelessWidget {
+  const _ColorBand({required this.garment});
+
+  final Garment garment;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = swatchFor(garment.colorFamily, garment.tone);
+    // 밝은 색 위에는 쪽빛 글씨, 어두운 색 위에는 한지 글씨.
+    final ink =
+        color.computeLuminance() > 0.35 ? SeaColors.sea : SeaColors.hanji;
+    final kind = categoryLabel(garment.category);
+    final label = garment.name == kind ? kind : '$kind, ${garment.name}';
+    return ColoredBox(
+      color: color,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontFamily: SeaFonts.gothic,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: ink)),
+              Text(garment.colorName,
+                  style: TextStyle(
+                      fontFamily: SeaFonts.gothic,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 38,
+                      height: 1.1,
+                      letterSpacing: -0.6,
+                      color: ink)),
+            ],
           ),
         ),
       ),

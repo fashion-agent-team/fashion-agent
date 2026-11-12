@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/garment.dart';
+
 /// 화면 개편(2026-11-12) "인당수의 밤" 색.
 ///
 /// 쪽빛 바탕에 노랑 큰 글씨는 저시력 사용자가 가장 잘 읽는 대비 조합이다(바탕 대비 약 11:1).
@@ -22,6 +24,38 @@ class SeaColors {
 
   /// 연꽃: 키보드 초점 테두리
   static const lotus = Color(0xFFF7A1B5);
+}
+
+/// 옷 색 계열·톤을 화면에 칠할 색으로. "오늘의 색동" 띠에 쓴다.
+/// 실제 옷 사진 색이 아니라 계열의 대표색이다(사진은 폰에 남기지 않는다).
+Color swatchFor(ColorFamily family, Tone tone) {
+  final base = switch (family) {
+    ColorFamily.black => const Color(0xFF232327),
+    ColorFamily.white => const Color(0xFFF1EBDF),
+    ColorFamily.gray => const Color(0xFF8D9097),
+    ColorFamily.navy => const Color(0xFF2B3A64),
+    ColorFamily.beige => const Color(0xFFD8C4A2),
+    ColorFamily.brown => const Color(0xFF6B4A33),
+    ColorFamily.khaki => const Color(0xFF7C7A4E),
+    ColorFamily.blue => const Color(0xFF3E6DB3),
+    ColorFamily.red => const Color(0xFFC03A3D),
+    ColorFamily.pink => const Color(0xFFE8A0B4),
+    ColorFamily.orange => const Color(0xFFDF7A34),
+    ColorFamily.yellow => const Color(0xFFE6C24A),
+    ColorFamily.green => const Color(0xFF3E7C4E),
+    ColorFamily.purple => const Color(0xFF6D4E99),
+    ColorFamily.unknown => const Color(0xFF5A6072),
+  };
+  // 검정·흰색은 톤을 따로 두지 않는다.
+  if (family == ColorFamily.black || family == ColorFamily.white) return base;
+  final hsl = HSLColor.fromColor(base);
+  final l = switch (tone) {
+    Tone.light => hsl.lightness + (1 - hsl.lightness) * 0.4,
+    Tone.mid => hsl.lightness,
+    Tone.dark => hsl.lightness * 0.8,
+  };
+  // 쪽빛 바탕(밝기 약 0.18)에 묻히지 않게 0.22 밑으로는 내리지 않는다.
+  return hsl.withLightness(l.clamp(0.22, 1.0)).toColor();
 }
 
 /// 글꼴 규칙: 누르는 것과 상태는 고딕, 에이전트가 하는 말과 들은 말은 명조.

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../agent/camera_turn.dart';
 import '../services/auto_capture.dart';
+import '../services/turn_api.dart' show ImageKind;
 import 'palette.dart';
 
 /// agent가 카메라를 켜라고 했을 때의 화면. 찍기 버튼은 없다. 멈추면 자동으로 찍는다.
@@ -49,22 +50,8 @@ class CameraTurnScreen extends StatelessWidget {
                           Expanded(
                             flex: 9,
                             child: Padding(
-                              padding: const EdgeInsets.fromLTRB(28, 24, 28, 8),
-                              child: SingleChildScrollView(
-                                child: Text(
-                                  controller.message.isEmpty
-                                      ? (controller.busy ? '확인 중이에요' : '말하기')
-                                      : controller.message,
-                                  style: const TextStyle(
-                                    fontFamily: SeaFonts.gothic,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 40,
-                                    height: 1.18,
-                                    letterSpacing: -0.8,
-                                    color: SeaColors.jeogori,
-                                  ),
-                                ),
-                              ),
+                              padding: const EdgeInsets.fromLTRB(28, 20, 28, 8),
+                              child: _Guide(controller: controller),
                             ),
                           ),
                         ],
@@ -86,6 +73,103 @@ class CameraTurnScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 아래쪽 안내: 진행 막대 세 칸, 노랑 큰 글씨 한 줄(첫 문장), 그 아래 한지색 작은 설명(나머지).
+class _Guide extends StatelessWidget {
+  const _Guide({required this.controller});
+
+  final CameraTurnController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = controller.message.isEmpty
+        ? (controller.busy ? '확인 중이에요' : '멈추면 알아서 찍어요')
+        : controller.message;
+    final (head, rest) = splitGuide(text);
+    // 옷을 찍을 때만 몇 장째인지 보여 준다(얼굴·이는 한 장).
+    final steps = switch (controller.kind) {
+      ImageKind.outfit || ImageKind.worn => 3,
+      _ => 0,
+    };
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (steps > 0) ...[
+            _Steps(total: steps, done: controller.shots),
+            const SizedBox(height: 22),
+          ],
+          Text(
+            head,
+            style: const TextStyle(
+              fontFamily: SeaFonts.gothic,
+              fontWeight: FontWeight.w900,
+              fontSize: 40,
+              height: 1.18,
+              letterSpacing: -0.8,
+              color: SeaColors.jeogori,
+            ),
+          ),
+          if (rest.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Text(
+                rest,
+                style: const TextStyle(
+                  fontFamily: SeaFonts.batang,
+                  fontSize: 21,
+                  height: 1.6,
+                  color: SeaColors.hanji,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 첫 문장과 나머지로 나눈다. 첫 문장 끝의 마침표는 큰 글씨에서 뺀다("한 걸음 뒤로 가 주세요").
+(String, String) splitGuide(String text) {
+  final t = text.trim();
+  final m = RegExp(r'[.?!。](\s+|$)').firstMatch(t);
+  if (m == null || m.end >= t.length) return (_dropPeriod(t), '');
+  return (_dropPeriod(t.substring(0, m.start + 1)), t.substring(m.end).trim());
+}
+
+String _dropPeriod(String s) =>
+    s.endsWith('.') ? s.substring(0, s.length - 1) : s;
+
+/// 진행 막대: 찍은 만큼 노랑, 남은 칸은 흐린 파랑. 꾸밈이라 화면 읽기에서 뺀다.
+class _Steps extends StatelessWidget {
+  const _Steps({required this.total, required this.done});
+
+  final int total;
+  final int done;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: Row(
+        children: [
+          for (var i = 0; i < total; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                height: 7,
+                decoration: BoxDecoration(
+                  color: i < done ? SeaColors.jeogori : const Color(0xFF34477F),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'agent_speech.dart' show isHomeCommand;
 import 'command_listener.dart';
+import '../models/garment.dart';
 import '../services/auto_capture.dart';
 import '../services/capture_service.dart';
 import '../services/framing.dart';
@@ -61,6 +62,13 @@ class CameraTurnController extends ChangeNotifier {
   bool busy = false;
 
   ImageKind kind = ImageKind.outfit;
+
+  /// 이번에 카메라를 켜고 보낸 사진 수. 화면 진행 막대(세 칸)에 쓴다.
+  int shots = 0;
+
+  /// 이번 카메라에서 agent가 알려 준 옷(종류마다 한 벌). 끝나면 첫 화면 "오늘의 색동"에 보여 준다.
+  List<Garment> garments = const [];
+
   String? _sessionId;
   Completer<TurnReply?>? _done;
   int _round = 0;
@@ -74,6 +82,9 @@ class CameraTurnController extends ChangeNotifier {
   Future<TurnReply?> run(String sessionId, ImageKind kind) async {
     _sessionId = sessionId;
     this.kind = kind;
+    shots = 0;
+    garments = const [];
+    message = '';
     _timeouts = 0;
     _closing = false;
     final done = _done = Completer<TurnReply?>();
@@ -203,6 +214,7 @@ class CameraTurnController extends ChangeNotifier {
         return;
       }
       _timeouts = 0;
+      shots++;
       _setBusy(true);
       try {
         // 찍혔다는 걸 바로 알린다. 답을 기다리는 동안 읽는다.
@@ -243,6 +255,7 @@ class CameraTurnController extends ChangeNotifier {
       return;
     }
     await before;
+    garments = mergeOutfit(garments, reply.garments);
     if (!running) return;
     _sessionId = reply.sessionId;
     final next = reply.next.camera;
