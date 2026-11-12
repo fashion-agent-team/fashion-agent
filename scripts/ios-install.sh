@@ -2,12 +2,12 @@
 # 아이폰에 최신 develop 앱을 깔아 실행한다. 폰을 케이블로 맥에 연결하고 잠금을 풀어 둔 채로:
 #   ./scripts/ios-install.sh            # 연결된 아이폰 하나에 설치
 #   ./scripts/ios-install.sh <기기 id>   # 여러 대면 flutter devices의 id로 지정
-# 서버: GATEWAY_URL(기본 https://simcheong.java21.net). 서버 목소리(CLOUD_TTS)는 앱 기본값으로 켜져 있다.
+# 서버: GATEWAY_URL(기본 젯슨 Funnel https://team4.tail2d734d.ts.net, 2026-11-12: 강사님 프록시를 거치면 요청마다 1~1.5초 더 걸려서 바로 붙음). 서버 목소리(CLOUD_TTS)는 앱 기본값으로 켜져 있다.
 # FAKE_CAMERA 같은 시뮬레이터 옵션은 넣지 않는다(실기기에서 얼굴을 못 찾던 원인).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-GATEWAY_URL="${GATEWAY_URL:-https://simcheong.java21.net}"
+GATEWAY_URL="${GATEWAY_URL:-https://team4.tail2d734d.ts.net}"
 DEVICE="${1:-}"
 
 echo "▶ develop 최신 받기"
