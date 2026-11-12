@@ -127,6 +127,25 @@ class TtsCache {
   }
 }
 
+/// 서버 목소리로 받을 조각. 첫 문장만 따로 두고(바로 읽기 시작), 나머지는 [max]자까지 이어 붙인다.
+/// 게이트웨이는 한 번에 500자까지 받는다.
+List<String> speechChunks(String text, {int max = 300}) {
+  final sentences = splitSentences(text);
+  if (sentences.length <= 1) return sentences;
+  final out = [sentences.first];
+  final buf = StringBuffer();
+  for (final s in sentences.skip(1)) {
+    if (buf.isNotEmpty && buf.length + 1 + s.length > max) {
+      out.add(buf.toString());
+      buf.clear();
+    }
+    if (buf.isNotEmpty) buf.write(' ');
+    buf.write(s);
+  }
+  if (buf.isNotEmpty) out.add(buf.toString());
+  return out;
+}
+
 /// 긴 안내를 문장으로 나눈다. 첫 문장을 먼저 받아 읽는 동안 다음 문장을 받아서 기다림을 줄인다.
 List<String> splitSentences(String text) {
   final out = <String>[];

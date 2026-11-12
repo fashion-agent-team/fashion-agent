@@ -154,6 +154,17 @@ void main() {
       expect(splitSentences('네. 좋아요.'), ['네. 좋아요.']);
     });
 
+    test('첫 문장만 따로, 나머지는 이어서 받는다', () {
+      expect(speechChunks('안녕하세요. 오늘은 맑아요! 겉옷을 챙기세요'),
+          ['안녕하세요.', '오늘은 맑아요! 겉옷을 챙기세요']);
+      expect(speechChunks('네. 좋아요.'), ['네. 좋아요.']);
+      final long = List.filled(10, '오늘은 날씨가 맑고 따뜻해요.').join(' ');
+      final chunks = speechChunks('첫 문장이에요. $long', max: 60);
+      expect(chunks.first, '첫 문장이에요.');
+      expect(chunks.skip(1).every((c) => c.length <= 60), isTrue);
+      expect(chunks.skip(1).join(' '), long);
+    });
+
     test('같은 목소리·문장은 같은 이름으로 기억한다', () {
       expect(
           TtsCache.cacheKey('Aoede', '안녕'), TtsCache.cacheKey('Aoede', '안녕'));
