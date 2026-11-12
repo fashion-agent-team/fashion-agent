@@ -373,13 +373,14 @@ void main() {
       expect(speech.spoken, contains(noServerOutfitSpeech));
     });
 
-    test('준비 중인 기능은 그렇다고 말한다', () async {
+    test('서버 없이 얼굴 확인을 말하면 준비 중이 아니라 서버 연결이 필요하다고 말한다', () async {
       final speech = FakeSpeech();
       final agent = agentWith(speech, ['얼굴 좀 봐 줘'],
           profile: const UserProfile(agentName: '하늘', consent: consentVersion));
       await agent.start();
 
-      expect(speech.spoken, contains('얼굴 확인 기능은 지금 준비 중이에요.'));
+      expect(speech.spoken, contains(noServerFaceSpeech));
+      expect(speech.spoken.any((s) => s.contains('준비 중')), isFalse);
     });
   });
 
