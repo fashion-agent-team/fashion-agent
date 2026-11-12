@@ -209,7 +209,7 @@ class CameraTurnController extends ChangeNotifier {
     if (!running) return;
     final round = ++_round;
     unawaited(() async {
-      final shot = await camera.nextStill(
+      final still = await camera.nextStill(
         timeout: stillTimeout,
         onHint: _hint,
         subject: switch (kind) {
@@ -220,7 +220,7 @@ class CameraTurnController extends ChangeNotifier {
         onGuide: (speech) => unawaited(_say(speech)),
       );
       if (round != _round || !running) return;
-      if (shot == null) {
+      if (still == null) {
         if (++_timeouts >= maxTimeouts) {
           await _say('잘 안 보여서 카메라는 잠깐 끌게요. 다시 하고 싶으면 말씀해 주세요.');
           await _end(null);
@@ -233,6 +233,12 @@ class CameraTurnController extends ChangeNotifier {
       _timeouts = 0;
       _setBusy(true);
       try {
+        // 젯슨까지 올리는 구간이 느려서 보내기 전에 줄인다. 입 박스·윤곽점도 줄인 사진에서 찾는다.
+        final shot = await compute(shrinkJpeg, (
+          jpeg: still,
+          maxSide: kind == ImageKind.teeth ? sendMaxSideTeeth : sendMaxSide,
+        ));
+        if (round != _round || !running) return;
         final marks = kind == ImageKind.face ? await _findFace(shot) : null;
         if (round != _round || !running) return;
         // 윤곽점이 없으면 서버는 보지도 않고 "얼굴을 찾지 못했어요"로 답한다(몇 초 낭비).

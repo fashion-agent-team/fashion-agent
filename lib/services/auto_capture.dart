@@ -117,6 +117,36 @@ Uint8List mirrorJpeg(Uint8List jpeg) {
   return img.encodeJpg(img.flipHorizontal(upright), quality: 85);
 }
 
+/// 서버로 보내는 사진의 긴 변 최대 픽셀. 젯슨까지 올리는 구간이 느려서(약 40KB/s)
+/// 1920×1080 원본(1~1.5MB)은 30~60초 걸린다. 1280·품질 80이면 200~300KB.
+const int sendMaxSide = 1280;
+
+/// 이 사진은 입 안쪽만 잘라 보므로(서버 치아 모델 입력 320px) 조금 더 크게 둔다.
+const int sendMaxSideTeeth = 1600;
+const int sendQuality = 80;
+
+/// 보낼 사진을 줄인다. 긴 변이 [maxSide] 이하면 원본 그대로, 크면 방향(EXIF)을 픽셀에 반영한 뒤
+/// 비율을 지켜 줄이고 품질 [sendQuality] JPEG로 다시 만든다. 셀카 좌우 뒤집기는 그대로 남는다.
+/// 입 박스·얼굴 윤곽점은 줄인 사진에서 비율(0~1)로 구하므로 따로 바꿀 것이 없다.
+Uint8List shrinkJpeg(({Uint8List jpeg, int maxSide}) input) {
+  final img.Image? decoded;
+  try {
+    decoded = img.decodeJpg(input.jpeg);
+  } on Object catch (_) {
+    return input.jpeg; // 읽을 수 없으면 원본을 보내고 서버 판단에 맡긴다
+  }
+  if (decoded == null) return input.jpeg;
+  final photo = img.bakeOrientation(decoded);
+  final wide = photo.width >= photo.height;
+  if ((wide ? photo.width : photo.height) <= input.maxSide) return input.jpeg;
+  final small = wide
+      ? img.copyResize(photo,
+          width: input.maxSide, interpolation: img.Interpolation.average)
+      : img.copyResize(photo,
+          height: input.maxSide, interpolation: img.Interpolation.average);
+  return img.encodeJpg(small, quality: sendQuality);
+}
+
 /// 켜 둔 카메라. 사용자가 버튼을 누르지 않아도 프레임이 멈추면 한 장을 찍는다.
 abstract class AutoCaptureCamera {
   /// 화면에 미리 보기를 그릴 컨트롤러. 테스트용 구현은 null.
