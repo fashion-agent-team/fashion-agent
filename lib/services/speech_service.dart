@@ -18,7 +18,7 @@ import 'voices.dart';
 /// 유진이 기본이다(`--dart-define=CLOUD_TTS=false`로 끔). 고른 목소리는 기억한다([voices]).
 /// 서버가 없거나 늦으면(4초, 앱을 켠 뒤 첫 문장은 15초) 그 문장부터는 폰 목소리로 읽는다. 사용자는 끊김 없이 듣는다.
 ///
-/// 긴 안내는 문장으로 나눠, 첫 문장을 읽는 동안 다음 문장을 받아 둔다. 같은 문장은 폰에 기억해 두어
+/// 긴 안내는 문장으로 나눠, 모든 문장을 한꺼번에 받기 시작하고 첫 문장부터 읽는다. 같은 문장은 폰에 기억해 두어
 /// 인사·추임새·자주 하는 안내는 바로 읽는다.
 class SpeechService {
   SpeechService({this.cloud, VoiceStore? voices, TtsCache? cache})
@@ -115,6 +115,9 @@ class SpeechService {
   /// 앱을 켜고 서버 목소리를 처음 받을 때. 로그인, 서버의 첫 연결, Azure 첫 연결이 겹쳐 9초를 넘기기도 한다
   /// (2026-11-12 시뮬레이터: 첫 안내만 폰 목소리로 읽음). 한 번 받으면 [_slowTimeout]으로 돌아간다.
   static const _coldTimeout = Duration(seconds: 15);
+
+  /// 서버 목소리가 한 번 늦거나 실패하면 이만큼 폰 목소리로 읽고 다시 서버로 간다(예전 1분: 오래 폰 목소리로 남음).
+  static const _retryAfter = Duration(seconds: 20);
 
   /// 서버 목소리를 한 번이라도 받았는지.
   bool _cloudWarm = false;
@@ -275,8 +278,13 @@ class SpeechService {
     final sentences = api.wholeText ? [text.trim()] : splitSentences(text);
     Future<Uint8List> fetch(int i) => _cache.get(
         v.id, sentences[i], () => api.synthesize(sentences[i], v.id));
-    var next = fetch(0);
+    // 2026-11-12 엣지 목소리: 문장마다 1초쯤 걸려 하나씩 받으면 문장 사이가 길었다. 모든 문장을 같이 받기 시작한다.
+    final pending = [for (var i = 0; i < sentences.length; i++) fetch(i)];
+    for (final f in pending.skip(1)) {
+      unawaited(f.then((_) {}, onError: (_) {}));
+    }
     for (var i = 0; i < sentences.length; i++) {
+      final next = pending[i];
       Uint8List bytes;
       final watch = Stopwatch()..start();
       try {
@@ -295,8 +303,8 @@ class SpeechService {
         final coldSlow = e is TimeoutException && !_cloudWarm;
         debugPrint('서버 목소리 실패${quota ? '(무료 횟수 끝)' : ''}, 폰 목소리로 읽어요: $e');
         if (!coldSlow) {
-          _cloudPausedUntil = DateTime.now().add(
-              quota ? const Duration(minutes: 30) : const Duration(minutes: 1));
+          _cloudPausedUntil = DateTime.now()
+              .add(quota ? const Duration(minutes: 30) : _retryAfter);
         }
         if (gen == _generation) {
           await _speakDevice(sentences.sublist(i).join(' '), _bestDevice);
@@ -305,11 +313,6 @@ class SpeechService {
       }
       if (i == 0) debugPrint('[시간] 첫 문장 소리 ${watch.elapsedMilliseconds}ms');
       if (gen != _generation) return;
-      // 읽는 동안 다음 문장을 받아 둔다.
-      if (i + 1 < sentences.length) {
-        next = fetch(i + 1);
-        unawaited(next.then((_) {}, onError: (_) {}));
-      }
       await _play(bytes);
       if (gen != _generation) return;
     }
