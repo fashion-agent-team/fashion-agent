@@ -198,36 +198,3 @@ String? _blankToNull(Object? value) {
   if (value is! String || value.trim().isEmpty) return null;
   return value;
 }
-
-/// 화면 "오늘의 색동"에 쌓는 순서: 겉옷, 상의, 원피스, 하의, 신발, 그 밖.
-const outfitOrder = [
-  GarmentCategory.outer,
-  GarmentCategory.top,
-  GarmentCategory.dress,
-  GarmentCategory.bottom,
-  GarmentCategory.shoes,
-  GarmentCategory.other,
-];
-
-/// 지금까지 본 옷([before])에 새로 본 옷([seen])을 더한다. 종류마다 한 벌만 남기고 새로 본 것이 이긴다.
-/// 한 장에 같은 종류가 여럿이면(왼쪽·오른쪽 비교) 앞의 것을 쓴다.
-List<Garment> mergeOutfit(List<Garment> before, List<Garment> seen) {
-  if (seen.isEmpty) return before;
-  final byCategory = {for (final g in before) g.category: g};
-  final fresh = <GarmentCategory>{};
-  for (final g in seen) {
-    if (fresh.add(g.category)) byCategory[g.category] = g;
-  }
-  final order = outfitOrder.where(byCategory.containsKey);
-  return [for (final c in order) byCategory[c]!];
-}
-
-/// "상의", "하의"처럼 화면에 쓰는 종류 이름.
-String categoryLabel(GarmentCategory c) => switch (c) {
-      GarmentCategory.top => '상의',
-      GarmentCategory.bottom => '하의',
-      GarmentCategory.outer => '겉옷',
-      GarmentCategory.dress => '원피스',
-      GarmentCategory.shoes => '신발',
-      GarmentCategory.other => '소품',
-    };
