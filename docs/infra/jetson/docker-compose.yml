@@ -81,6 +81,8 @@ services:
       HELPER_URL: http://mcp-helper:8096
       SCHEDULE_URL: http://mcp-schedule:8092
       EDGE_TTS_URL: http://edge-tts:8099   # 엣지 목소리(선희). 키 없음, 발표용
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-koreacentral}
     healthcheck: &health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
