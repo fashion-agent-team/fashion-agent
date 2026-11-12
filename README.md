@@ -104,7 +104,7 @@ flutter pub get
 flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080   # 게이트웨이로 실행 (옷 검사·얼굴 확인은 서버가 있어야 함)
 flutter run                                  # 서버 없이 폰 안 기능(날씨 등)만
 flutter run --dart-define=FAKE_VISION=true   # 서버 없이 예시 응답으로 옷 검사 화면 돌려 보기
-flutter run --dart-define=FAKE_CAMERA=true   # 카메라 없는 시뮬레이터
+flutter run --dart-define=FAKE_CAMERA=true   # 카메라 없는 시뮬레이터 (debug 전용, --release에서는 무시)
 flutter test
 ```
 
