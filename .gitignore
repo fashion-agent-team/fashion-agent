@@ -24,3 +24,6 @@ pubspec.lock
 # 비밀 값
 .env
 *.keystore
+
+# 각자 맥의 iOS 서명 값(scripts/ios-install.sh)
+ios/signing.local
