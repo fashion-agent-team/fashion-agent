@@ -183,12 +183,12 @@ class GatewayAuth {
       throw GatewayException(401, 'unauthorized', '로그인하지 않았어요');
     }
     if (!_now().isBefore(current.expiresAt.subtract(_skew))) {
-      current = await _refresh(current);
+      current = await _refreshOrRelogin(current);
     }
 
     var res = await _sendOnce(method, path, json, current.accessToken);
     if (res.statusCode == 401) {
-      current = await _refresh(current);
+      current = await _refreshOrRelogin(current);
       res = await _sendOnce(method, path, json, current.accessToken);
     }
     if (res.statusCode >= 300) _decode(res);
@@ -212,6 +212,22 @@ class GatewayAuth {
       req.body = jsonEncode(json);
     }
     return _client.send(req).then(http.Response.fromStream);
+  }
+
+  /// 갱신한다. 서버가 갱신을 401로 거절하면(서버 DB나 비밀값이 바뀜) 개발용 로그인을 한 번 해서 이어 간다.
+  ///
+  /// 2026-11-12 시뮬레이터: 예전 서버 토큰이 남아 있으면 갱신이 401로 끊기고, 토큰만 지운 채 그 요청이 실패해서
+  /// 첫 안내가 폰 목소리로 나왔다. 개발용 로그인이 안 되면 예전처럼 `unauthorized`를 던진다.
+  Future<GatewayTokens> _refreshOrRelogin(GatewayTokens stale) async {
+    try {
+      return await _refresh(stale);
+    } on GatewayException catch (e) {
+      if (e.status != 401) rethrow;
+      if (!await ensureSignedIn()) rethrow;
+      final fresh = await tokens.read();
+      if (fresh == null) rethrow;
+      return fresh;
+    }
   }
 
   Future<GatewayTokens> _refresh(GatewayTokens stale) {
