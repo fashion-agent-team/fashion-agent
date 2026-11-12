@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:fashion_agent/agent/acknowledge.dart';
 import 'package:fashion_agent/agent/command_listener.dart';
 import 'package:fashion_agent/agent/intent_router.dart';
@@ -156,6 +159,33 @@ void main() {
           TtsCache.cacheKey('Aoede', '안녕'), TtsCache.cacheKey('Aoede', '안녕'));
       expect(TtsCache.cacheKey('Aoede', '안녕'),
           isNot(TtsCache.cacheKey('Kore', '안녕')));
+    });
+
+    test('처음 받는 문장과 파일에서 다시 읽는 문장 모두 끝난다', () async {
+      final dir = await Directory.systemTemp.createTemp('tts');
+      addTearDown(() => dir.delete(recursive: true));
+      final bytes = Uint8List.fromList([1, 2, 3]);
+      var loads = 0;
+      Future<Uint8List> load() async {
+        loads++;
+        return bytes;
+      }
+
+      final first = TtsCache(dir: () async => dir);
+      expect(
+          await first
+              .get('YuJin', '안녕.', load)
+              .timeout(const Duration(seconds: 2)),
+          bytes);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // 새로 켠 앱처럼 메모리는 비고 파일만 남은 상태
+      final second = TtsCache(dir: () async => dir);
+      expect(
+          await second
+              .get('YuJin', '안녕.', load)
+              .timeout(const Duration(seconds: 2)),
+          bytes);
+      expect(loads, 1);
     });
 
     test('신호음은 WAV다', () {
