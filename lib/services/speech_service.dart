@@ -18,7 +18,7 @@ import 'voices.dart';
 /// 유진이 기본이다(`--dart-define=CLOUD_TTS=false`로 끔). 고른 목소리는 기억한다([voices]).
 /// 서버가 없거나 늦으면(4초, 앱을 켠 뒤 첫 문장은 15초) 그 문장부터는 폰 목소리로 읽는다. 사용자는 끊김 없이 듣는다.
 ///
-/// 긴 안내는 문장으로 나눠, 모든 문장을 한꺼번에 받기 시작하고 첫 문장부터 읽는다. 같은 문장은 폰에 기억해 두어
+/// 긴 안내는 문장으로 나눠, 첫 문장을 읽는 동안 다음 문장을 받아 둔다. 같은 문장은 폰에 기억해 두어
 /// 인사·추임새·자주 하는 안내는 바로 읽는다.
 class SpeechService {
   SpeechService({this.cloud, VoiceStore? voices, TtsCache? cache})
@@ -278,13 +278,10 @@ class SpeechService {
     final sentences = api.wholeText ? [text.trim()] : splitSentences(text);
     Future<Uint8List> fetch(int i) => _cache.get(
         v.id, sentences[i], () => api.synthesize(sentences[i], v.id));
-    // 2026-11-12 엣지 목소리: 문장마다 1초쯤 걸려 하나씩 받으면 문장 사이가 길었다. 모든 문장을 같이 받기 시작한다.
-    final pending = [for (var i = 0; i < sentences.length; i++) fetch(i)];
-    for (final f in pending.skip(1)) {
-      unawaited(f.then((_) {}, onError: (_) {}));
-    }
+    // 한 번에 하나만 앞서 받는다. 2026-11-12: 모든 문장을 한꺼번에 받았더니 Azure 무료 등급(1분 20번)에 걸려
+    // 두세 번째 문장부터 폰 목소리로 넘어갔다.
+    var next = fetch(0);
     for (var i = 0; i < sentences.length; i++) {
-      final next = pending[i];
       Uint8List bytes;
       final watch = Stopwatch()..start();
       try {
@@ -313,6 +310,11 @@ class SpeechService {
       }
       if (i == 0) debugPrint('[시간] 첫 문장 소리 ${watch.elapsedMilliseconds}ms');
       if (gen != _generation) return;
+      // 읽는 동안 다음 문장을 받아 둔다.
+      if (i + 1 < sentences.length) {
+        next = fetch(i + 1);
+        unawaited(next.then((_) {}, onError: (_) {}));
+      }
       await _play(bytes);
       if (gen != _generation) return;
     }
