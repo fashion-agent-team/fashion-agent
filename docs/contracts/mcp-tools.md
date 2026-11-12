@@ -36,7 +36,7 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 }
 ```
 
-**`embedding`은 사람에게 읽어 줄 값이 아닙니다**(2026-11-11 추가, mcp-clothes-state 이슈 #15). clothes_inspect가 옷 박스를 Marqo FashionSigLIP으로 바꾼 숫자이고, 옷장이 "같은 옷인지" 판단할 때만 씁니다. agent는 이 값을 closet_save에 그대로 넘기고, **GPT에게 넘길 때는 빼세요**(옷 한 벌에 숫자 768개). 사진은 어디에도 저장하지 않습니다.
+**`embedding`은 사람에게 읽어 줄 값이 아닙니다**(2026-11-11 추가, mcp-clothes-state 이슈 #15). clothes_inspect가 옷 박스를 Marqo FashionSigLIP으로 바꾼 숫자이고, 옷장이 "같은 옷인지" 판단할 때만 씁니다. agent는 이 값을 closet_save에 그대로 넘기고, **GPT에게 넘길 때는 빼세요**(옷 한 벌에 숫자 768개). 원본 사진은 어디에도 저장하지 않습니다(옷 부분 작은 사진만 closet에, 아래 closet_save `thumbnail`).
 
 **왼쪽·오른쪽은 바라보는 사람(사진) 기준 하나입니다.** 옷을 내려놓고 위에서 비추므로 사진 왼쪽이 사용자 왼쪽입니다.
 - `position`(옷이 화면 어디에 있나): box 중심 x가 0.4 미만이면 left, 0.6 초과면 right, 그 사이는 center.
@@ -230,9 +230,22 @@ agent가 부르는 MCP 도구의 이름과 JSON 입출력입니다. 서버는 Sp
 - 한 번에 넘긴 옷끼리(한 사진에 같이 있으면 다른 옷), 그리고 두 벌을 같은 옛 옷 하나에 합치지 않습니다.
 - `forceNewIds`에 넣은 입력 id. 합쳤다고 알렸는데 사용자가 "그건 다른 옷이에요"라고 하면 agent가 그 옷을 이 목록에 넣어 다시 부릅니다.
 
-입력 `{ "userId": "…", "garments": [Garment, ...], "forceNewIds": ["g2"], "embeddingModel": "marqo-fashionSigLIP" }` (`forceNewIds`, `embeddingModel`은 선택)
+**기준과 애매함**(2026-11-12). 기준은 일상 사진(DeepFashion2 소비자 사진 1,500벌)으로 다시 맞춘 0.60입니다(같은 옷 63% 맞게 합침, 엉뚱한 옷 1.0%, 새 옷 잘못 합침 2.3%). 기준보다 0.10 아래까지(0.50~0.60)는 **애매함**이라 새 옷으로 저장하되 `saved[].maybeSameAs`에 가장 가까운 옷을 줍니다. 사진 벡터가 없는데(인식 실패) 작은 사진이 왔을 때도 글로 가장 가까운 같은 종류·색 옷을 줍니다. agent는 GPT 사용에 동의한 사람이면 이번 사진과 `maybeSameAs.thumbnail`을 GPT에게 보여 같은 옷(확신 0.7 이상)이면 `closet_merge`를 부릅니다. 모델이 확실할 때는 GPT를 부르지 않습니다(박창근 님 결정).
 
-출력 `{ "saved": [{ "inputId": "g1", "garmentId": "c_17", "isNew": false }] }`
+**옷 작은 사진 `thumbnail`**(선택, 2026-11-12). agent가 clothes_inspect의 `box`로 옷 부분만 잘라 긴 변 256px로 줄인 JPEG(base64, 얼굴 없음, 48KB 이하)입니다. 원본 사진은 저장하지 않고 이것만 closet DB(`garments.thumbnail`)에 둡니다. 애매할 때 GPT 비교에만 쓰고, 옷을 지우면 함께 지워집니다. 모양이 틀리거나 크면 사진 없이 저장합니다(오류 아님). GPT 판단 입력과 앱 응답에는 넣지 않습니다.
+
+입력 `{ "userId": "…", "garments": [Garment(+embedding, +thumbnail), ...], "forceNewIds": ["g2"], "embeddingModel": "marqo-fashionSigLIP" }` (`forceNewIds`, `embeddingModel`, `thumbnail`은 선택)
+
+출력
+```json
+{ "saved": [
+  { "inputId": "g1", "garmentId": "c_17", "isNew": false },
+  { "inputId": "g2", "garmentId": "c_21", "isNew": true,
+    "maybeSameAs": { "garmentId": "c_03", "name": "코트", "colorName": "검정", "pattern": null, "material": "울",
+                     "thumbnail": "/9j/4AAQ…", "similarity": 0.56 } }
+] }
+```
+`maybeSameAs`는 애매할 때만 있습니다.
 
 ### `closet_wear`
 입력 `{ "userId": "…", "garmentIds": ["c_17", "c_03"], "date": "2026-11-04" }` → 출력 `{ "recorded": 2 }`
@@ -306,4 +319,11 @@ closet_save는 사진 벡터가 있으면 그것으로 옷 이름(청바지·블
 입력 `{ "userId": "…", "garmentIds": ["c_17"] }` → 출력 `{ "removed": 1 }`
 
 남의 옷이나 없는 id가 섞이면 `not_found`이고 아무것도 지우지 않습니다.
+
+### `closet_merge`
+따로 저장된 두 옷을 한 벌로 합칩니다(2026-11-12). closet_save의 `maybeSameAs`를 GPT가 사진으로 확인했거나, 사용자가 "그거 같은 옷이에요"라고 했을 때 부릅니다.
+
+입력 `{ "userId": "…", "garmentId": "c_21", "intoGarmentId": "c_03" }` → 출력 `{ "merged": "c_21", "into": "c_03" }`
+
+`garmentId`는 없어지고 `intoGarmentId`가 남습니다. 입은 날은 옮기고(같은 날은 하나), 사진 벡터는 사진 수로 가중 평균, 설명·작은 사진은 더 최근 것, 처음 본 날은 더 이른 것을 남깁니다. 종류가 다르면 `bad_request`, 남의 옷이나 없는 id면 `not_found`.
 
