@@ -295,7 +295,9 @@ class SpeechService {
       return;
     }
     // Gemini TTS는 하루 횟수가 적어서 한 번에 받는다. Cloud TTS는 문장으로 나눠 첫 문장부터 읽는다.
-    final sentences = api.wholeText ? [text.trim()] : splitSentences(text);
+    // 2026-11-12: 문장마다 따로 받아 틀면 문장 사이가 길었다. 첫 문장만 따로 받아 바로 읽고, 나머지는 한 번에 받아
+    // 하나로 이어 읽는다(서버 목소리가 문장 사이를 자연스럽게 쉰다, 요청 수도 준다).
+    final sentences = api.wholeText ? [text.trim()] : speechChunks(text);
     Future<Uint8List> fetch(int i) => _cache.get(_cacheVoice(v), sentences[i],
         () => api.synthesize(sentences[i], v.id, rate: _serverRate));
     // 한 번에 하나만 앞서 받는다. 2026-11-12: 모든 문장을 한꺼번에 받았더니 Azure 무료 등급(1분 20번)에 걸려
@@ -335,7 +337,7 @@ class SpeechService {
         next = fetch(i + 1);
         unawaited(next.then((_) {}, onError: (_) {}));
       }
-      await _play(bytes);
+      await _play(bytes, keepContext: i > 0);
       if (gen != _generation) return;
     }
   }
@@ -411,10 +413,16 @@ class SpeechService {
   /// 문장 사이에 쉬는 시간.
   static const sentencePause = Duration(milliseconds: 350);
 
-  Future<void> _play(Uint8List bytes, {String? mimeType}) async {
+  /// [keepContext]면 오디오 설정을 다시 잡지 않는다. 같은 안내의 다음 조각은 사이에 마이크를 켜지 않아서
+  /// 설정이 그대로다(2026-11-12: 조각마다 다시 잡느라 0.1~0.3초씩 쉬었다).
+  Future<void> _play(Uint8List bytes,
+      {String? mimeType, bool keepContext = false}) async {
     final player = _player ??= AudioPlayer()..setReleaseMode(ReleaseMode.stop);
-    await player.setAudioContext(
-        AudioContextConfig(focus: AudioContextConfigFocus.duckOthers).build());
+    if (!keepContext) {
+      await player.setAudioContext(
+          AudioContextConfig(focus: AudioContextConfigFocus.duckOthers)
+              .build());
+    }
     final done = _playDone = Completer<void>();
     final sub = player.onPlayerComplete.listen((_) {
       if (!done.isCompleted) done.complete();
