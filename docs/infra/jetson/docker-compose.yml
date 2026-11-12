@@ -80,6 +80,7 @@ services:
       AGENT_URL: http://agent:8081
       HELPER_URL: http://mcp-helper:8096
       SCHEDULE_URL: http://mcp-schedule:8092
+      EDGE_TTS_URL: http://edge-tts:8099   # 엣지 목소리(선희). 키 없음, 발표용
     healthcheck: &health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
@@ -88,6 +89,14 @@ services:
       start_period: 180s     # 젯슨은 처음 뜰 때 느림
     depends_on:
       postgres: { condition: service_healthy }
+
+  # 엣지 목소리 사이드카(2026-11-12, 발표용·비공식). 파이썬 edge-tts, 키 없음, 밖에 안 엶.
+  # 꺼져 있거나 막혀도 gateway가 502를 주고 앱은 아이폰 목소리로 읽음.
+  edge-tts:
+    <<: *app
+    build: ../fashion-agent-gateway/edge-tts
+    image: fashion-agent/edge-tts:local
+    mem_limit: 96m
 
   agent:
     <<: *app

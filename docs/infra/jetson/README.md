@@ -58,6 +58,7 @@ Tailscale Funnel (젯슨이 바깥으로 연결을 걸어 둠, 공유기 포트 
 | 서비스 | mem_limit | -Xmx | 비고 |
 |---|---|---|---|
 | gateway | 320m | 128m | `dev` 프로필(개발용 로그인 켬) |
+| edge-tts | 96m | - | 엣지 목소리(선희) 사이드카, 파이썬. 발표용 |
 | agent | 352m | 144m | `mcp,openai,redis` 프로필, 세션은 Redis |
 | mcp-weather | 256m | 112m | |
 | mcp-schedule | 288m | 112m | |
