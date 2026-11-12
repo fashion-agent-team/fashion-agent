@@ -41,8 +41,9 @@ const _fakeCamera = bool.fromEnvironment('FAKE_CAMERA');
 /// 화면을 누르지 않고 에이전트 이름을 불러 말하기. 끄려면 `--dart-define=HANDS_FREE=false`
 const _handsFree = bool.fromEnvironment('HANDS_FREE', defaultValue: true);
 
-/// 서버 목소리(유진·지민·서현·순복) 켜기. 게이트웨이에 AZURE_SPEECH_KEY가 있을 때: `--dart-define=CLOUD_TTS=true`
-const _cloudTts = bool.fromEnvironment('CLOUD_TTS');
+/// 서버 목소리(유진·지민·서현·순복). 게이트웨이가 있으면 기본으로 켠다. 끄려면 `--dart-define=CLOUD_TTS=false`
+/// 2026-11-12: 기본이 꺼짐이라 빌드할 때 옵션을 빠뜨리면 폰 목소리 그대로였다. 서버가 안 되면 어차피 폰 목소리로 읽는다.
+const _cloudTts = bool.fromEnvironment('CLOUD_TTS', defaultValue: true);
 
 /// 게이트웨이 주소. 비우면 서버 없이 폰 안 기능(날씨 등)만 쓴다. 옷 검사·얼굴 확인은 서버가 있어야 한다.
 /// 노트북에서 띄운 게이트웨이: `flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080`
@@ -72,7 +73,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final (account, gateway) = await _account();
   // 목소리는 하나로 통일한다(2026-11-09 진행 님). 기본은 폰의 고품질 한국어 목소리.
-  // 게이트웨이에 Azure 키(AZURE_SPEECH_KEY)를 넣었을 때 `--dart-define=CLOUD_TTS=true`로 유진·지민·서현·순복 목소리를 켠다.
+  // 게이트웨이가 있으면 유진·지민·서현·순복 목소리를 쓴다(게이트웨이에 AZURE_SPEECH_KEY 필요). 끄려면 CLOUD_TTS=false.
   // Gemini TTS는 무료 횟수가 끝나면 목소리가 바뀌어서 쓰지 않는다.
   final speech = SpeechService(
       cloud: _cloudTts && gateway != null ? GatewayTtsApi(gateway) : null);

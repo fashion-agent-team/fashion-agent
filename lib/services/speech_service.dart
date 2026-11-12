@@ -14,8 +14,8 @@ import 'voices.dart';
 /// 앱의 모든 음성 안내를 담당한다.
 ///
 /// 2026-11-09 발표 피드백: 기기 목소리(flutter_tts)가 딱딱하다. 기본은 폰에 받아 둔 고품질 한국어 목소리
-/// (향상됨·프리미엄) 하나로 모든 안내를 읽는다. 안내마다 목소리가 바뀌지 않게, 구글 목소리([cloud])는
-/// `--dart-define=CLOUD_TTS=true`로 켰을 때만 쓴다. 고른 목소리는 기억한다([voices]).
+/// (향상됨·프리미엄) 하나로 모든 안내를 읽는다. 2026-11-12부터 서버 목소리([cloud], 유진 등)가 켜져 있으면
+/// 유진이 기본이다(`--dart-define=CLOUD_TTS=false`로 끔). 고른 목소리는 기억한다([voices]).
 /// 서버가 없거나 늦으면(4초, 앱을 켠 뒤 첫 문장은 15초) 그 문장부터는 폰 목소리로 읽는다. 사용자는 끊김 없이 듣는다.
 ///
 /// 긴 안내는 문장으로 나눠, 첫 문장을 읽는 동안 다음 문장을 받아 둔다. 같은 문장은 폰에 기억해 두어
@@ -185,7 +185,7 @@ class SpeechService {
     }
   }
 
-  /// 지금 목소리. 고른 적 없으면 폰의 좋은 목소리(향상됨·프리미엄), 그것도 없으면 구글 목소리 첫째, 그다음 폰 기본.
+  /// 지금 목소리. 고른 적 있으면 그것, 없으면 서버 목소리가 켜져 있을 때 유진, 아니면 폰의 좋은 목소리(향상됨·프리미엄), 그다음 폰 기본.
   Future<Voice> get voice async {
     final known = _voice;
     if (known != null) return known;
@@ -194,9 +194,12 @@ class SpeechService {
     final all = voices;
     final saved = all.where((v) => v.id == id);
     if (saved.isNotEmpty) return _voice = saved.first;
+    // 서버 목소리가 켜져 있으면 유진이 기본이다(2026-11-12: 폰에 고품질 목소리가 있으면 그걸 먼저 골라서
+    // 새 목소리로 바꿨는데도 그대로라는 피드백). 서버가 안 되면 문장마다 폰 목소리로 대신 읽는다.
+    if (cloud != null) return _voice = cloudVoices.first;
     final good = _deviceVoices.where((v) => v.rank >= 2);
     if (good.isNotEmpty) return _voice = good.first;
-    return _voice = cloud != null ? cloudVoices.first : all.first;
+    return _voice = all.first;
   }
 
   /// 목소리를 바꾸고 기억한다.
