@@ -73,8 +73,12 @@ class TtsCache {
       _memory[key] = hit; // 최근에 쓴 것으로 옮긴다
       return Future.value(hit);
     }
-    return _pending[key] ??=
-        _fromDiskOrLoad(key, load).whenComplete(() => _pending.remove(key));
+    // whenComplete 안에서 값을 돌려주지 않는다. `_pending.remove(key)`는 이 Future 자신을
+    // 돌려주는데, whenComplete는 돌려받은 Future가 끝나기를 기다려서 영원히 끝나지 않는다
+    // (2026-11-12: 새 문장마다 9초 기다린 뒤 폰 목소리로 읽던 원인).
+    return _pending[key] ??= _fromDiskOrLoad(key, load).whenComplete(() {
+      _pending.remove(key);
+    });
   }
 
   Future<Uint8List> _fromDiskOrLoad(

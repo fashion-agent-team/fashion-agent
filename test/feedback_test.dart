@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:fashion_agent/agent/acknowledge.dart';
 import 'package:fashion_agent/agent/command_listener.dart';
 import 'package:fashion_agent/agent/intent_router.dart';
@@ -156,6 +159,28 @@ void main() {
           TtsCache.cacheKey('Aoede', '안녕'), TtsCache.cacheKey('Aoede', '안녕'));
       expect(TtsCache.cacheKey('Aoede', '안녕'),
           isNot(TtsCache.cacheKey('Kore', '안녕')));
+    });
+
+    test('처음 받는 문장도 끝난다(whenComplete가 자기 자신을 기다리지 않는다)', () async {
+      final dir = await Directory.systemTemp.createTemp('tts_cache_test');
+      addTearDown(() => dir.delete(recursive: true));
+      final cache = TtsCache(dir: () async => dir);
+      var loads = 0;
+      Future<Uint8List> load() async {
+        loads++;
+        return Uint8List.fromList([1, 2, 3]);
+      }
+
+      final first = await cache
+          .get('YuJin', '처음 문장', load)
+          .timeout(const Duration(seconds: 2));
+      expect(first, [1, 2, 3]);
+      // 파일에서 다시 읽어도 끝난다.
+      final fromDisk = await TtsCache(dir: () async => dir)
+          .get('YuJin', '처음 문장', load)
+          .timeout(const Duration(seconds: 2));
+      expect(fromDisk, [1, 2, 3]);
+      expect(loads, 1);
     });
 
     test('신호음은 WAV다', () {
