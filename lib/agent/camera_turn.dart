@@ -8,6 +8,7 @@ import '../services/auto_capture.dart';
 import '../services/capture_service.dart';
 import '../services/framing.dart';
 import '../services/listen_service.dart';
+import '../services/face_landmark_finder.dart';
 import '../services/mouth_finder.dart';
 import '../services/speech_service.dart';
 import '../services/turn_api.dart';
@@ -28,6 +29,7 @@ class CameraTurnController extends ChangeNotifier {
     required this.camera,
     LocationProvider? location,
     this.mouths,
+    this.faces,
     this.stillTimeout = const Duration(seconds: 30),
     this.maxTimeouts = 3,
     this.handsFree = false,
@@ -41,6 +43,10 @@ class CameraTurnController extends ChangeNotifier {
 
   /// 이 사진에서 입 박스(`mouthBox`)를 찾는다. null이거나 못 찾으면 박스 없이 보낸다.
   final MouthFinder? mouths;
+
+  /// 얼굴 사진에서 ML Kit 윤곽점(`faceLandmarks`)을 찾는다. 화장 좌우 확인(face_makeup_check)은 이게 있어야
+  /// 판단하고, 없으면 서버가 "얼굴을 찾지 못했어요"로 답한다. null이거나 못 찾으면 윤곽점 없이 보낸다.
+  final FaceLandmarkFinder? faces;
 
   /// 이만큼 기다려도 멈추지 않으면 다시 안내한다.
   final Duration stillTimeout;
@@ -209,9 +215,10 @@ class CameraTurnController extends ChangeNotifier {
         final saying = _say('찍었어요. 잘 볼게요.');
         final loc = await location.current();
         final box = kind == ImageKind.teeth ? await _findMouth(shot) : null;
+        final marks = kind == ImageKind.face ? await _findFace(shot) : null;
         await _handle(
             () => turns.show(_sessionId, kind, shot,
-                location: loc, mouthBox: box),
+                location: loc, mouthBox: box, faceLandmarks: marks),
             before: saying);
       } finally {
         _setBusy(false);
@@ -226,6 +233,17 @@ class CameraTurnController extends ChangeNotifier {
       return await finder.find(shot);
     } on Object catch (e) {
       debugPrint('입 찾기 실패: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, Object>?> _findFace(Uint8List shot) async {
+    final finder = faces;
+    if (finder == null) return null;
+    try {
+      return await finder.find(shot);
+    } on Object catch (e) {
+      debugPrint('얼굴 윤곽 찾기 실패: $e');
       return null;
     }
   }
