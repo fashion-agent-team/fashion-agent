@@ -136,9 +136,9 @@ class MascotPainter extends CustomPainter {
   void _hairBack(Canvas canvas) {
     _fill(
         canvas,
-        'M64 84 Q60 34 110 32 Q160 34 156 84 Q160 120 166 146 Q170 160 158 162 '
+        'M62 86 Q56 26 110 24 Q164 26 158 86 Q160 120 166 146 Q170 160 158 162 '
         'Q160 150 150 152 Q154 140 146 142 L74 142 Q66 140 70 152 '
-        'Q60 150 62 162 Q50 160 54 146 Q60 120 64 84Z',
+        'Q60 150 62 162 Q50 160 54 146 Q60 120 62 86Z',
         hair);
   }
 
@@ -176,19 +176,20 @@ class MascotPainter extends CustomPainter {
     canvas.drawOval(
         Rect.fromCenter(center: const Offset(110, 80), width: 84, height: 80),
         Paint()..color = skin);
-    // 앞머리와 옆머리
+    // 앞머리: 이마를 덮는 둥근 앞머리. 정수리를 높고 둥글게 해서 이마가 넓게 드러나지 않게 한다.
+    // (2026-11-12 피드백: 뾰족한 앞머리 사이로 이마가 보여 사무라이 머리 같았다.)
     _fill(
         canvas,
-        'M68 86 Q64 40 110 38 Q156 40 152 86 Q146 66 136 60 Q132 70 124 72 '
-        'Q122 62 116 60 Q112 70 104 72 Q102 64 96 64 Q90 72 82 72 Q74 74 68 86Z',
+        'M64 90 Q56 28 110 26 Q164 28 156 90 Q152 76 144 72 Q136 78 126 73 '
+        'Q118 79 110 73 Q102 79 94 73 Q84 78 76 72 Q68 76 64 90Z',
         hair);
-    _fill(canvas, 'M68 84 Q62 110 70 132 Q76 112 78 92Z', hair);
-    _fill(canvas, 'M152 84 Q158 110 150 132 Q144 112 142 92Z', hair);
-    _stroke(canvas, 'M88 48 Q100 42 114 43', hairShine, 3.5);
-    // 다홍 리본 머리핀
-    _fill(canvas, 'M140 52 Q156 38 162 52 Q154 60 142 56Z', chima);
-    _fill(canvas, 'M140 54 Q130 40 122 50 Q128 60 140 56Z', chima);
-    canvas.drawCircle(const Offset(141, 54), 4.5, Paint()..color = ribbonDeep);
+    _fill(canvas, 'M66 86 Q60 112 70 134 Q76 112 79 92Z', hair);
+    _fill(canvas, 'M154 86 Q160 112 150 134 Q144 112 141 92Z', hair);
+    _stroke(canvas, 'M82 44 Q94 34 110 34', hairShine, 4);
+    // 다홍 리본 머리핀: 귀 위 옆머리에
+    _fill(canvas, 'M150 64 Q166 52 170 68 Q160 74 152 68Z', chima);
+    _fill(canvas, 'M150 66 Q138 54 134 66 Q140 74 150 68Z', chima);
+    canvas.drawCircle(const Offset(151, 66), 4.5, Paint()..color = ribbonDeep);
 
     // 눈: 듣는 중에는 조금 크게, 그 밖에는 가끔 깜빡인다.
     final blink = phase != AgentPhase.listening && (t % 3.2) < 0.14;
