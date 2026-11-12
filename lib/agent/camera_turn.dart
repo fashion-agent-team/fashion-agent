@@ -14,6 +14,10 @@ import '../services/mouth_finder.dart';
 import '../services/speech_service.dart';
 import '../services/turn_api.dart';
 
+/// 얼굴 사진에서 눈·눈썹·입술 윤곽을 다 못 찾았을 때 폰이 바로 하는 안내.
+/// 가까이 대서 눈썹·턱이 화면 밖으로 나가는 일이 가장 흔하다.
+const faceRetrySpeech = '얼굴이 다 안 보여요. 폰을 조금 멀리 들어서 이마부터 턱까지 화면에 다 들어오게 해 주세요.';
+
 /// agent가 `camera_*`를 주면 도는 카메라 대화. 카메라를 켜 둔 채로 멈추면 한 장씩 보낸다.
 ///
 /// - 옷(얼굴, 입)이 1초 멈추면 자동으로 찍어 보낸다. 사용자는 찍기 버튼을 누르지 않는다.
@@ -80,6 +84,12 @@ class CameraTurnController extends ChangeNotifier {
   int _round = 0;
   int _timeouts = 0;
 
+  /// 얼굴 사진에서 윤곽점을 연달아 못 찾은 수. [maxFaceMisses]까지는 보내지 않고 다시 비추게 한다.
+  int _faceMisses = 0;
+
+  /// 윤곽점 없이는 서버가 판단하지 못해서(no_landmarks), 이만큼은 폰에서 바로 다시 안내한다.
+  static const maxFaceMisses = 2;
+
   bool _closing = false;
 
   bool get running => _done != null && !_done!.isCompleted && !_closing;
@@ -92,6 +102,7 @@ class CameraTurnController extends ChangeNotifier {
     garments = const [];
     message = '';
     _timeouts = 0;
+    _faceMisses = 0;
     _closing = false;
     final done = _done = Completer<TurnReply?>();
     try {
@@ -220,14 +231,27 @@ class CameraTurnController extends ChangeNotifier {
         return;
       }
       _timeouts = 0;
-      shots++;
       _setBusy(true);
       try {
+        final marks = kind == ImageKind.face ? await _findFace(shot) : null;
+        if (round != _round || !running) return;
+        // 윤곽점이 없으면 서버는 보지도 않고 "얼굴을 찾지 못했어요"로 답한다(몇 초 낭비).
+        // 폰에서 바로 다시 비추게 하고, 그래도 계속 못 찾으면 그냥 보내 agent 안내를 따른다.
+        if (kind == ImageKind.face &&
+            marks == null &&
+            faces != null &&
+            _faceMisses < maxFaceMisses) {
+          _faceMisses++;
+          await _say(faceRetrySpeech);
+          _watch();
+          return;
+        }
+        _faceMisses = 0;
+        shots++;
         // 찍혔다는 걸 바로 알린다. 답을 기다리는 동안 읽는다.
         final saying = _say('찍었어요. 잘 볼게요.');
         final loc = await location.current();
         final box = kind == ImageKind.teeth ? await _findMouth(shot) : null;
-        final marks = kind == ImageKind.face ? await _findFace(shot) : null;
         await _handle(
             () => turns.show(_sessionId, kind, shot,
                 location: loc, mouthBox: box, faceLandmarks: marks),
