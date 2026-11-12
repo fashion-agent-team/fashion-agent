@@ -16,7 +16,7 @@ import 'voices.dart';
 /// 2026-11-09 발표 피드백: 기기 목소리(flutter_tts)가 딱딱하다. 기본은 폰에 받아 둔 고품질 한국어 목소리
 /// (향상됨·프리미엄) 하나로 모든 안내를 읽는다. 안내마다 목소리가 바뀌지 않게, 구글 목소리([cloud])는
 /// `--dart-define=CLOUD_TTS=true`로 켰을 때만 쓴다. 고른 목소리는 기억한다([voices]).
-/// 서버가 없거나 늦으면(4초) 그 문장부터는 폰 목소리로 읽는다. 사용자는 끊김 없이 듣는다.
+/// 서버가 없거나 늦으면(4초, 앱을 켠 뒤 첫 문장은 15초) 그 문장부터는 폰 목소리로 읽는다. 사용자는 끊김 없이 듣는다.
 ///
 /// 긴 안내는 문장으로 나눠, 첫 문장을 읽는 동안 다음 문장을 받아 둔다. 같은 문장은 폰에 기억해 두어
 /// 인사·추임새·자주 하는 안내는 바로 읽는다.
@@ -111,6 +111,35 @@ class SpeechService {
 
   static const _firstTimeout = Duration(seconds: 4);
   static const _slowTimeout = Duration(seconds: 9);
+
+  /// 앱을 켜고 서버 목소리를 처음 받을 때. 로그인, 서버의 첫 연결, Azure 첫 연결이 겹쳐 9초를 넘기기도 한다
+  /// (2026-11-12 시뮬레이터: 첫 안내만 폰 목소리로 읽음). 한 번 받으면 [_slowTimeout]으로 돌아간다.
+  static const _coldTimeout = Duration(seconds: 15);
+
+  /// 서버 목소리를 한 번이라도 받았는지.
+  bool _cloudWarm = false;
+
+  /// [warmUp]이 진행 중일 때 그 작업.
+  Future<void>? _warming;
+
+  /// 앱을 켜자마자 불러, 첫 안내 전에 로그인과 서버·Azure 연결을 미리 해 둔다.
+  /// 짧은 말("네.")을 지금 목소리로 받아 둔다. 실패해도 조용히 넘어간다.
+  Future<void> warmUp() => _warming ??= _warmUp();
+
+  Future<void> _warmUp() async {
+    final api = cloud;
+    if (api == null) return;
+    try {
+      final v = await voice;
+      if (v.device || !await api.available) return;
+      final watch = Stopwatch()..start();
+      await _cache.get(v.id, '네.', () => api.synthesize('네.', v.id));
+      _cloudWarm = true;
+      debugPrint('[시간] 서버 목소리 미리 연결 ${watch.elapsedMilliseconds}ms');
+    } on Object catch (e) {
+      debugPrint('서버 목소리 미리 연결 실패: $e');
+    }
+  }
 
   /// 서버 목소리가 안 될 때 대신 읽을 폰 목소리.
   Voice get _bestDevice =>
@@ -249,14 +278,23 @@ class SpeechService {
       final watch = Stopwatch()..start();
       try {
         // Gemini는 읽는 데 2~6초 걸린다. 엔진을 아직 모르면 Gemini일 수 있어 넉넉히 기다린다.
-        bytes = await next
-            .timeout(api.wholeText || i == 0 ? _slowTimeout : _firstTimeout);
+        // 앱을 켠 뒤 처음 받는 문장은 연결이 늦어서 더 기다린다.
+        bytes = await next.timeout(!_cloudWarm
+            ? _coldTimeout
+            : api.wholeText || i == 0
+                ? _slowTimeout
+                : _firstTimeout);
+        _cloudWarm = true;
       } on Object catch (e) {
         // 무료 횟수를 다 쓰면(429) 한동안 폰 목소리만 쓴다.
         final quota = e is GatewayException && e.status == 429;
-        debugPrint('구글 목소리 실패${quota ? '(무료 횟수 끝)' : ''}, 폰 목소리로 읽어요: $e');
-        _cloudPausedUntil = DateTime.now().add(
-            quota ? const Duration(minutes: 30) : const Duration(minutes: 1));
+        // 처음 연결이 늦었을 뿐이면 받던 소리는 계속 받아 두고, 다음 안내부터 바로 서버 목소리로 읽는다.
+        final coldSlow = e is TimeoutException && !_cloudWarm;
+        debugPrint('서버 목소리 실패${quota ? '(무료 횟수 끝)' : ''}, 폰 목소리로 읽어요: $e');
+        if (!coldSlow) {
+          _cloudPausedUntil = DateTime.now().add(
+              quota ? const Duration(minutes: 30) : const Duration(minutes: 1));
+        }
         if (gen == _generation) {
           await _speakDevice(sentences.sublist(i).join(' '), _bestDevice);
         }

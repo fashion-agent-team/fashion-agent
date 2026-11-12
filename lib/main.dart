@@ -76,6 +76,8 @@ Future<void> main() async {
   // Gemini TTS는 무료 횟수가 끝나면 목소리가 바뀌어서 쓰지 않는다.
   final speech = SpeechService(
       cloud: _cloudTts && gateway != null ? GatewayTtsApi(gateway) : null);
+  // 첫 안내가 폰 목소리로 새지 않게 서버 목소리 연결을 미리 해 둔다.
+  unawaited(speech.warmUp());
   final profiles = LocalProfileStore();
   // 부른 뒤 명령과 온보딩 답만 서버(OpenAI) 음성 인식으로 다시 받아 적는다(2026-11-09 진행 님 결정).
   // 게이트웨이에 OPENAI_API_KEY가 없거나 실패하면 폰 음성 인식 글자를 그대로 쓴다.
