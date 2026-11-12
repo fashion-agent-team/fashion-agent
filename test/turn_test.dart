@@ -573,6 +573,41 @@ void main() {
       expect(faces.calls, 1);
     });
 
+    test('얼굴 윤곽점을 못 찾으면 보내지 않고 폰에서 바로 다시 비추게 한다', () async {
+      const marks = <String, Object>{
+        'leftEye': [
+          [0.3, 0.4]
+        ],
+      };
+      final faces = _SequenceFaceFinder([null, marks]);
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([reply('화장이 고르게 됐어요.', TurnNext.listen)]);
+      final camera = FakeAutoCaptureCamera([photo, photo]);
+      final c = cameraWith(speech, turns, camera, faces: faces);
+
+      await c.run('s_1', ImageKind.face);
+
+      expect(turns.faceLandmarks, [marks]);
+      expect(faces.calls, 2);
+      expect(speech.spoken, contains(faceRetrySpeech));
+      expect(c.shots, 1);
+    });
+
+    test('윤곽점을 계속 못 찾으면 두 번 다시 비춘 뒤 그대로 보낸다', () async {
+      final faces = _SequenceFaceFinder([null, null, null]);
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([reply('얼굴이 잘 안 보여요.', TurnNext.listen)]);
+      final camera = FakeAutoCaptureCamera([photo, photo, photo]);
+      final c = cameraWith(speech, turns, camera, faces: faces);
+
+      await c.run('s_1', ImageKind.face);
+
+      expect(turns.faceLandmarks, [null]);
+      expect(faces.calls, 3);
+      expect(speech.spoken.where((t) => t == faceRetrySpeech).length,
+          CameraTurnController.maxFaceMisses);
+    });
+
     test('입을 못 찾으면 박스 없이 보낸다', () async {
       final turns = FakeTurnApi([reply('잘 보이지 않아요.', TurnNext.listen)]);
       final c = cameraWith(FakeSpeech(), turns, FakeAutoCaptureCamera([photo]),
@@ -720,4 +755,22 @@ class _SigningAccount extends FakeAccount {
     onSignIn();
     return id;
   }
+}
+
+/// 정해 둔 순서대로 윤곽점(또는 못 찾음)을 준다.
+class _SequenceFaceFinder implements FaceLandmarkFinder {
+  _SequenceFaceFinder(this.results);
+
+  final List<Map<String, Object>?> results;
+  int calls = 0;
+
+  @override
+  Future<Map<String, Object>?> find(Uint8List jpeg) async {
+    final i = calls < results.length ? calls : results.length - 1;
+    calls++;
+    return results[i];
+  }
+
+  @override
+  Future<void> close() async {}
 }

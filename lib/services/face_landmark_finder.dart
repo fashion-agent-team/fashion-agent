@@ -37,7 +37,14 @@ Map<String, Object>? faceLandmarksFromContours(
     'upperLipTop',
     'lowerLipBottom',
   ];
-  if (!needed.every(out.containsKey)) return null;
+  final missing = [
+    for (final n in needed)
+      if (!out.containsKey(n)) n
+  ];
+  if (missing.isNotEmpty) {
+    debugPrint('얼굴 윤곽 일부를 못 찾음: ${missing.join(', ')}');
+    return null;
+  }
   if (yaw != null) out['yaw'] = yaw;
   if (roll != null) out['roll'] = roll;
   return out;
@@ -76,7 +83,10 @@ class MlKitFaceLandmarkFinder implements FaceLandmarkFinder {
       await file.writeAsBytes(jpeg, flush: true);
       final faces =
           await _detector.processImage(InputImage.fromFilePath(file.path));
-      if (faces.isEmpty) return null;
+      if (faces.isEmpty) {
+        debugPrint('얼굴 윤곽: ML Kit이 얼굴을 못 찾음 (${size.width}x${size.height})');
+        return null;
+      }
       // 여러 명이면 가장 큰 얼굴(폰에 가장 가까운 사람)
       final face = faces.reduce((a, b) =>
           a.boundingBox.width * a.boundingBox.height >=
