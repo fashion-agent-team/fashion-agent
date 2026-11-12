@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ -f .env ] || { echo ".env가 없습니다 (scripts/make-env.sh)"; exit 1; }
-BUILDS=(${@:-gateway agent mcp-weather mcp-schedule mcp-clothes-state mcp-face-check mcp-closet mcp-helper})
+BUILDS=(${@:-edge-tts gateway agent mcp-weather mcp-schedule mcp-clothes-state mcp-face-check mcp-closet mcp-helper})
 if [ "${NO_BUILD:-}" != 1 ]; then
   for s in "${BUILDS[@]}"; do echo "→ build $s"; docker compose build "$s"; done
 fi

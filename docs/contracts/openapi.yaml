@@ -229,7 +229,7 @@ paths:
       tags: [voice]
       summary: 문장을 구글 목소리로 읽은 소리 (2026-11-09 발표 피드백)
       description: |
-        유진·지민·서현·순복은 Azure Speech(ko-KR 신경망, AZURE_SPEECH_KEY)로 읽습니다(2026-11-12). 그 밖에는
+        SunHi·InJoon·Hyunsu는 엣지 목소리(EDGE_TTS_URL, edge-tts 사이드카, 발표용)로 읽습니다(2026-11-12). 유진·지민·서현·순복은 Azure Speech(AZURE_SPEECH_KEY). 그 밖에는
         게이트웨이가 Google Cloud Text-to-Speech(ko-KR Chirp 3 HD)로 읽습니다. 그 키(GOOGLE_TTS_API_KEY)가 없으면
         Gemini TTS(GEMINI_API_KEY, 같은 이름의 목소리)로 읽습니다. 둘 다 없으면 503이고, 앱은 폰 목소리로 읽습니다.
         같은 목소리·문장은 게이트웨이와 앱이 기억해 두고 다시 받지 않습니다. 분당 횟수 제한은 말하기와 따로 셉니다.
@@ -242,10 +242,10 @@ paths:
               required: [text]
               properties:
                 text: { type: string, maxLength: 500 }
-                voice: { type: string, description: '목소리 이름. YuJin, JiMin, SeoHyeon, SoonBok(Azure, 2026-11-12) 또는 구글 목소리 Achernar 등. Azure 키가 없으면 구글 기본 목소리' }
+                voice: { type: string, description: '목소리 이름. SunHi(기본), InJoon, Hyunsu(엣지), YuJin, JiMin, SeoHyeon, SoonBok(Azure) 또는 구글 목소리 Achernar 등. Azure 키가 없으면 구글 기본 목소리' }
       responses:
         '200':
-          description: 소리 파일. Azure·Cloud TTS는 MP3, Gemini TTS는 WAV(24kHz 16비트 모노). X-Tts-Engine 헤더는 azure, cloud, gemini.
+          description: 소리 파일. Azure·Cloud TTS는 MP3, Gemini TTS는 WAV(24kHz 16비트 모노). 엣지는 MP3. X-Tts-Engine 헤더는 edge, azure, cloud, gemini.
           content:
             audio/mpeg: { schema: { type: string, format: binary } }
             audio/wav: { schema: { type: string, format: binary } }
