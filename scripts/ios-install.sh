@@ -9,6 +9,16 @@ cd "$(dirname "$0")/.."
 
 GATEWAY_URL="${GATEWAY_URL:-https://simcheong.java21.net}"
 DEVICE="${1:-}"
+PBX=ios/Runner.xcodeproj/project.pbxproj
+SIGNING=ios/signing.local   # 각자 맥의 서명 값(팀·번들 ID). .gitignore라 커밋되지 않는다.
+DEFAULT_BUNDLE=com.fashionagent.fashionAgent
+
+# 지금 서명 값을 ios/signing.local에 적어 둔다(처음 한 번, 또는 Xcode에서 바꾼 뒤).
+team=$(grep -m1 -o 'DEVELOPMENT_TEAM = [A-Z0-9]*' "$PBX" | awk '{print $3}' || true)
+bundle=$(grep -o 'PRODUCT_BUNDLE_IDENTIFIER = [^;]*' "$PBX" | awk '{print $3}' | grep -v RunnerTests | head -1 || true)
+if [[ -n "$team" && "$bundle" != "$DEFAULT_BUNDLE" ]]; then
+  printf 'TEAM=%s\nBUNDLE_ID=%s\n' "$team" "$bundle" > "$SIGNING"
+fi
 
 echo "▶ develop 최신 받기"
 # 지금 브랜치에 develop을 합친다. 브랜치를 바꾸거나 변경을 치우지 않아서
@@ -25,6 +35,33 @@ if ! git merge-base --is-ancestor origin/develop HEAD; then
   exit 1
 fi
 
+# 합치는 중에 서명 설정이 빠졌으면 ios/signing.local 값으로 다시 넣는다.
+if [[ -f "$SIGNING" ]]; then
+  # shellcheck disable=SC1090
+  source "$SIGNING"
+  if ! grep -q "PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;" "$PBX"; then
+    echo "  서명 설정이 빠져 있어서 다시 넣어요 (팀 $TEAM, 번들 $BUNDLE_ID)"
+    python3 - "$PBX" "$TEAM" "$BUNDLE_ID" "$DEFAULT_BUNDLE" <<'PY'
+import sys
+path, team, bundle, default = sys.argv[1:]
+out = []
+for line in open(path).read().split("\n"):
+    if line.strip() == f"PRODUCT_BUNDLE_IDENTIFIER = {default};":
+        indent = line[: len(line) - len(line.lstrip())]
+        block = []
+        for prev in reversed(out):  # 같은 buildSettings 블록 안만 본다
+            if "buildSettings = {" in prev:
+                break
+            block.append(prev)
+        if not any("DEVELOPMENT_TEAM" in l for l in block):
+            out.append(f"{indent}DEVELOPMENT_TEAM = {team};")
+        line = f"{indent}PRODUCT_BUNDLE_IDENTIFIER = {bundle};"
+    out.append(line)
+open(path, "w").write("\n".join(out))
+PY
+  fi
+fi
+
 if [[ -z "$DEVICE" ]]; then
   DEVICE=$(flutter devices --machine 2>/dev/null |
     python3 -c 'import json,sys
@@ -38,4 +75,8 @@ fi
 
 echo "▶ 설치·실행 (기기 $DEVICE, 서버 $GATEWAY_URL)"
 flutter pub get
-flutter run --release -d "$DEVICE" --dart-define=GATEWAY_URL="$GATEWAY_URL"
+if ! flutter run --release -d "$DEVICE" --dart-define=GATEWAY_URL="$GATEWAY_URL"; then
+  echo "✖ 실행에 실패했어요. 앱이 깔렸는데 안 열리면 폰에서"
+  echo "  설정 → 일반 → VPN 및 기기 관리 → 개발자 앱 → '신뢰'를 누른 뒤 앱 아이콘을 눌러 주세요."
+  exit 1
+fi
