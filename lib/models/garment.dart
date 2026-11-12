@@ -218,10 +218,8 @@ List<Garment> mergeOutfit(List<Garment> before, List<Garment> seen) {
   for (final g in seen) {
     if (fresh.add(g.category)) byCategory[g.category] = g;
   }
-  return [
-    for (final c in outfitOrder)
-      if (byCategory[c] != null) byCategory[c]!,
-  ];
+  final order = outfitOrder.where(byCategory.containsKey);
+  return [for (final c in order) byCategory[c]!];
 }
 
 /// "상의", "하의"처럼 화면에 쓰는 종류 이름.
