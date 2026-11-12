@@ -19,7 +19,7 @@ abstract class TtsApi {
 }
 
 class GatewayTtsApi implements TtsApi {
-  GatewayTtsApi(this.gateway, {this.timeout = const Duration(seconds: 12)});
+  GatewayTtsApi(this.gateway, {this.timeout = const Duration(seconds: 20)});
 
   final GatewayAuth gateway;
   final Duration timeout;
