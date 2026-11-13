@@ -267,6 +267,47 @@ void main() {
       expect(bodies.last['allowGpt'], isTrue);
     });
 
+    test('색 설명 방식은 바꾸기 전엔 보내지 않고, 바꾸면 기억해 보낸다', () async {
+      final bodies = <Map<String, dynamic>>[];
+      var changed = true;
+      final client = MockClient((req) async {
+        bodies.add(jsonDecode(req.body) as Map<String, dynamic>);
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({
+            'sessionId': 's_c',
+            'speech': '알겠어요. 이제 색은 이름만 말씀드릴게요.',
+            'next': 'listen',
+            if (changed) 'colorDetail': false,
+          })),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final store = MemoryTokenStore()
+        ..tokens = GatewayTokens(
+            accessToken: 'a1',
+            refreshToken: 'r1',
+            expiresAt: DateTime.now().add(const Duration(hours: 1)));
+      final detail = MemoryColorDetailStore();
+      final api = GatewayTurnApi(
+          GatewayAuth(
+              baseUrl: Uri.parse('http://gw:8080'),
+              tokens: store,
+              client: client),
+          modes: MemoryOutfitModeStore(),
+          gptConsent: MemoryGptConsentStore(),
+          colorDetail: detail);
+
+      final r = await api.say('s_c', '색 설명 짧게 해 줘');
+      expect(bodies.first.containsKey('colorDetail'), isFalse);
+      expect(r.colorDetail, isFalse);
+      expect(detail.value, isFalse);
+
+      changed = false;
+      await api.say('s_c', '옷 추천해 줘');
+      expect(bodies.last['colorDetail'], isFalse);
+    });
+
     test('위치 권한이 없으면 서울(locationFallback=true)로 보낸다', () async {
       final loc = await LocationProvider(read: () async => null).current();
       expect(loc.toJson(),

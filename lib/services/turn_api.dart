@@ -113,6 +113,7 @@ class TurnReply {
     this.resultType,
     this.outfitMode,
     this.gptConsent,
+    this.colorDetail,
   });
 
   factory TurnReply.fromJson(Map<String, dynamic> json) => TurnReply(
@@ -124,6 +125,7 @@ class TurnReply {
         outfitMode: OutfitMode.parse((json['result']
             as Map<String, dynamic>?)?['outfitMode'] as String?),
         gptConsent: json['gptConsent'] as bool?,
+        colorDetail: json['colorDetail'] as bool?,
       );
 
   final String sessionId;
@@ -140,6 +142,9 @@ class TurnReply {
 
   /// 사용자가 이번에 "더 정확한 AI에게 물어봐도 될까요?"에 답했으면 그 답. 앱이 기억해 다음부터 allowGpt로 보낸다.
   final bool? gptConsent;
+
+  /// 사용자가 이번에 "색 설명 짧게/자세히"라고 했으면 그 값. 앱이 기억해 다음부터 colorDetail로 보낸다.
+  final bool? colorDetail;
 }
 
 /// `POST /api/v1/agent/turn`. 게이트웨이에 로그인했을 때만 쓴다.
@@ -162,13 +167,18 @@ class GatewayTurnApi implements TurnApi {
   GatewayTurnApi(this.gateway,
       {this.timeout = const Duration(seconds: 40),
       OutfitModeStore? modes,
-      GptConsentStore? gptConsent})
+      GptConsentStore? gptConsent,
+      ColorDetailStore? colorDetail})
       : modes = modes ?? LocalOutfitModeStore(),
-        gptConsent = gptConsent ?? LocalGptConsentStore();
+        gptConsent = gptConsent ?? LocalGptConsentStore(),
+        colorDetail = colorDetail ?? LocalColorDetailStore();
 
   /// GPT 확인·학습 저장 동의. 답했으면 요청마다 allowGpt로 보내고(true면 agent가 애매한 얼룩 조각만 GPT로 확인),
   /// 아직이면 보내지 않는다. 그러면 agent가 처음 애매한 얼룩에서 묻고, 답을 [TurnReply.gptConsent]로 돌려준다.
   final GptConsentStore gptConsent;
+
+  /// 색 설명 방식. 사용자가 바꾼 적이 있으면 요청마다 colorDetail로 보낸다(없으면 agent 기본: 자세히).
+  final ColorDetailStore colorDetail;
 
   final GatewayAuth gateway;
 
@@ -208,6 +218,8 @@ class GatewayTurnApi implements TurnApi {
   Future<TurnReply> _post(Map<String, dynamic> body) async {
     final allow = await gptConsent.load();
     if (allow != null) body['allowGpt'] = allow;
+    final detail = await colorDetail.load();
+    if (detail != null) body['colorDetail'] = detail;
     final json =
         await gateway.sendJson('POST', _path, json: body).timeout(timeout);
     if (json == null) {
@@ -218,6 +230,8 @@ class GatewayTurnApi implements TurnApi {
     if (mode != null) await modes.save(mode);
     final answered = reply.gptConsent;
     if (answered != null) await gptConsent.save(answered);
+    final changed = reply.colorDetail;
+    if (changed != null) await colorDetail.save(changed);
     return reply;
   }
 }
@@ -353,4 +367,45 @@ class MemoryGptConsentStore implements GptConsentStore {
 
   @override
   Future<void> save(bool allow) async => value = allow;
+}
+
+/// 색 설명 방식을 폰에 기억한다(2026-11-13 진행 님: "색 설명 짧게/자세히"로 바꿀 수 있게).
+/// true면 감각·느낌까지, false면 이름만(빨강·초록은 짧은 비유). 바꾼 적 없으면 null.
+abstract class ColorDetailStore {
+  Future<bool?> load();
+  Future<void> save(bool detailed);
+}
+
+class LocalColorDetailStore implements ColorDetailStore {
+  static const _key = 'color.detail';
+
+  @override
+  Future<bool?> load() async {
+    try {
+      return (await SharedPreferences.getInstance()).getBool(_key);
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> save(bool detailed) async {
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_key, detailed);
+    } on Object {
+      // 저장 못 하면 agent 기본(자세히)으로 돌아간다.
+    }
+  }
+}
+
+class MemoryColorDetailStore implements ColorDetailStore {
+  MemoryColorDetailStore([this.value]);
+
+  bool? value;
+
+  @override
+  Future<bool?> load() async => value;
+
+  @override
+  Future<void> save(bool detailed) async => value = detailed;
 }
