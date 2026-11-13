@@ -37,7 +37,8 @@ class CameraTurnScreen extends StatelessWidget {
                 child: Semantics(
                   button: true,
                   label: controller.busy ? '확인 중' : '말하기',
-                  hint: controller.message,
+                  // 안내는 앱이 소리로 읽는다. 여기에 긴 안내를 넣으면 VoiceOver와 겹친다(2026-11-13 점검).
+                  hint: controller.busy ? null : '두 번 탭하면 말씀하실 수 있어요.',
                   excludeSemantics: true,
                   child: Material(
                     color: Colors.transparent,

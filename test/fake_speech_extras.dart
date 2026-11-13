@@ -40,6 +40,11 @@ mixin FakeSpeechExtras implements SpeechService {
   @override
   Future<void> listeningCue() async => cues++;
 
+  int ticks = 0;
+
+  @override
+  Future<void> waitingTick() async => ticks++;
+
   @override
   double rate = SpeechService.speechRate;
 

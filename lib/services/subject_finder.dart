@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
@@ -30,6 +31,12 @@ class MlKitSubjectFinder implements SubjectFinder {
         ),
       );
 
+  FaceDetector? _faces;
+
+  /// 구도 안내용이라 윤곽점 없이 빠르게 얼굴 상자만 찾는다(윤곽점은 찍은 뒤 [MlKitFaceLandmarkFinder]가 찾는다).
+  FaceDetector get _faceDetector => _faces ??= FaceDetector(
+      options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast));
+
   PoseDetector get _poseDetector => _poses ??= PoseDetector(
       options: PoseDetectorOptions(mode: PoseDetectionMode.stream));
 
@@ -41,6 +48,17 @@ class MlKitSubjectFinder implements SubjectFinder {
     if (input == null) return null;
     final (image, w, h) = input;
     try {
+      if (subject == Subject.face) {
+        final found = await _faceDetector.processImage(image);
+        return frameFace([
+          for (final f in found)
+            Rect.fromLTRB(
+                (f.boundingBox.left / w).clamp(0, 1),
+                (f.boundingBox.top / h).clamp(0, 1),
+                (f.boundingBox.right / w).clamp(0, 1),
+                (f.boundingBox.bottom / h).clamp(0, 1)),
+        ]);
+      }
       if (subject == Subject.garment) {
         final found = await _objectDetector.processImage(image);
         return frameGarment(garmentBoxes(found, w, h));
@@ -104,6 +122,8 @@ class MlKitSubjectFinder implements SubjectFinder {
   Future<void> close() async {
     await _objects?.close();
     await _poses?.close();
+    await _faces?.close();
+    _faces = null;
     _objects = null;
     _poses = null;
   }

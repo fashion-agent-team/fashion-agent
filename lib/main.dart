@@ -25,6 +25,7 @@ import 'services/permission_service.dart';
 import 'services/profile_store.dart';
 import 'services/schedule_reminders.dart';
 import 'services/schedule_store.dart';
+import 'services/shortcut_ask.dart';
 import 'services/speech_service.dart';
 import 'services/turn_api.dart';
 import 'services/wardrobe_store.dart';
@@ -105,6 +106,35 @@ Future<void> main() async {
       scheduler: reminderScheduler,
     );
   }
+  final agent = AgentController(
+    speech: speech,
+    listen: listen,
+    profiles: profiles,
+    weatherService: weather,
+    turns: turns,
+    reminders: reminders,
+    location: location,
+    handsFree: _handsFree,
+    onboarding: OnboardingFlow(
+      speech: speech,
+      listen: listen,
+      profiles: profiles,
+      account: account,
+      permissions: _fakeCamera
+          ? FakePermissionService()
+          : DevicePermissionService(
+              listen: listen,
+              camera: capture,
+              reminders: reminderScheduler,
+            ),
+    ),
+  );
+  // 시리 단축어("심청이한테 오늘 뭐 입지")는 iOS 쪽(AppDelegate.swift)이 이 값에 말을 넣고 앱을 연다.
+  agent.takeShortcutAsk = takeShortcutAsk;
+  unawaited(agent.checkShortcut());
+  // 일정 알림을 누르면 그날 옷 추천으로 바로 시작한다(2026-11-13 진행 님).
+  unawaited(reminderScheduler?.listenTaps((day) =>
+      unawaited(agent.askFromReminder(reminderAsk(day, DateTime.now())))));
   runApp(FashionAgentApp(
     cameraTurn: turns == null
         ? null
@@ -121,29 +151,7 @@ Future<void> main() async {
                 : DeviceAutoCaptureCamera(),
           ),
     heardNow: listen.heardNow,
-    agent: AgentController(
-      speech: speech,
-      listen: listen,
-      profiles: profiles,
-      weatherService: weather,
-      turns: turns,
-      reminders: reminders,
-      location: location,
-      handsFree: _handsFree,
-      onboarding: OnboardingFlow(
-        speech: speech,
-        listen: listen,
-        profiles: profiles,
-        account: account,
-        permissions: _fakeCamera
-            ? FakePermissionService()
-            : DevicePermissionService(
-                listen: listen,
-                camera: capture,
-                reminders: reminderScheduler,
-              ),
-      ),
-    ),
+    agent: agent,
     // 서버 없이 쓰는 옷 검사 화면은 데모(FAKE_VISION)일 때만 연다. 진짜 사진 분석은 서버로만 한다.
     outfitCheck: _fakeVision
         ? SessionController(

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:fashion_agent/agent/agent_controller.dart';
 import 'package:fashion_agent/models/schedule_event.dart';
+import 'package:fashion_agent/models/user_profile.dart';
 import 'package:fashion_agent/services/gateway_auth.dart';
 import 'package:fashion_agent/services/profile_store.dart';
 import 'package:fashion_agent/services/schedule_reminders.dart';
@@ -73,7 +74,7 @@ void main() {
       expect(plans.map((p) => p.id), [202611131, 202611142]);
       expect(plans.first.title, '내일 일정');
       expect(plans.last.title, '오늘 일정');
-      expect(plans.first.payload, 'schedule:2026-11-13:before');
+      expect(plans.first.payload, 'schedule:2026-11-13:before:2026-11-14');
     });
 
     test('아침 일찍 시작하면 당일 알림은 1시간 전', () {
@@ -330,5 +331,94 @@ void main() {
     await settle();
     expect(turns.sent, ['say:토요일 두 시에 친구 결혼식 넣어 줘']);
     expect(scheduler.replaces, 1);
+  });
+
+  group('알림을 누르면 그날 옷 추천', () {
+    test('알림 값에서 일정 날을 꺼낸다', () {
+      expect(reminderEventDay('schedule:2026-11-13:before:2026-11-14'),
+          DateTime(2026, 11, 14));
+      // 예전 모양(일정 날 없음)은 알림 날
+      expect(reminderEventDay('schedule:2026-11-14:sameDay'),
+          DateTime(2026, 11, 14));
+      expect(reminderEventDay('other:1'), isNull);
+      expect(reminderEventDay(null), isNull);
+    });
+
+    test('가까운 날은 오늘·내일·모레, 먼 날은 날짜로 묻는다', () {
+      final at = DateTime(2026, 11, 13, 20);
+      expect(reminderAsk(DateTime(2026, 11, 13), at), '오늘 뭐 입지?');
+      expect(reminderAsk(DateTime(2026, 11, 14), at), '내일 뭐 입지?');
+      expect(reminderAsk(DateTime(2026, 11, 15), at), '모레 뭐 입지?');
+      expect(reminderAsk(DateTime(2026, 11, 20), at), '11월 20일 뭐 입지?');
+    });
+
+    test('여러 날 미리 알림은 가장 이른 일정 날로', () {
+      final plans = planReminders([
+        ev("면접", DateTime(2026, 11, 16, 10), daysBefore: 3),
+      ], now);
+      expect(plans.first.payload, endsWith(':2026-11-16'));
+    });
+
+    test('누르면 인사 없이 바로 그날 옷 추천을 agent에 보낸다', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([reply('내일 입을 옷을 추천해 드릴게요.', TurnNext.done)]);
+      final agent = AgentController(
+        speech: speech,
+        listen: ScriptedListen(const []),
+        profiles: InMemoryProfileStore(),
+        onboarding: onboardingWith(speech, const []),
+        weatherService: FakeWeatherService(),
+        turns: turns,
+      );
+      agent.profile =
+          const UserProfile(agentName: '하늘', consent: consentVersion);
+
+      await agent.askFromReminder('내일 뭐 입지?');
+      await settle();
+      expect(turns.sent, ['say:내일 뭐 입지?']);
+      expect(speech.spoken.first, AgentController.reminderIntro);
+    });
+
+    test('앱이 알림으로 막 켜져 정보를 아직 안 불러왔으면 시작 인사 뒤 듣지 않고 보낸다', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([reply('추천해 드릴게요.', TurnNext.done)]);
+      final agent = AgentController(
+        speech: speech,
+        listen: ScriptedListen(const []),
+        profiles: InMemoryProfileStore(
+            const UserProfile(agentName: '하늘', consent: consentVersion)),
+        onboarding: onboardingWith(speech, const []),
+        weatherService: FakeWeatherService(),
+        turns: turns,
+      );
+      await agent.askFromReminder('오늘 뭐 입지?');
+      await agent.start();
+      await settle();
+      await settle();
+      expect(turns.sent, ['say:오늘 뭐 입지?']);
+      expect(speech.spoken, isNot(contains(startsWith('앗'))));
+    });
+  });
+
+  test('시리 단축어로 들어온 말을 한 번만 보낸다', () async {
+    final speech = FakeSpeech();
+    final turns = FakeTurnApi([reply('오늘 옷 추천해 드릴게요.', TurnNext.done)]);
+    final agent = AgentController(
+      speech: speech,
+      listen: ScriptedListen(const []),
+      profiles: InMemoryProfileStore(),
+      onboarding: onboardingWith(speech, const []),
+      weatherService: FakeWeatherService(),
+      turns: turns,
+    );
+    agent.profile = const UserProfile(agentName: '하늘', consent: consentVersion);
+    final asks = ['오늘 뭐 입지?'];
+    agent.takeShortcutAsk = () async => asks.isEmpty ? null : asks.removeAt(0);
+
+    await agent.checkShortcut();
+    await settle();
+    await agent.checkShortcut();
+    await settle();
+    expect(turns.sent, ['say:오늘 뭐 입지?']);
   });
 }

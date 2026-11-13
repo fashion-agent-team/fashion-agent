@@ -149,7 +149,8 @@ class _AgentScreenState extends State<AgentScreen> with WidgetsBindingObserver {
                       // 듣는 중에는 다홍 위에 쪽빛 버튼, 평소에는 노랑 버튼.
                       background: listening ? SeaColors.sea : SeaColors.jeogori,
                       foreground: listening ? SeaColors.jeogori : SeaColors.sea,
-                      onPressed: _a.busy ? null : () => unawaited(_a.repeat()),
+                      onPressed:
+                          _a.canRepeat ? () => unawaited(_a.repeat()) : null,
                     ),
                   ),
                 ),
@@ -179,6 +180,7 @@ class _TalkArea extends StatelessWidget {
         AgentPhase.listening => '듣고 있어요',
         AgentPhase.thinking => '알아보는 중이에요',
         AgentPhase.speaking => '말하는 중이에요',
+        AgentPhase.idle when agent.resting => '쉬는 중이에요',
         AgentPhase.idle =>
           agent.handsFree ? '“${agent.wakeName}” 하고 불러 주세요' : '화면을 눌러 말씀해 주세요',
       };
@@ -186,10 +188,12 @@ class _TalkArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final listening = agent.phase == AgentPhase.listening;
+    // 2026-11-13 점검: 예전에는 hint에 마지막 안내 전체를 넣어서 포커스가 갈 때마다 VoiceOver가 긴 문장을 읽고
+    // 앱 목소리와 겹쳤다. 안내는 '다시 듣기'로 듣고, 여기는 지금 상태와 누르면 무엇이 되는지만 짧게 읽는다.
     return Semantics(
       button: true,
-      label: agent.busy ? '듣는 중' : '말하기',
-      hint: agent.message,
+      label: agent.resting ? '쉬는 중' : semanticsLabelFor(agent.phase),
+      hint: semanticsHintFor(agent.phase, busy: agent.busy),
       excludeSemantics: true,
       child: Material(
         color: Colors.transparent,
@@ -308,3 +312,19 @@ class _TalkArea extends StatelessWidget {
     );
   }
 }
+
+/// 말하기 영역을 VoiceOver가 읽는 이름. 예전에는 바쁘면 늘 "듣는 중"이었다.
+String semanticsLabelFor(AgentPhase phase) => switch (phase) {
+      AgentPhase.listening => '듣는 중',
+      AgentPhase.thinking => '알아보는 중',
+      AgentPhase.speaking => '말하는 중',
+      AgentPhase.idle => '말하기',
+    };
+
+/// 두 번 탭하면 무엇이 되는지. 알아보는 중에는 눌러도 아무 일이 없어서 읽지 않는다.
+String? semanticsHintFor(AgentPhase phase, {required bool busy}) =>
+    switch (phase) {
+      AgentPhase.speaking => '두 번 탭하면 말을 멈춰요.',
+      AgentPhase.idle when !busy => '두 번 탭하면 말씀하실 수 있어요.',
+      _ => null,
+    };

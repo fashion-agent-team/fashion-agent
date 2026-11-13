@@ -61,7 +61,8 @@ class PlannedReminder {
     required this.at,
     required this.title,
     required this.body,
-  });
+    DateTime? eventDay,
+  }) : eventDay = eventDay ?? day;
 
   /// 알림이 뜨는 날과 종류로 정한다(같은 알림은 늘 같은 번호). 예: 2026-11-12 당일 = 202611122.
   final int id;
@@ -75,8 +76,13 @@ class PlannedReminder {
   final String title;
   final String body;
 
+  /// 알림이 알려 주는 일정의 날(여러 개면 가장 이른 일정). 알림을 누르면 이날 옷 추천으로 시작한다.
+  final DateTime eventDay;
+
   /// 알림을 눌렀을 때 앱이 받는 값. 이 앱이 만든 일정 알림인지 이 접두어로 가린다.
-  String get payload => '$payloadPrefix${isoDate(day)}:${kind.name}';
+  /// 끝에 일정 날을 붙인다(2026-11-13: 누르면 그날 옷 추천으로 바로 시작).
+  String get payload =>
+      '$payloadPrefix${isoDate(day)}:${kind.name}:${isoDate(eventDay)}';
 
   static const payloadPrefix = 'schedule:';
 
@@ -136,6 +142,7 @@ List<PlannedReminder> planReminders(
       day: d,
       at: at,
       title: onlyTomorrow ? '내일 일정' : '다가오는 일정',
+      eventDay: _dayOf(list.first.start),
       body: beforeBody(list, d, agentName: agentName),
     ));
   }
@@ -158,6 +165,33 @@ List<PlannedReminder> planReminders(
   }
   plans.sort((a, b) => a.at.compareTo(b.at));
   return plans;
+}
+
+DateTime _dayOf(DateTime t) {
+  final l = t.toLocal();
+  return DateTime(l.year, l.month, l.day);
+}
+
+/// 알림 값에서 일정 날을 꺼낸다. 이 앱의 일정 알림이 아니거나 예전 모양(일정 날 없음)이면 알림 날, 못 읽으면 null.
+DateTime? reminderEventDay(String? payload) {
+  if (payload == null || !payload.startsWith(PlannedReminder.payloadPrefix)) {
+    return null;
+  }
+  final parts =
+      payload.substring(PlannedReminder.payloadPrefix.length).split(':');
+  return DateTime.tryParse(parts.length >= 3 ? parts[2] : parts.first);
+}
+
+/// 알림을 누르고 들어왔을 때 agent에 보낼 말. "오늘 뭐 입지?", "내일 뭐 입지?", "11월 20일 뭐 입지?".
+String reminderAsk(DateTime eventDay, DateTime now) {
+  final days = _daysBetween(DateTime(now.year, now.month, now.day), eventDay);
+  final when = switch (days) {
+    <= 0 => '오늘',
+    1 => '내일',
+    2 => '모레',
+    _ => '${eventDay.month}월 ${eventDay.day}일',
+  };
+  return '$when 뭐 입지?';
 }
 
 int _dayNumber(DateTime d) => d.year * 10000 + d.month * 100 + d.day;
@@ -294,6 +328,9 @@ abstract class ReminderScheduler {
 
   /// 이 앱이 예약한 일정 알림을 모두 지우고 [plans]로 바꾼다. 다른 알림은 건드리지 않는다.
   Future<void> replace(List<PlannedReminder> plans);
+
+  /// 일정 알림을 누르면 그 알림의 일정 날로 [onTap]을 부른다. 앱이 꺼져 있다가 알림으로 켜졌으면 바로 한 번 부른다.
+  Future<void> listenTaps(void Function(DateTime eventDay) onTap);
 }
 
 /// `flutter_local_notifications`로 폰에 예약한다. 앱이 꺼져 있어도 정한 때에 뜬다.
@@ -338,7 +375,30 @@ class LocalReminderScheduler implements ReminderScheduler {
         requestSoundPermission: false,
       ),
     );
-    await _plugin.initialize(settings: settings);
+    await _plugin.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: (r) {
+        final day = reminderEventDay(r.payload);
+        if (day != null) _onTap?.call(day);
+      },
+    );
+  }
+
+  void Function(DateTime eventDay)? _onTap;
+
+  @override
+  Future<void> listenTaps(void Function(DateTime eventDay) onTap) async {
+    _onTap = onTap;
+    try {
+      await _init();
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp ?? false) {
+        final day = reminderEventDay(launch!.notificationResponse?.payload);
+        if (day != null) onTap(day);
+      }
+    } on Object catch (e) {
+      debugPrint('알림 누름 받기 실패: $e');
+    }
   }
 
   @override
@@ -408,6 +468,12 @@ class MemoryReminderScheduler implements ReminderScheduler {
     replaces++;
     scheduled = [...plans];
   }
+
+  void Function(DateTime eventDay)? onTap;
+
+  @override
+  Future<void> listenTaps(void Function(DateTime eventDay) onTap) async =>
+      this.onTap = onTap;
 }
 
 /// 서버 일정을 받아 알림을 다시 맞춘다.
