@@ -106,7 +106,10 @@ void main() {
       );
       await spin();
       expect(turns.sent, ['say:오늘 뭐 입지?']);
-      expect(speech.spoken.last, '다른 게 필요하면 "코디" 하고 불러 주세요.');
+      // 인사 뒤 조용할 때 사과 없이 한 번 길게 안내했으니, 그다음부터는 짧게 한다(2026-11-13 점검).
+      expect(speech.spoken, contains('다른 게 필요하면 "코디" 하고 불러 주세요.'));
+      expect(speech.spoken, isNot(contains(startsWith('앗, 제가 잘 못 들었어요'))));
+      expect(speech.spoken.last, '또 필요하시면 "코디" 하고 불러 주세요.');
       expect(listen.waiting, isTrue, reason: '끝나면 다시 이름을 기다린다');
       await agent.pauseHandsFree();
     });

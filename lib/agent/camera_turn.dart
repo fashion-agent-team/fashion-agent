@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'agent_speech.dart' show isHomeCommand;
 import 'command_listener.dart';
+import 'waiting_cue.dart';
 import '../services/auto_capture.dart';
 import '../services/capture_service.dart';
 import '../services/framing.dart';
@@ -210,6 +211,7 @@ class CameraTurnController extends ChangeNotifier {
         subject: switch (kind) {
           ImageKind.outfit => Subject.garment,
           ImageKind.worn => Subject.body,
+          ImageKind.face => Subject.face,
           _ => Subject.any,
         },
         onGuide: (speech) => unawaited(_say(speech)),
@@ -289,7 +291,10 @@ class CameraTurnController extends ChangeNotifier {
       {Future<void>? before}) async {
     TurnReply reply;
     try {
-      reply = await send();
+      // 기다리는 동안 짧게 진동하고, 오래 걸리면 "아직 보고 있어요"라고 한 번 말한다(2026-11-13 점검).
+      reply = await withWaitingCue(retryOnceIfUnsent(send),
+          tick: () => unawaited(speech.waitingTick()),
+          still: () => unawaited(_say(stillWorkingSpeech)));
     } on Object catch (e) {
       debugPrint('turn 실패: $e');
       await before;

@@ -370,6 +370,17 @@ class SpeechService {
   /// 폰을 짧게 진동하고 시스템 "딸깍" 소리를 낸다. 예전에는 audioplayers로 "띵" 소리를 틀었는데,
   /// audioplayers는 소리가 끝나면 iOS 오디오 세션을 꺼 버려서(setActive(false)) 바로 이어 켠 마이크가
   /// 아무 소리도 못 들었다(2026-11-09 폰 확인: 이름을 불러도 못 알아들음). 시스템 소리와 진동은 세션을 건드리지 않는다.
+  /// 서버 답을 기다리는 동안 "아직 하는 중"이라고 알리는 짧은 진동. 말·오디오 세션은 건드리지 않는다.
+  ///
+  /// 2026-11-13 점검: 서버나 GPT가 5~8초 걸리면 그동안 아무 소리가 없어서, 화면을 못 보는 사람은 멈춘 건지 알 수 없었다.
+  Future<void> waitingTick() async {
+    try {
+      await HapticFeedback.lightImpact();
+    } on Object catch (e) {
+      debugPrint('진동 실패: $e');
+    }
+  }
+
   Future<void> listeningCue() async {
     final gen = ++_generation;
     await _stopNow();

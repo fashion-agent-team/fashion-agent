@@ -321,7 +321,11 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
         onHint?.call(CaptureHint.shaking);
       }
       if (state != FrameState.ready) return;
-      if (subject != Subject.any) {
+      // 얼굴은 폰마다 앞쪽 카메라 방향이 달라 못 찾을 수도 있다. 그래도 [_faceGate]가 지나면 예전처럼 멈추면 찍는다
+      // (찍은 뒤 윤곽점 확인이 한 번 더 있다). 안내 때문에 아예 못 찍게 되지는 않게.
+      final gated = subject != Subject.any &&
+          !(subject == Subject.face && now > _faceGate);
+      if (gated) {
         final f = framing;
         if (f == null || !f.ready || now - framingAt > _framingFresh) return;
       }
@@ -341,6 +345,9 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
     });
     return done.future;
   }
+
+  /// 얼굴을 이만큼 못 맞추면 구도 안내 없이 찍는다.
+  static const _faceGate = Duration(seconds: 8);
 
   static const _darkHint = Duration(seconds: 2);
   static const _movingHint = Duration(seconds: 8);

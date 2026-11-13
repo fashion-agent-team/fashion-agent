@@ -347,7 +347,7 @@ void main() {
       expect(
           speech.spoken.first,
           '반가워요. 저 하늘이에요. 오늘도 같이 준비해 봐요. '
-          '$homeHint 필요한 게 있으면 편하게 말씀해 주세요.');
+          '필요한 게 있으면 편하게 말씀해 주세요.');
       expect(speech.spoken[1], contains('일교차가 13도로 커요'));
       expect(speech.spoken.last, tapToTalk);
     });
@@ -500,6 +500,39 @@ void main() {
       expect(store.profile?.heightCm, 175);
       expect(store.profile?.name, '김민수');
       expect(speech.spoken, contains(startsWith('바꿨어요. 이름 김민수')));
+    });
+
+    test('정보를 고쳐도 동의와 말 빠르기는 그대로 둔다', () async {
+      // 2026-11-13 점검: 예전에는 고칠 때 동의·말 빠르기가 지워져서 다음 실행에 동의 안내가 다시 나왔다.
+      final speech = FakeSpeech();
+      const before = UserProfile(
+          heightCm: 170,
+          agentName: '하늘',
+          consent: consentVersion,
+          speechRate: 0.48);
+      final store = InMemoryProfileStore(before);
+      final agent = agentWith(speech, ['내 키 바꿔 줘'],
+          profile: before, answers: ['175'], store: store);
+      await agent.start();
+
+      expect(store.profile?.heightCm, 175);
+      expect(store.profile?.consent, consentVersion);
+      expect(store.profile?.speechRate, 0.48);
+    });
+
+    test('첫 실행 내 정보는 "나중에 할게"로 한 번에 넘긴다', () async {
+      final speech = FakeSpeech();
+      final profile = await onboardingWith(speech, [
+        '하늘', '네', //
+        '나중에 할게', '건너뛰기',
+      ]).run();
+
+      expect(profile.agentName, '하늘');
+      expect(profile.name, isNull);
+      expect(speech.spoken, contains(profileLater));
+      expect(speech.spoken, isNot(contains(startsWith('말씀해주신 정보를 읽어 드릴게요'))));
+      expect(speech.spoken,
+          isNot(contains('생년월일을 말씀해 주세요. 예를 들면 1990년 3월 5일처럼요.')));
     });
 
     test('못 알아들으면 정보를 지우지 않고 그대로 둔다', () async {

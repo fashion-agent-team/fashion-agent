@@ -38,6 +38,12 @@ class OnboardingFlow {
   /// 한 질문을 못 알아들었을 때 다시 묻는 횟수.
   static const retries = 2;
 
+  /// 첫 실행 내 정보 질문 중이면 true. 이때만 "나중에 할게"로 남은 질문을 한 번에 넘긴다.
+  bool _laterAllowed = false;
+
+  /// "나중에 할게"를 들었으면 true.
+  bool _laterAll = false;
+
   Future<UserProfile> run() async {
     // 2026-11-10 진행 님 순서: 인사 → 허용(허용하면 동의) → 구글 로그인
     // → 전에 썼으면 이름·정보·말 빠르기를 불러와 묻지 않고 바로 시작(옷장·일정은 서버에 계정별로 있다)
@@ -68,10 +74,19 @@ class OnboardingFlow {
         UserProfile(agentName: agentName, consent: consent, accountId: id);
     await _say(profileIntro);
 
+    _laterAll = false;
+    _laterAllowed = true;
     for (final field in _Field.values) {
       profile = await _askField(profile, field);
+      if (_laterAll) break;
     }
-    profile = await _confirm(profile);
+    _laterAllowed = false;
+    final anySet = _Field.values.any((f) => f.isSet(profile));
+    if (_laterAll && !anySet) {
+      await _say(profileLater);
+    } else {
+      profile = await _confirm(profile);
+    }
     final call = await _pickCallName(profile);
     if (call != null) {
       profile = profile.copyWith(callName: call);
@@ -342,6 +357,10 @@ class OnboardingFlow {
       // 이름·직업처럼 흔치 않은 말이 많아서 서버 음성 인식으로 받아 적는다.
       final heard = await listen.listen(server: true);
       if (heard != null) {
+        if (skippable && _laterAllowed && isLaterAll(heard)) {
+          _laterAll = true;
+          return null;
+        }
         if (skippable && isSkip(heard)) {
           await _say('네, 그건 건너뛸게요.');
           return null;
@@ -474,4 +493,7 @@ UserProfile _clear(UserProfile p, _Field field) => UserProfile(
       agentName: p.agentName,
       callName: p.callName,
       accountId: p.accountId,
+      // 예전에는 이 둘을 빠뜨려서 "내 키 바꿔 줘" 뒤에 동의와 말 빠르기가 지워졌다(2026-11-13 점검).
+      consent: p.consent,
+      speechRate: p.speechRate,
     );

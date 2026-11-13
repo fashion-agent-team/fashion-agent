@@ -17,6 +17,9 @@ enum Subject {
 
   /// 옷을 입은 사람(머리부터 발까지).
   body,
+
+  /// 셀카로 찍는 얼굴(화장 확인). 2026-11-13 점검: 예전에는 구도 안내 없이 찍고 나서야 "얼굴이 다 안 보여요"라고 했다.
+  face,
 }
 
 /// 구도 판단 결과. [ready]면 찍어도 된다. 아니면 [speech]를 읽어 준다.
@@ -169,4 +172,29 @@ double sceneDifference(List<double> a, List<double> b) {
     }
   }
   return (bytes: out, width: outW, height: outH);
+}
+
+/// 셀카 얼굴 상자들(화면 기준 0~1)을 보고 안내한다. 가장 큰 얼굴을 본다.
+///
+/// 앞쪽 카메라는 좌우가 뒤집혀 보일 수 있어서 "왼쪽/오른쪽"은 말하지 않고, 멀고 가까움과 "가운데로"만 말한다.
+Framing frameFace(List<Rect> faces) {
+  if (faces.isEmpty) {
+    return const Framing.fix('얼굴이 안 보여요. 폰을 얼굴 정면에 들어 주세요.');
+  }
+  final box =
+      faces.reduce((a, b) => a.width * a.height >= b.width * b.height ? a : b);
+  final cutLeft = box.left <= _edge,
+      cutRight = box.right >= 1 - _edge,
+      cutTop = box.top <= _edge,
+      cutBottom = box.bottom >= 1 - _edge;
+  if (box.width > 0.8 || (cutLeft && cutRight) || (cutTop && cutBottom)) {
+    return const Framing.fix('조금 멀리 들어 주세요.');
+  }
+  if (box.width < 0.3) {
+    return const Framing.fix('조금 가까이 들어 주세요.');
+  }
+  if (cutLeft || cutRight || cutTop || cutBottom) {
+    return const Framing.fix('얼굴이 화면 끝에 걸려요. 폰을 얼굴 정가운데로 천천히 옮겨 주세요.');
+  }
+  return const Framing.ready();
 }
