@@ -121,6 +121,10 @@ Uint8List mirrorJpeg(Uint8List jpeg) {
 /// 1920×1080 원본(1~1.5MB)은 30~60초 걸린다. 1280·품질 80이면 200~300KB.
 const int sendMaxSide = 1280;
 
+/// 옷 사진(내려놓은 옷·입은 모습)은 더 줄인다. 옷 상태 서버 모델 입력이 512px이라 960이면 충분하고,
+/// 1280보다 보낼 크기가 약 45% 작다(2026-11-13 응답 시간 줄이기). 얼굴 사진은 [sendMaxSide] 그대로.
+const int sendMaxSideClothes = 960;
+
 /// 이 사진은 입 안쪽만 잘라 보므로(서버 치아 모델 입력 320px) 조금 더 크게 둔다.
 const int sendMaxSideTeeth = 1600;
 const int sendQuality = 80;

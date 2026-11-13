@@ -231,7 +231,11 @@ class CameraTurnController extends ChangeNotifier {
         // 젯슨까지 올리는 구간이 느려서 보내기 전에 줄인다. 입 박스·윤곽점도 줄인 사진에서 찾는다.
         final shot = await compute(shrinkJpeg, (
           jpeg: still,
-          maxSide: kind == ImageKind.teeth ? sendMaxSideTeeth : sendMaxSide,
+          maxSide: switch (kind) {
+            ImageKind.teeth => sendMaxSideTeeth,
+            ImageKind.outfit || ImageKind.worn => sendMaxSideClothes,
+            ImageKind.face => sendMaxSide,
+          },
         ));
         if (round != _round || !running) return;
         final marks = kind == ImageKind.face ? await _findFace(shot) : null;
