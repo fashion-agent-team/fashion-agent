@@ -103,4 +103,24 @@ void main() {
           frameFace([const Rect.fromLTRB(0.2, 0.2, 0.8, 0.75)]).ready, isTrue);
     });
   });
+
+  test('"기능 뭐 있어?" 같은 비슷한 말도 기능 설명으로', () {
+    for (final said in [
+      '기능 설명',
+      '기능 뭐 있어?',
+      '어떤 기능 있어',
+      '기능이 뭐야',
+      '너 뭐 할 수 있어?',
+      '할 수 있는 거 알려 줘',
+      '할 줄 아는 거 말해 봐',
+      '뭘 도와줄 수 있어',
+      '사용법 알려 줘',
+      '이거 어떻게 써?',
+    ]) {
+      expect(isFeatureExplainCommand(said), isTrue, reason: said);
+    }
+    for (final said in ['오늘 뭐 입지?', '옷 추천해 줘', '내일 날씨 어때', '이거 무슨 색이야?']) {
+      expect(isFeatureExplainCommand(said), isFalse, reason: said);
+    }
+  });
 }

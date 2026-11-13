@@ -105,6 +105,32 @@ Future<void> main() async {
       scheduler: reminderScheduler,
     );
   }
+  final agent = AgentController(
+    speech: speech,
+    listen: listen,
+    profiles: profiles,
+    weatherService: weather,
+    turns: turns,
+    reminders: reminders,
+    location: location,
+    handsFree: _handsFree,
+    onboarding: OnboardingFlow(
+      speech: speech,
+      listen: listen,
+      profiles: profiles,
+      account: account,
+      permissions: _fakeCamera
+          ? FakePermissionService()
+          : DevicePermissionService(
+              listen: listen,
+              camera: capture,
+              reminders: reminderScheduler,
+            ),
+    ),
+  );
+  // 일정 알림을 누르면 그날 옷 추천으로 바로 시작한다(2026-11-13 진행 님).
+  unawaited(reminderScheduler?.listenTaps((day) =>
+      unawaited(agent.askFromReminder(reminderAsk(day, DateTime.now())))));
   runApp(FashionAgentApp(
     cameraTurn: turns == null
         ? null
@@ -121,29 +147,7 @@ Future<void> main() async {
                 : DeviceAutoCaptureCamera(),
           ),
     heardNow: listen.heardNow,
-    agent: AgentController(
-      speech: speech,
-      listen: listen,
-      profiles: profiles,
-      weatherService: weather,
-      turns: turns,
-      reminders: reminders,
-      location: location,
-      handsFree: _handsFree,
-      onboarding: OnboardingFlow(
-        speech: speech,
-        listen: listen,
-        profiles: profiles,
-        account: account,
-        permissions: _fakeCamera
-            ? FakePermissionService()
-            : DevicePermissionService(
-                listen: listen,
-                camera: capture,
-                reminders: reminderScheduler,
-              ),
-      ),
-    ),
+    agent: agent,
     // 서버 없이 쓰는 옷 검사 화면은 데모(FAKE_VISION)일 때만 연다. 진짜 사진 분석은 서버로만 한다.
     outfitCheck: _fakeVision
         ? SessionController(

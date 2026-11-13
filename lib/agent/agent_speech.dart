@@ -100,7 +100,7 @@ const featureIntro = featureExplain;
 /// 기능별 "○○ 자세히 알려줘".
 const featureDetails = {
   '일정 추가': '일정을 추가하실 수 있어요. 날짜와 시간 일정을 알려 주시면 일정에 맞는 패션을 추천해드려요. '
-      '당일에 알림으로 리마인드 해드려요.',
+      '당일에 알림으로 리마인드 해드려요. 알림을 누르시면 그날 입을 옷 추천으로 바로 이어져요.',
   '날씨 정보': '오늘 날씨를 알려드려요. 내일 날씨도 궁금하시면 알려드릴게요. 날씨를 바탕으로 패션을 추천해드려요.',
   '옷 추천': '일정과 날씨를 토대로 어떤 옷을 입으면 좋을지 종합적으로 판단해서 패션을 추천해드려요.',
   '원하는 옷 확인': '옷 사진을 찍어서 그 옷이 그 날에 잘 어울리는 옷인지 판단해서 알려드려요. '
@@ -114,8 +114,19 @@ const featureDetails = {
 };
 
 /// "기능 설명", "기능 알려 줘"면 true.
-bool isFeatureExplainCommand(String text) =>
-    RegExp(r'기능\s*(설명|소개|알려|뭐|목록)').hasMatch(text);
+///
+/// 2026-11-13 진행 님: "기능 설명"뿐 아니라 "기능 뭐 있어?", "뭐 할 수 있어?", "할 줄 아는 거 알려 줘",
+/// "어떤 기능 있어?", "사용법 알려 줘" 같은 비슷한 말도 같은 안내로 답한다.
+bool isFeatureExplainCommand(String text) {
+  final t = text.replaceAll(RegExp(r'\s+'), '');
+  return RegExp(r'기능(이|은|는|을|들)?(설명|소개|알려|뭐|뭔|무엇|어떤|목록|있|좀)').hasMatch(t) ||
+      RegExp(r'(어떤|무슨|뭔)기능').hasMatch(t) ||
+      RegExp(r'(뭐|뭘|무엇을|무얼)(할|해줄|도와줄)수있').hasMatch(t) ||
+      RegExp(r'할수있는(거|게|것|일)').hasMatch(t) ||
+      RegExp(r'할줄아는').hasMatch(t) ||
+      RegExp(r'(뭐|뭘|무엇을)도와(줄|줘|주)').hasMatch(t) ||
+      RegExp(r'사용법|어떻게써|어떻게사용|쓰는법').hasMatch(t);
+}
 
 /// "이물질 확인 자세히 알려줘", "옷 추천 설명해 줘"면 그 기능 설명, 아니면 null.
 String? featureDetailFor(String text) {

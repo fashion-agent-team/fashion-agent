@@ -139,7 +139,8 @@ class AgentController extends ChangeNotifier {
         shortAcknowledgement,
         askMore,
       ]));
-      await _listenAndHandle(quietIfSilent: true);
+      // 일정 알림을 눌러 켰으면 듣지 않고 바로 그날 옷 추천으로(_busy가 끝나면 보낸다).
+      if (_reminderAsk == null) await _listenAndHandle(quietIfSilent: true);
     });
     unawaited(_wakeLoop());
   }
@@ -542,7 +543,36 @@ class AgentController extends ChangeNotifier {
       phase = AgentPhase.idle;
       notifyListeners();
     }
+    // 하던 일 중에 일정 알림을 눌렀으면 끝난 뒤 바로 그날 옷 추천으로 간다.
+    final pending = _reminderAsk;
+    if (pending != null) {
+      _reminderAsk = null;
+      unawaited(askFromReminder(pending));
+    }
   }
+
+  /// 일정 알림을 눌러 들어왔을 때 보낼 말("내일 뭐 입지?"). 바쁘면 하던 일이 끝난 뒤 보낸다.
+  String? _reminderAsk;
+
+  /// 일정 알림을 누르면 그날 옷 추천으로 바로 시작한다(2026-11-13 진행 님).
+  ///
+  /// 처음 실행(온보딩)이 아직이면 하지 않는다. 앱을 켜는 인사 중이면 인사 뒤에 듣지 않고 바로 간다.
+  Future<void> askFromReminder(String ask) async {
+    // 앱이 알림으로 막 켜졌으면 아직 정보를 안 불러왔다(start 전). 시작 인사가 끝난 뒤 보낸다.
+    if (busy || profile == null) {
+      _reminderAsk = ask;
+      return;
+    }
+    if (!profile!.isOnboarded) return;
+    await _busy(() async {
+      if (_waking) await listen.cancel();
+      await _say(reminderIntro);
+      await handle(ask);
+    });
+  }
+
+  /// 일정 알림으로 들어왔을 때 처음 하는 말.
+  static const reminderIntro = '일정 알림 보고 오셨군요. 그날 입을 옷을 같이 볼게요.';
 
   /// 마지막으로 한 안내("다시 말해 줘"에 다시 읽는다). "불러 주세요" 같은 다음 안내는 빼고 기억한다.
   String? _lastAnswer;
