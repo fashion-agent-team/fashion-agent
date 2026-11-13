@@ -37,6 +37,13 @@ void main() {
     expect(shrinkJpeg((jpeg: small, maxSide: sendMaxSide)), same(small));
   });
 
+  test('옷 사진은 긴 변 960으로 줄인다', () {
+    final d = img.decodeJpg(
+        shrinkJpeg((jpeg: jpeg(1920, 1080), maxSide: sendMaxSideClothes)))!;
+    expect(d.width, 960);
+    expect(d.height, 540);
+  });
+
   test('이 사진은 1600까지 둔다', () {
     final d = img.decodeJpg(
         shrinkJpeg((jpeg: jpeg(1920, 1080), maxSide: sendMaxSideTeeth)))!;
