@@ -18,6 +18,14 @@ import '../services/turn_api.dart';
 /// 가까이 대서 눈썹·턱이 화면 밖으로 나가는 일이 가장 흔하다.
 const faceRetrySpeech = '얼굴이 다 안 보여요. 폰을 조금 멀리 들어서 이마부터 턱까지 화면에 다 들어오게 해 주세요.';
 
+/// 카메라를 처음 켤 때 하는 소리 구도 안내 설명. 구도 안내가 없는 이(치아)는 null.
+String? beepHintFor(ImageKind kind) => switch (kind) {
+      ImageKind.outfit => '옷이 화면 가운데로 올수록 톡톡 소리가 빨라져요. 소리가 빨라지면 잘하고 있는 거예요.',
+      ImageKind.worn => '몸이 화면에 잘 들어올수록 톡톡 소리가 빨라져요. 소리가 빨라지면 잘하고 있는 거예요.',
+      ImageKind.face => '얼굴이 화면 가운데로 올수록 톡톡 소리가 빨라져요. 소리가 빨라지면 잘하고 있는 거예요.',
+      ImageKind.teeth => null,
+    };
+
 /// agent가 `camera_*`를 주면 도는 카메라 대화. 카메라를 켜 둔 채로 멈추면 한 장씩 보낸다.
 ///
 /// - 옷(얼굴, 입)이 1초 멈추면 자동으로 찍어 보낸다. 사용자는 찍기 버튼을 누르지 않는다.
@@ -89,6 +97,9 @@ class CameraTurnController extends ChangeNotifier {
 
   bool _closing = false;
 
+  /// 이번 실행에서 소리 구도 안내를 알려 줬는지.
+  bool _beepExplained = false;
+
   bool get running => _done != null && !_done!.isCompleted && !_closing;
 
   /// [kind] 카메라를 켜고, 카메라가 끝나는 답(또는 그만두면 null)을 돌려준다.
@@ -108,6 +119,12 @@ class CameraTurnController extends ChangeNotifier {
       await _say('미안해요, 카메라를 못 켰어요. 설정 앱에서 카메라 권한이 켜져 있는지 봐 주실래요?');
       await _end(null);
       return done.future;
+    }
+    // 처음 카메라를 켤 때 한 번 소리 구도 안내를 알려 준다(2026-11-13 진행 님).
+    final hint = beepHintFor(kind);
+    if (camera.beeps && !_beepExplained && hint != null) {
+      _beepExplained = true;
+      await _say(hint);
     }
     _watch();
     if (handsFree) unawaited(_listenLoop());

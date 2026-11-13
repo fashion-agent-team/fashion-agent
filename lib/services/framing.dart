@@ -26,11 +26,16 @@ enum Subject {
 class Framing {
   const Framing.ready()
       : ready = true,
-        speech = '좋아요, 그대로요.';
-  const Framing.fix(this.speech) : ready = false;
+        speech = '좋아요, 그대로요.',
+        closeness = 1;
+  const Framing.fix(this.speech, [this.closeness = 0]) : ready = false;
 
   final bool ready;
   final String speech;
+
+  /// 찍기 좋은 자리에 얼마나 가까운지(0~1). 찾지 못했으면 0, 찍어도 되면 1.
+  /// 소리 구도 안내가 이 값으로 톡톡 소리를 빠르게 한다(2026-11-13 진행 님).
+  final double closeness;
 
   @override
   bool operator ==(Object other) =>
@@ -52,30 +57,31 @@ Framing frameGarment(List<Rect> boxes) {
   }
   final box = boxes.reduce((a, b) => a.expandToInclude(b));
   final area = box.width * box.height;
+  final c = boxCloseness(box);
   final cutLeft = box.left <= _edge,
       cutRight = box.right >= 1 - _edge,
       cutTop = box.top <= _edge,
       cutBottom = box.bottom >= 1 - _edge;
 
   if (area > 0.85 || (cutLeft && cutRight) || (cutTop && cutBottom)) {
-    return const Framing.fix('조금 더 높이 들어 주세요.');
+    return Framing.fix('조금 더 높이 들어 주세요.', c);
   }
   if (area < 0.08) {
-    return const Framing.fix('조금 더 가까이 가 주세요.');
+    return Framing.fix('조금 더 가까이 가 주세요.', c);
   }
   // 한쪽이 잘렸거나 한쪽으로 치우쳤으면 그쪽으로 폰을 옮기게 한다.
   final cx = box.center.dx, cy = box.center.dy;
   if (cutLeft || cx < 0.35) {
-    return const Framing.fix('폰을 조금 왼쪽으로.');
+    return Framing.fix('폰을 조금 왼쪽으로.', c);
   }
   if (cutRight || cx > 0.65) {
-    return const Framing.fix('폰을 조금 오른쪽으로.');
+    return Framing.fix('폰을 조금 오른쪽으로.', c);
   }
   if (cutTop || cy < 0.35) {
-    return const Framing.fix('폰을 조금 위로.');
+    return Framing.fix('폰을 조금 위로.', c);
   }
   if (cutBottom || cy > 0.65) {
-    return const Framing.fix('폰을 조금 아래로.');
+    return Framing.fix('폰을 조금 아래로.', c);
   }
   return const Framing.ready();
 }
@@ -104,7 +110,7 @@ Framing frameBody(Map<String, List<BodyPoint>> points) {
     return const Framing.fix('몸이 안 보여요. 폰 앞에 서 주세요.');
   }
   if (!seen('foot', 0.3) && !kneeLow()) {
-    return const Framing.fix('한 걸음 뒤로 가 주세요.');
+    return const Framing.fix('한 걸음 뒤로 가 주세요.', 0.3);
   }
   final all = points.values
       .expand((list) => list)
@@ -113,15 +119,16 @@ Framing frameBody(Map<String, List<BodyPoint>> points) {
   final top = all.map((p) => p.y).reduce((a, b) => a < b ? a : b);
   final bottom = all.map((p) => p.y).reduce((a, b) => a > b ? a : b);
   final cx = all.map((p) => p.x).reduce((a, b) => a + b) / all.length;
+  final c = bodyCloseness(cx, bottom - top);
   if (bottom - top < 0.25) {
-    return const Framing.fix('한 걸음 앞으로 와 주세요.');
+    return Framing.fix('한 걸음 앞으로 와 주세요.', c);
   }
   // 뒤쪽 카메라라 사진 왼쪽이 폰을 바라보는 사람의 오른쪽이다. 그 사람 기준으로 말한다.
   if (cx < 0.25) {
-    return const Framing.fix('왼쪽으로 반 걸음 가 주세요.');
+    return Framing.fix('왼쪽으로 반 걸음 가 주세요.', c);
   }
   if (cx > 0.75) {
-    return const Framing.fix('오른쪽으로 반 걸음 가 주세요.');
+    return Framing.fix('오른쪽으로 반 걸음 가 주세요.', c);
   }
   return const Framing.ready();
 }
@@ -183,18 +190,40 @@ Framing frameFace(List<Rect> faces) {
   }
   final box =
       faces.reduce((a, b) => a.width * a.height >= b.width * b.height ? a : b);
+  final c = boxCloseness(box, small: 0.09, big: 0.64);
   final cutLeft = box.left <= _edge,
       cutRight = box.right >= 1 - _edge,
       cutTop = box.top <= _edge,
       cutBottom = box.bottom >= 1 - _edge;
   if (box.width > 0.8 || (cutLeft && cutRight) || (cutTop && cutBottom)) {
-    return const Framing.fix('조금 멀리 들어 주세요.');
+    return Framing.fix('조금 멀리 들어 주세요.', c);
   }
   if (box.width < 0.3) {
-    return const Framing.fix('조금 가까이 들어 주세요.');
+    return Framing.fix('조금 가까이 들어 주세요.', c);
   }
   if (cutLeft || cutRight || cutTop || cutBottom) {
-    return const Framing.fix('얼굴이 화면 끝에 걸려요. 폰을 얼굴 정가운데로 천천히 옮겨 주세요.');
+    return Framing.fix('얼굴이 화면 끝에 걸려요. 폰을 얼굴 정가운데로 천천히 옮겨 주세요.', c);
   }
   return const Framing.ready();
+}
+
+/// 상자가 화면 가운데에 알맞은 크기로 있을수록 1에 가깝다. [small]~[big]은 알맞은 넓이(화면 비율).
+/// 찾기만 했으면 0.15부터 시작해서, 찾았다는 것도 소리로 알 수 있게 한다.
+double boxCloseness(Rect box, {double small = 0.08, double big = 0.85}) {
+  final dx = (box.center.dx - 0.5).abs(), dy = (box.center.dy - 0.5).abs();
+  final centered = (1 - (dx > dy ? dx : dy) / 0.5).clamp(0.0, 1.0);
+  final area = box.width * box.height;
+  final sized = area < small
+      ? area / small
+      : area > big
+          ? ((1 - area) / (1 - big)).clamp(0.0, 1.0)
+          : 1.0;
+  return (0.15 + 0.85 * centered * sized).clamp(0.0, 1.0);
+}
+
+/// 몸이 가운데에서 머리부터 발까지 크게 보일수록 1에 가깝다.
+double bodyCloseness(double cx, double span) {
+  final centered = (1 - (cx - 0.5).abs() / 0.5).clamp(0.0, 1.0);
+  final tall = (span / 0.6).clamp(0.0, 1.0);
+  return (0.15 + 0.85 * centered * tall).clamp(0.0, 1.0);
 }

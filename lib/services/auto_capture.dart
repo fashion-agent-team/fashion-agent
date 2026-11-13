@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
 import 'capture_service.dart';
@@ -170,6 +171,9 @@ abstract class AutoCaptureCamera {
   /// 기다리던 [nextStill]을 멈춘다. 말하기를 누르거나 그만둘 때.
   Future<void> cancel();
 
+  /// 구도에 따라 톡톡 소리를 내는지([FramingBeeper]). 내면 카메라를 처음 켤 때 소리 뜻을 알려 준다.
+  bool get beeps;
+
   Future<void> close();
 }
 
@@ -196,12 +200,16 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
   bool? _front;
   Completer<Uint8List?>? _waiting;
   Timer? _timer;
+  FramingBeeper? _beeper;
 
   /// 프레임을 전부 보지 않고 이 간격마다 하나씩 본다.
   static const _every = Duration(milliseconds: 120);
 
   @override
   ValueListenable<CameraController?> get preview => _preview;
+
+  @override
+  bool get beeps => true;
 
   @override
   Future<void> open({required bool front}) async {
@@ -275,6 +283,9 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
       }
     }
 
+    // 소리 구도 안내: 옷(몸, 얼굴)이 가운데에 알맞게 올수록 톡톡 소리가 빨라진다(2026-11-13 진행 님).
+    final beeper = _beeper = FramingBeeper()..start();
+    if (subject == Subject.any) beeper.stop();
     _timer = Timer(timeout, () => unawaited(_finish(null)));
     await controller.startImageStream((frame) {
       if (done.isCompleted || shooting) return;
@@ -302,6 +313,7 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
           if (f == null || done.isCompleted) return;
           framing = f;
           framingAt = clock.elapsed;
+          beeper.closeness = f.closeness;
           guide(f, clock.elapsed);
         }));
       }
@@ -381,6 +393,8 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
   Future<void> _finish(Uint8List? bytes) async {
     _timer?.cancel();
     _timer = null;
+    _beeper?.stop();
+    _beeper = null;
     final controller = _preview.value;
     if (controller != null) await _stopStream(controller);
     final waiting = _waiting;
@@ -411,9 +425,66 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
   }
 }
 
+/// 구도에 따라 빨라지는 톡톡 소리.
+///
+/// [closeness]가 0이면(옷을 못 찾음) 조용하고, 찾으면 느리게, 찍기 좋은 자리(1)에 가까울수록 빠르게 낸다.
+/// 시스템 "딸깍" 소리와 가벼운 진동을 쓴다. 소리 파일을 틀면(audioplayers) iOS 오디오 세션이 꺼져서
+/// 켜 둔 마이크가 아무것도 못 듣는다(2026-11-09 폰 확인). 시스템 소리와 진동은 세션을 건드리지 않는다.
+class FramingBeeper {
+  FramingBeeper({void Function()? beep}) : _beep = beep ?? _systemBeep;
+
+  final void Function() _beep;
+  Timer? _timer;
+  final _clock = Stopwatch();
+  Duration _last = Duration.zero;
+
+  /// 0~1. 구도를 새로 볼 때마다 바뀐다.
+  double closeness = 0;
+
+  /// 가장 느린 간격과 가장 빠른 간격.
+  static const slowest = Duration(milliseconds: 1100);
+  static const fastest = Duration(milliseconds: 150);
+
+  /// [closeness]일 때 소리 사이 간격. 0이면 null(소리 없음).
+  static Duration? gapFor(double closeness) {
+    if (closeness <= 0) return null;
+    final c = closeness.clamp(0.0, 1.0);
+    final ms = slowest.inMilliseconds -
+        (slowest.inMilliseconds - fastest.inMilliseconds) * c;
+    return Duration(milliseconds: ms.round());
+  }
+
+  void start() {
+    _clock.start();
+    _timer ??= Timer.periodic(const Duration(milliseconds: 50), (_) {
+      final gap = gapFor(closeness);
+      if (gap == null) return;
+      if (_clock.elapsed - _last >= gap) {
+        _last = _clock.elapsed;
+        _beep();
+      }
+    });
+  }
+
+  void stop() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  static void _systemBeep() {
+    unawaited(
+        SystemSound.play(SystemSoundType.click).catchError((Object _) {}));
+    unawaited(HapticFeedback.selectionClick().catchError((Object _) {}));
+  }
+}
+
 /// 테스트·시뮬레이터용. 정해 둔 사진을 차례로 "찍는다". null은 시간이 지나도 안 멈춘 경우다.
 class FakeAutoCaptureCamera implements AutoCaptureCamera {
-  FakeAutoCaptureCamera([List<Uint8List?>? shots]) : shots = shots ?? [];
+  FakeAutoCaptureCamera([List<Uint8List?>? shots, this.beeps = false])
+      : shots = shots ?? [];
+
+  @override
+  final bool beeps;
 
   final List<Uint8List?> shots;
   final opened = <bool>[];
