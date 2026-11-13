@@ -107,6 +107,9 @@ class AgentController extends ChangeNotifier {
   /// 묻거나 듣는 중이면 true. 그동안 버튼을 막는다.
   bool busy = false;
 
+  /// "잠깐 쉬어"로 이름 듣기를 멈춘 중. 화면을 누르거나 앱을 다시 열면 끝난다.
+  bool resting = false;
+
   /// 처음 실행이면 온보딩을, 아니면 인사를 한다. 그다음 원하는 기능을 듣는다.
   Future<void> start() async {
     await _busy(() async {
@@ -140,7 +143,7 @@ class AgentController extends ChangeNotifier {
         askMore,
       ]));
       // 일정 알림을 눌러 켰으면 듣지 않고 바로 그날 옷 추천으로(_busy가 끝나면 보낸다).
-      if (_reminderAsk == null) await _listenAndHandle(quietIfSilent: true);
+      if (_pendingAsk == null) await _listenAndHandle(quietIfSilent: true);
     });
     unawaited(_wakeLoop());
   }
@@ -175,10 +178,12 @@ class AgentController extends ChangeNotifier {
       if (speech.speaking) await speech.stop();
       return;
     }
+    final wasResting = resting;
+    resting = false;
     await _busy(() async {
       // 이름을 기다리며 듣던 것을 먼저 멈춘다. busy를 켠 뒤라 이름 듣기는 다시 시작하지 않는다.
       if (_waking) await listen.cancel();
-      await _say('말씀해 주세요.');
+      await _say(wasResting ? restEndSpeech : '말씀해 주세요.');
       await _listenAndHandle();
     });
   }
@@ -207,6 +212,12 @@ class AgentController extends ChangeNotifier {
   /// 앱이 다시 화면에 오면 이름 듣기를 다시 시작한다.
   void resumeHandsFree() {
     _paused = false;
+    unawaited(checkShortcut());
+    // 앱을 다시 열면 쉬기도 끝난다.
+    if (resting) {
+      resting = false;
+      notifyListeners();
+    }
     unawaited(_syncReminders());
     unawaited(_wakeLoop());
   }
@@ -219,7 +230,7 @@ class AgentController extends ChangeNotifier {
     var quickMisses = 0;
     try {
       while (!_paused) {
-        if (busy) {
+        if (busy || resting) {
           await Future<void>.delayed(const Duration(milliseconds: 300));
           continue;
         }
@@ -336,6 +347,13 @@ class AgentController extends ChangeNotifier {
       await _listenAndHandle();
       return;
     }
+    if (isRestCommand(text)) {
+      // "잠깐 쉬어": 이름 듣기를 멈춘다. 회의 중이나 TV 소리가 클 때(2026-11-13 진행 님).
+      _sessionId = null;
+      resting = true;
+      await _say(handsFree ? restSpeech : '네, 잠깐 쉴게요.');
+      return;
+    }
     if (await _speedOrRepeat(text)) {
       await _say(_nextHint);
       return;
@@ -427,6 +445,12 @@ class AgentController extends ChangeNotifier {
         heard = await _hear();
       }
       if (heard == null) break;
+      if (isRestCommand(heard)) {
+        _sessionId = null;
+        resting = true;
+        await _say(handsFree ? restSpeech : '네, 잠깐 쉴게요.');
+        return true;
+      }
       if (isHomeCommand(heard)) {
         _sessionId = null;
         await _say('처음으로 돌아왔어요. $homeScreen');
@@ -543,32 +567,55 @@ class AgentController extends ChangeNotifier {
       phase = AgentPhase.idle;
       notifyListeners();
     }
-    // 하던 일 중에 일정 알림을 눌렀으면 끝난 뒤 바로 그날 옷 추천으로 간다.
-    final pending = _reminderAsk;
+    // 하던 일 중에 일정 알림을 누르거나 시리로 물었으면 끝난 뒤 바로 보낸다.
+    final pending = _pendingAsk;
     if (pending != null) {
-      _reminderAsk = null;
-      unawaited(askFromReminder(pending));
+      _pendingAsk = null;
+      unawaited(askFrom(pending.ask, intro: pending.intro));
     }
   }
 
-  /// 일정 알림을 눌러 들어왔을 때 보낼 말("내일 뭐 입지?"). 바쁘면 하던 일이 끝난 뒤 보낸다.
-  String? _reminderAsk;
+  /// 밖(일정 알림, 시리)에서 들어온 말. 바쁘면 하던 일이 끝난 뒤 보낸다.
+  ({String ask, String? intro})? _pendingAsk;
 
   /// 일정 알림을 누르면 그날 옷 추천으로 바로 시작한다(2026-11-13 진행 님).
+  Future<void> askFromReminder(String ask) =>
+      askFrom(ask, intro: reminderIntro);
+
+  /// 밖에서 들어온 말([ask])을 바로 처리한다. [intro]가 있으면 먼저 말한다.
   ///
   /// 처음 실행(온보딩)이 아직이면 하지 않는다. 앱을 켜는 인사 중이면 인사 뒤에 듣지 않고 바로 간다.
-  Future<void> askFromReminder(String ask) async {
-    // 앱이 알림으로 막 켜졌으면 아직 정보를 안 불러왔다(start 전). 시작 인사가 끝난 뒤 보낸다.
+  Future<void> askFrom(String ask, {String? intro}) async {
+    // 앱이 알림·시리로 막 켜졌으면 아직 정보를 안 불러왔다(start 전). 시작 인사가 끝난 뒤 보낸다.
     if (busy || profile == null) {
-      _reminderAsk = ask;
+      _pendingAsk = (ask: ask, intro: intro);
       return;
     }
     if (!profile!.isOnboarded) return;
+    resting = false;
     await _busy(() async {
       if (_waking) await listen.cancel();
-      await _say(reminderIntro);
+      if (intro != null) await _say(intro);
       await handle(ask);
     });
+  }
+
+  /// 시리 단축어("심청이한테 오늘 뭐 입지")로 들어온 말을 가져온다. 앱을 열거나 돌아올 때 본다.
+  /// null이면 쓰지 않는다(테스트).
+  Future<String?> Function()? takeShortcutAsk;
+
+  /// 시리 단축어로 들어온 말이 있으면 바로 처리한다. 시리가 앱을 연 직후에 말이 늦게 들어올 수 있어 한 번 더 본다.
+  Future<void> checkShortcut() async {
+    final take = takeShortcutAsk;
+    if (take == null) return;
+    for (final wait in const [Duration.zero, Duration(milliseconds: 900)]) {
+      if (wait > Duration.zero) await Future<void>.delayed(wait);
+      final ask = await take();
+      if (ask != null && ask.trim().isNotEmpty) {
+        await askFrom(ask);
+        return;
+      }
+    }
   }
 
   /// 일정 알림으로 들어왔을 때 처음 하는 말.

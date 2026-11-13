@@ -185,3 +185,16 @@ const noServerFaceSpeech = '지금은 서버에 연결되지 않아서 얼굴을
 /// 서버에 연결되지 않았을 때 일정을 부탁받으면. 일정은 서버(mcp-schedule)에 저장한다.
 const noServerScheduleSpeech = '지금은 서버에 연결되지 않아서 일정을 볼 수가 없어요. '
     '와이파이나 데이터가 켜져 있는지 봐 주시고, 조금 뒤에 다시 말씀해 주세요.';
+
+/// "잠깐 쉬어", "그만 들어", "듣지 마", "조용히 해", "잠깐 멈춰"면 true. 이름 듣기를 멈춘다(2026-11-13 진행 님).
+bool isRestCommand(String text) {
+  final t = text.replaceAll(RegExp(r'\s+'), '');
+  return RegExp(r'잠깐쉬|잠시쉬|좀쉬어|쉬고있어|그만들어|듣지마|듣지말|조용히해|조용히있어|잠깐멈춰|잠시멈춰')
+      .hasMatch(t);
+}
+
+/// 쉬기 시작할 때.
+const restSpeech = '네, 잠깐 쉴게요. 이제 이름을 불러도 듣지 않아요. 다시 부르실 때는 화면을 두 번 탭해 주세요.';
+
+/// 쉬다가 화면을 눌렀을 때.
+const restEndSpeech = '다시 들을게요. 말씀해 주세요.';

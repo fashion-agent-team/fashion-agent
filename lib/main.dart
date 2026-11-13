@@ -25,6 +25,7 @@ import 'services/permission_service.dart';
 import 'services/profile_store.dart';
 import 'services/schedule_reminders.dart';
 import 'services/schedule_store.dart';
+import 'services/shortcut_ask.dart';
 import 'services/speech_service.dart';
 import 'services/turn_api.dart';
 import 'services/wardrobe_store.dart';
@@ -128,6 +129,9 @@ Future<void> main() async {
             ),
     ),
   );
+  // 시리 단축어("심청이한테 오늘 뭐 입지")는 iOS 쪽(AppDelegate.swift)이 이 값에 말을 넣고 앱을 연다.
+  agent.takeShortcutAsk = takeShortcutAsk;
+  unawaited(agent.checkShortcut());
   // 일정 알림을 누르면 그날 옷 추천으로 바로 시작한다(2026-11-13 진행 님).
   unawaited(reminderScheduler?.listenTaps((day) =>
       unawaited(agent.askFromReminder(reminderAsk(day, DateTime.now())))));

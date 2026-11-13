@@ -164,4 +164,13 @@ void main() {
       expect(beepHintFor(ImageKind.teeth), isNull);
     });
   });
+
+  test('쉬라는 말을 알아듣고, 다른 말은 아니다', () {
+    for (final t in ['잠깐 쉬어', '잠시 쉬고 있어', '그만 들어', '듣지 마', '조용히 해', '잠깐 멈춰']) {
+      expect(isRestCommand(t), isTrue, reason: t);
+    }
+    for (final t in ['오늘 뭐 입지?', '쉬운 옷 추천해 줘', '그만', '됐어']) {
+      expect(isRestCommand(t), isFalse, reason: t);
+    }
+  });
 }

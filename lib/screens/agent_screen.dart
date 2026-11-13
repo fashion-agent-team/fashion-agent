@@ -180,6 +180,7 @@ class _TalkArea extends StatelessWidget {
         AgentPhase.listening => '듣고 있어요',
         AgentPhase.thinking => '알아보는 중이에요',
         AgentPhase.speaking => '말하는 중이에요',
+        AgentPhase.idle when agent.resting => '쉬는 중이에요',
         AgentPhase.idle =>
           agent.handsFree ? '“${agent.wakeName}” 하고 불러 주세요' : '화면을 눌러 말씀해 주세요',
       };
@@ -191,7 +192,7 @@ class _TalkArea extends StatelessWidget {
     // 앱 목소리와 겹쳤다. 안내는 '다시 듣기'로 듣고, 여기는 지금 상태와 누르면 무엇이 되는지만 짧게 읽는다.
     return Semantics(
       button: true,
-      label: semanticsLabelFor(agent.phase),
+      label: agent.resting ? '쉬는 중' : semanticsLabelFor(agent.phase),
       hint: semanticsHintFor(agent.phase, busy: agent.busy),
       excludeSemantics: true,
       child: Material(

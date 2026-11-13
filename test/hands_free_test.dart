@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:fashion_agent/agent/agent_speech.dart' show restSpeech;
 import 'package:fashion_agent/agent/agent_controller.dart';
 import 'package:fashion_agent/agent/camera_turn.dart';
 import 'package:fashion_agent/agent/wake_word.dart';
@@ -97,6 +98,18 @@ void main() {
       await agent.start();
       return (agent, speech, turns, listen);
     }
+
+    test('"잠깐 쉬어"면 이름 듣기를 멈추고, 화면을 누르면 다시 듣는다', () async {
+      final (agent, speech, turns, listen) = await started(
+        [null, '코디야 잠깐 쉬어', '코디야 오늘 뭐 입지?'],
+        [reply('맑아요.', TurnNext.done)],
+      );
+      await spin();
+      expect(agent.resting, isTrue);
+      expect(speech.spoken.last, restSpeech);
+      expect(turns.sent, isEmpty, reason: '쉬는 동안은 이름을 불러도 듣지 않는다');
+      await agent.pauseHandsFree();
+    });
 
     test('이름 뒤에 말이 있으면 바로 보낸다', () async {
       final (agent, speech, turns, listen) = await started(

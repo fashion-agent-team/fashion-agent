@@ -399,4 +399,26 @@ void main() {
       expect(speech.spoken, isNot(contains(startsWith('앗'))));
     });
   });
+
+  test('시리 단축어로 들어온 말을 한 번만 보낸다', () async {
+    final speech = FakeSpeech();
+    final turns = FakeTurnApi([reply('오늘 옷 추천해 드릴게요.', TurnNext.done)]);
+    final agent = AgentController(
+      speech: speech,
+      listen: ScriptedListen(const []),
+      profiles: InMemoryProfileStore(),
+      onboarding: onboardingWith(speech, const []),
+      weatherService: FakeWeatherService(),
+      turns: turns,
+    );
+    agent.profile = const UserProfile(agentName: '하늘', consent: consentVersion);
+    final asks = ['오늘 뭐 입지?'];
+    agent.takeShortcutAsk = () async => asks.isEmpty ? null : asks.removeAt(0);
+
+    await agent.checkShortcut();
+    await settle();
+    await agent.checkShortcut();
+    await settle();
+    expect(turns.sent, ['say:오늘 뭐 입지?']);
+  });
 }
