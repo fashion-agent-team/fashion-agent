@@ -129,12 +129,21 @@ class TtsCache {
 
 /// 서버 목소리로 받을 조각. 첫 문장만 따로 두고(바로 읽기 시작), 나머지는 [max]자까지 이어 붙인다.
 /// 게이트웨이는 한 번에 500자까지 받는다.
-List<String> speechChunks(String text, {int max = 300}) {
+///
+/// 2026-11-13: 긴 답에서 서버 목소리가 끊기고 폰 목소리로 넘어갔다. 마침표 없이 긴 문장은 통째로 한 조각이 되어
+/// 500자를 넘기거나(게이트웨이 400), 큰 조각을 받는 데 시간제한을 넘겼다. 그래서 문장이 길면 쉼표·띄어쓰기에서
+/// 자르고, 첫 조각은 [firstMax]자, 나머지는 [max]자로 짧게 둔다(소리 파일이 작아 제때 도착).
+List<String> speechChunks(String text, {int max = 120, int firstMax = 100}) {
   final sentences = splitSentences(text);
-  if (sentences.length <= 1) return sentences;
-  final out = [sentences.first];
+  if (sentences.isEmpty) return sentences;
+  final head = splitLong(sentences.first, firstMax);
+  final out = [head.first];
+  final rest = [
+    ...head.skip(1),
+    for (final s in sentences.skip(1)) ...splitLong(s, max),
+  ];
   final buf = StringBuffer();
-  for (final s in sentences.skip(1)) {
+  for (final s in rest) {
     if (buf.isNotEmpty && buf.length + 1 + s.length > max) {
       out.add(buf.toString());
       buf.clear();
@@ -143,6 +152,27 @@ List<String> speechChunks(String text, {int max = 300}) {
     buf.write(s);
   }
   if (buf.isNotEmpty) out.add(buf.toString());
+  return out;
+}
+
+/// [s]가 [max]자보다 길면 쉼표 뒤나 띄어쓰기에서 [max]자 이하로 자른다. 끊을 곳이 없으면 [max]자에서 자른다.
+List<String> splitLong(String s, int max) {
+  final out = <String>[];
+  var t = s.trim();
+  while (t.length > max) {
+    var cut = -1;
+    for (final mark in const [', ', ',', ' ']) {
+      final i = t.lastIndexOf(mark, max - mark.length);
+      if (i >= max ~/ 3) {
+        cut = i + mark.length;
+        break;
+      }
+    }
+    if (cut <= 0) cut = max;
+    out.add(t.substring(0, cut).trim());
+    t = t.substring(cut).trim();
+  }
+  if (t.isNotEmpty) out.add(t);
   return out;
 }
 
