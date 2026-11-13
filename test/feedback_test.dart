@@ -165,6 +165,18 @@ void main() {
       expect(chunks.skip(1).join(' '), long);
     });
 
+    test('마침표 없이 긴 문장도 500자 넘지 않게 자른다', () {
+      final long = List.filled(40, '오늘은 날씨가 맑고, 바람이 조금 불어요').join(' ');
+      expect(long.length, greaterThan(500));
+      final chunks = speechChunks(long);
+      expect(chunks.length, greaterThan(2));
+      expect(chunks.first.length, lessThanOrEqualTo(100));
+      expect(chunks.every((c) => c.length <= 120), isTrue);
+      expect(chunks.join(' ').replaceAll(' ', ''), long.replaceAll(' ', ''));
+      expect(splitLong('짧아요', 10), ['짧아요']);
+      expect(splitLong('가나다라마바사아자차카타', 5), ['가나다라마', '바사아자차', '카타']);
+    });
+
     test('같은 목소리·문장은 같은 이름으로 기억한다', () {
       expect(
           TtsCache.cacheKey('Aoede', '안녕'), TtsCache.cacheKey('Aoede', '안녕'));

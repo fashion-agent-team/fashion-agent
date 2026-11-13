@@ -309,11 +309,21 @@ class SpeechService {
       try {
         // Gemini는 읽는 데 2~6초 걸린다. 엔진을 아직 모르면 Gemini일 수 있어 넉넉히 기다린다.
         // 앱을 켠 뒤 처음 받는 문장은 연결이 늦어서 더 기다린다.
-        bytes = await next.timeout(!_cloudWarm
+        // 긴 조각은 만들고 내려받는 데 더 걸려서 글자 수만큼 더 기다린다(2026-11-13: 긴 답이 폰 목소리로 넘어감).
+        final base = !_cloudWarm
             ? _coldTimeout
             : api.wholeText || i == 0
                 ? _slowTimeout
-                : _firstTimeout);
+                : _firstTimeout;
+        final limit = base + Duration(milliseconds: 30 * sentences[i].length);
+        try {
+          bytes = await next.timeout(limit);
+        } on TimeoutException {
+          // 프록시 길이 가끔 몇 초씩 멈춘다. 목소리가 중간에 바뀌는 것보다 조금 더 기다리는 게 낫다.
+          if (!_cloudWarm || gen != _generation) rethrow;
+          debugPrint('서버 목소리가 늦어서 조금 더 기다려요');
+          bytes = await next.timeout(_slowTimeout);
+        }
         _cloudWarm = true;
       } on Object catch (e) {
         // 무료 횟수를 다 쓰면(429) 한동안 폰 목소리만 쓴다.
