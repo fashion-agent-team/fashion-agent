@@ -40,9 +40,15 @@ class FakeTurnApi implements TurnApi {
   final locations = <TurnLocation?>[];
   final mouthBoxes = <MouthBox?>[];
   final faceLandmarks = <Map<String, Object>?>[];
+  final warmed = <TurnLocation?>[];
 
   @override
   Future<bool> get available async => signedIn;
+
+  @override
+  Future<void> warm({TurnLocation? location}) async {
+    warmed.add(location);
+  }
 
   Future<TurnReply> _next() async {
     final r = replies.removeAt(0);
@@ -476,6 +482,33 @@ void main() {
       expect(speech.spoken, contains('로그인이 잘 안 돼서, 지금은 폰 안에서 되는 것만 같이 할게요.'));
       expect(speech.spoken, contains(featureIntro));
       expect(turns.sent, isEmpty);
+    });
+
+    test('다시 켜면 인사하는 동안 서버에 미리 준비를 한 번 보낸다(대화와 같은 위치)', () async {
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([reply('네, 말씀하세요.', TurnNext.done)]);
+      final store = InMemoryProfileStore();
+      await store.save(const UserProfile(
+          name: '진행', agentName: '코디', consent: consentVersion));
+      final agent = AgentController(
+        speech: speech,
+        listen: ScriptedListen(['오늘 뭐 입지']),
+        profiles: store,
+        onboarding: onboardingWith(speech, const []),
+        weatherService: FakeWeatherService(),
+        turns: turns,
+        location: here,
+      );
+      await agent.start();
+      await settle();
+      expect(turns.warmed, hasLength(1));
+      expect(turns.warmed.single!.lat, 35.1);
+      expect(turns.locations.single!.lat, 35.1);
+
+      // 앱이 바로 다시 앞으로 와도 5분 안이면 또 보내지 않는다.
+      agent.warmUp();
+      await settle();
+      expect(turns.warmed, hasLength(1));
     });
 
     test('온보딩한 사용자도 첫 말부터 agent로 보낸다', () async {

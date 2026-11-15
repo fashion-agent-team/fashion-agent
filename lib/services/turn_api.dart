@@ -161,6 +161,46 @@ abstract class TurnApi {
       {TurnLocation? location,
       MouthBox? mouthBox,
       Map<String, Object>? faceLandmarks});
+
+  /// `POST /api/v1/agent/warm`. 첫 "오늘 뭐 입지?"에 쓸 날씨·오늘 일정을 서버가 미리 불러 두게 한다.
+  /// 답(202)은 본문이 없다. [TurnWarmer]가 앱이 켜지거나 다시 앞으로 올 때 부른다.
+  Future<void> warm({TurnLocation? location});
+}
+
+/// 앱이 켜지거나 다시 앞으로 올 때 서버에 미리 준비를 보낸다(2026-11-15).
+/// 그날 첫 추천이 7초쯤 걸렸는데(서버가 날씨를 새로 받느라 6초), 미리 받아 두면 두 번째처럼 2초 안팎이 된다.
+///
+/// 기다리지 않고(unawaited) 부르고, [interval] 안에 다시 부르면 보내지 않는다. 실패해도 조용히 넘어간다.
+/// 위치는 대화와 같은 [LocationProvider]에서 받아서(권한 창은 띄우지 않음) 서버 캐시의 동네가 첫 추천과 같다.
+class TurnWarmer {
+  TurnWarmer(this.api, this.location,
+      {this.interval = const Duration(minutes: 5), DateTime Function()? now})
+      : _now = now ?? DateTime.now;
+
+  final TurnApi api;
+  final LocationProvider location;
+  final Duration interval;
+  final DateTime Function() _now;
+  DateTime? _sentAt;
+
+  /// 보냈으면 true. 너무 자주거나, 로그인하지 않았거나, 실패하면 false.
+  Future<bool> warm() async {
+    final last = _sentAt;
+    final now = _now();
+    if (last != null && now.difference(last) < interval) return false;
+    _sentAt = now;
+    try {
+      if (!await api.available) {
+        _sentAt = null;
+        return false;
+      }
+      await api.warm(location: await location.current());
+      return true;
+    } on Object catch (e) {
+      debugPrint('미리 준비 실패(괜찮음): $e');
+      return false;
+    }
+  }
 }
 
 class GatewayTurnApi implements TurnApi {
@@ -214,6 +254,13 @@ class GatewayTurnApi implements TurnApi {
           location: location,
           mouthBox: mouthBox,
           faceLandmarks: faceLandmarks));
+
+  @override
+  Future<void> warm({TurnLocation? location}) async {
+    await gateway.send('POST', '/api/v1/agent/warm', json: {
+      if (location != null) 'location': location.toJson(),
+    }).timeout(const Duration(seconds: 10));
+  }
 
   Future<TurnReply> _post(Map<String, dynamic> body) async {
     final allow = await gptConsent.load();
