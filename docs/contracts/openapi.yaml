@@ -112,6 +112,28 @@ paths:
       responses:
         '204': { description: 저장됨 }
 
+  /api/v1/agent/warm:
+    post:
+      tags: [agent]
+      summary: 미리 준비 (앱이 켜지거나 다시 앞으로 올 때, 2026-11-15)
+      description: |
+        첫 "오늘 뭐 입지?"에 쓸 weather_today와 그 사용자의 오늘 schedule_list를 agent가 미리 불러 기억해 두고(날씨 10분, 일정 10분),
+        GPT 연결도 데웁니다. 바로 202로 답하고 결과는 돌려주지 않습니다. 위치는 대화(turn)에 보낼 것과 같은 값을 보내야
+        같은 동네로 기억됩니다(없으면 서울). 앱은 5분 안에 다시 보내지 않습니다. 게이트웨이는 말하기와 따로 사용자당 분당 6회까지 받습니다.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                location: { $ref: '#/components/schemas/Location' }
+            example: { location: { lat: 37.5665, lon: 126.978, locationFallback: false } }
+      responses:
+        '202': { description: 받음(불러오기는 뒤에서 함) }
+        '401': { description: 로그인 필요 }
+        '429': { description: 너무 자주 보냄(rate_limited) }
+
   /api/v1/agent/turn:
     post:
       tags: [agent]

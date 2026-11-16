@@ -54,11 +54,22 @@ class AgentController extends ChangeNotifier {
     LocationProvider? location,
     this.handsFree = false,
   }) : location = location ?? LocationProvider() {
+    final api = turns;
+    _warmer = api == null ? null : TurnWarmer(api, this.location);
     onboarding.onSay ??= showMessage;
     _command = CommandListener(listen, ask: _say);
   }
 
   late final CommandListener _command;
+
+  /// 첫 추천을 빠르게: 앱이 켜지거나 다시 앞으로 올 때 서버에 날씨·일정을 미리 불러 두게 한다.
+  late final TurnWarmer? _warmer;
+
+  /// 서버에 미리 준비를 보낸다(5분 안에 보냈으면 건너뜀). 기다리지 않는다.
+  void warmUp() {
+    final w = _warmer;
+    if (w != null) unawaited(w.warm());
+  }
 
   /// 마스코트가 보여 줄 상태.
   AgentPhase phase = AgentPhase.idle;
@@ -123,6 +134,8 @@ class AgentController extends ChangeNotifier {
         }
       } else {
         await _reconnect();
+        // 인사를 듣는 동안 서버가 날씨·일정을 미리 받아 둔다.
+        warmUp();
         await _say(returningGreeting(profile!.agentName!,
             callName: profile!.callName));
         // 동의 단계가 생기기 전에 깔았던 사용자는 한 번만 묻는다.
@@ -134,6 +147,7 @@ class AgentController extends ChangeNotifier {
           }
         }
       }
+      warmUp();
       await _askNotifications();
       unawaited(_syncReminders());
       unawaited(speech.prefetch(const [

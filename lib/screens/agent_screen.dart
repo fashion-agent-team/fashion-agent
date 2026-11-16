@@ -74,6 +74,8 @@ class _AgentScreenState extends State<AgentScreen> with WidgetsBindingObserver {
   /// 앱이 화면에 있는 동안만 이름을 듣는다. 잠그거나 다른 앱으로 가면 멈춘다.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 다시 앞으로 오면 첫 추천에 쓸 날씨·일정을 서버가 미리 받아 두게 한다(5분 안이면 건너뜀).
+    if (state == AppLifecycleState.resumed) _a.warmUp();
     if (!_a.handsFree) return;
     switch (state) {
       case AppLifecycleState.resumed:
