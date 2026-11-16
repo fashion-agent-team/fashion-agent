@@ -78,7 +78,6 @@ services:
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       AGENT_URL: http://agent:8081
-      HELPER_URL: http://mcp-helper:8096
       SCHEDULE_URL: http://mcp-schedule:8092
       EDGE_TTS_URL: http://edge-tts:8099   # 엣지 목소리(선희). 키 없음, 발표용
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
@@ -120,7 +119,6 @@ services:
       MCP_CLOTHES_STATE_URL: http://mcp-clothes-state:8093/mcp
       MCP_FACE_CHECK_URL: http://mcp-face-check:8094/mcp
       MCP_CLOSET_URL: http://mcp-closet:8095/mcp
-      MCP_HELPER_URL: http://mcp-helper:8096/mcp
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
@@ -131,7 +129,6 @@ services:
       mcp-clothes-state: { condition: service_healthy }
       mcp-face-check: { condition: service_healthy }
       mcp-closet: { condition: service_healthy }
-      mcp-helper: { condition: service_healthy }
 
   mcp-weather:
     <<: *app
@@ -214,35 +211,6 @@ services:
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8095/actuator/health || exit 1"]
-    depends_on:
-      postgres: { condition: service_healthy }
-
-  mcp-helper:
-    <<: *app
-    build: ../mcp-helper
-    image: fashion-agent/mcp-helper:local
-    mem_limit: 256m
-    environment:
-      TZ: Asia/Seoul
-      JAVA_TOOL_OPTIONS: "-Xmx112m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fashion
-      SPRING_DATASOURCE_USERNAME: fashion
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: "3"
-      # 가족 답장 링크 도메인. 게이트웨이 /h/** 가 helper로 감.
-      HELPER_PUBLIC_BASE_URL: ${HELPER_PUBLIC_BASE_URL:-https://simcheong.java21.net}
-      SMS_PROVIDER: ${SMS_PROVIDER:-}
-      SMS_API_KEY: ${SMS_API_KEY:-}
-      SMS_API_SECRET: ${SMS_API_SECRET:-}
-      SMS_SENDER: ${SMS_SENDER:-}
-      SMS_SERVICE_ID: ${SMS_SERVICE_ID:-}
-      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
-      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
-      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
-      R2_BUCKET: ${R2_BUCKET:-fashion-agent-helper}
-    healthcheck:
-      <<: *health
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8096/actuator/health || exit 1"]
     depends_on:
       postgres: { condition: service_healthy }
 
