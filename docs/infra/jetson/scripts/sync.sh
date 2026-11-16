@@ -8,7 +8,7 @@ DEST=${JETSON_DIR:-fashion-servers}          # 젯슨 홈 아래
 REF=${DEPLOY_REF:-origin/develop}
 SIGLIP=${SIGLIP_SRC:-$HOME/Downloads/fashion-siglip/marqo-fashionSigLIP-vision.onnx}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-REPOS=(fashion-agent-gateway fashion-agent-agent mcp-weather mcp-schedule mcp-clothes-state mcp-face-check mcp-closet mcp-helper)
+REPOS=(fashion-agent-gateway fashion-agent-agent mcp-weather mcp-schedule mcp-clothes-state mcp-face-check mcp-closet)
 
 ssh "$HOST" "mkdir -p ~/$DEST/models"
 for r in "${REPOS[@]}"; do

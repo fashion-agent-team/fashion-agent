@@ -7,7 +7,7 @@ set -euo pipefail
 HOST=${JETSON_HOST:-team4}
 DEST=${JETSON_DIR:-fashion-servers}
 PG_BIN=${PG_BIN:-/opt/homebrew/opt/postgresql@17/bin}
-APPS="nginx gateway agent mcp-weather mcp-schedule mcp-clothes-state mcp-face-check mcp-closet mcp-helper"
+APPS="nginx gateway agent mcp-weather mcp-schedule mcp-clothes-state mcp-face-check mcp-closet"
 
 DUMP=$(mktemp -t fashion).dump
 trap 'rm -f "$DUMP"' EXIT

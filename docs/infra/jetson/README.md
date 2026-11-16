@@ -16,11 +16,10 @@ Tailscale Funnel (젯슨이 바깥으로 연결을 걸어 둠, 공유기 포트 
   │ http://127.0.0.1:80
   ▼
 젯슨 Docker Compose (네트워크 fashion)
-  nginx:80 ─ gateway:8080 ─┬ agent:8081 ─ MCP 6개
+  nginx:80 ─ gateway:8080 ─┬ agent:8081 ─ MCP 5개
                             │    mcp-weather:8091  mcp-schedule:8092  mcp-clothes-state:8093
-                            │    mcp-face-check:8094  mcp-closet:8095  mcp-helper:8096
+                            │    mcp-face-check:8094  mcp-closet:8095
                             ├ /api/v1/schedules/** → mcp-schedule
-                            ├ /api/v1/me/contacts, /h/** → mcp-helper (가족 답장 페이지)
                             └ postgres:5432 (pgvector pg17), redis:6379
 ```
 
@@ -32,12 +31,12 @@ Tailscale Funnel (젯슨이 바깥으로 연결을 걸어 둠, 공유기 포트 
 
 | 파일 | 하는 일 |
 |---|---|
-| `docker-compose.yml` | 서비스 11개(+선택 cloudflared). 메모리 상한, JVM 옵션, 헬스체크, 서비스 사이 주소 |
+| `docker-compose.yml` | 서비스 12개(+선택 cloudflared). 메모리 상한, JVM 옵션, 헬스체크, 서비스 사이 주소 |
 | `nginx/default.conf` | gateway로 프록시. 업로드 20MB, 타임아웃 300초(GPT), WebSocket/SSE |
 | `postgres/init.sql` | 새 DB일 때 vector 확장과 스키마 4개 생성 |
 | `.env.example` | 키 **이름**만. 실제 `.env`는 커밋 금지(권한 600) |
 | `scripts/make-env.sh` | `.env` 만들기. DB 비밀번호·JWT는 새로 만들고, API 키는 화면에 안 보이게 붙여 넣기 |
-| `scripts/sync.sh` | 맥북 → 젯슨으로 레포 8개(`origin/develop`을 `git archive`), 이 폴더, FashionSigLIP 모델 보내기 |
+| `scripts/sync.sh` | 맥북 → 젯슨으로 레포 7개(`origin/develop`을 `git archive`), 이 폴더, FashionSigLIP 모델 보내기 |
 | `scripts/db-migrate.sh` | 맥북 `fashion` DB → 젯슨 postgres 컨테이너로 복원 |
 | `scripts/up.sh` | 젯슨에서 이미지 하나씩 빌드 후 실행 (`./scripts/up.sh mcp-closet`처럼 하나만도 됨) |
 | `scripts/funnel.sh` | Tailscale Funnel 켜기/끄기 (`off`) |
@@ -48,7 +47,7 @@ Tailscale Funnel (젯슨이 바깥으로 연결을 걸어 둠, 공유기 포트 
 ```
 ~/fashion-servers/
   fashion-agent-gateway/  fashion-agent-agent/  mcp-weather/  mcp-schedule/
-  mcp-clothes-state/  mcp-face-check/  mcp-closet/  mcp-helper/
+  mcp-clothes-state/  mcp-face-check/  mcp-closet/
   jetson-deploy/   ← 이 폴더 (docs/infra/jetson 내용)
   models/marqo-fashionSigLIP-vision.onnx
 ```
@@ -65,7 +64,6 @@ Tailscale Funnel (젯슨이 바깥으로 연결을 걸어 둠, 공유기 포트 
 | mcp-clothes-state | 832m | 160m | YOLO 2개 + FashionSigLIP vision 354MB. `.env`에서 `CLOTHES_EMBED_MODEL=` 비우면 끔(512m로 줄여도 됨) |
 | mcp-face-check | 512m | 256m | 힙 128m로는 모델 로딩 중 OOM이라 올림 |
 | mcp-closet | 1200m | 128m | e5-small + FashionSigLIP 글 모델(int8, imageQuery). 실제 약 1.0GB |
-| mcp-helper | 256m | 112m | |
 | postgres | 128m | – | shared_buffers 32MB, 서비스마다 Hikari 풀 3개 |
 | redis | 48m | – | maxmemory 32MB, 디스크 저장 안 함(사진 세션이 남지 않게) |
 | nginx | 32m | – | |
