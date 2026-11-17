@@ -682,14 +682,36 @@ void main() {
           CameraTurnController.maxFaceMisses);
     });
 
-    test('입을 못 찾으면 박스 없이 보낸다', () async {
+    test('입을 계속 못 찾으면 두 번 다시 비춘 뒤 박스 없이 보낸다', () async {
+      final speech = FakeSpeech();
       final turns = FakeTurnApi([reply('잘 보이지 않아요.', TurnNext.listen)]);
-      final c = cameraWith(FakeSpeech(), turns, FakeAutoCaptureCamera([photo]),
-          mouths: FakeMouthFinder());
+      final camera = FakeAutoCaptureCamera([photo, photo, photo]);
+      final c = cameraWith(speech, turns, camera, mouths: FakeMouthFinder());
 
       await c.run('s_1', ImageKind.teeth);
 
       expect(turns.mouthBoxes, [null]);
+      expect(camera.subjects, everyElement(Subject.mouth));
+      expect(speech.spoken.where((t) => t == mouthRetakeSpeech(null)).length,
+          CameraTurnController.maxMouthMisses);
+      expect(c.shots, 1);
+    });
+
+    test('입을 덜 벌린 사진은 보내지 않고 폰에서 바로 다시 안내한다', () async {
+      const closed = MouthBox(0.3, 0.55, 0.4, 0.01);
+      const open = MouthBox(0.3, 0.55, 0.4, 0.12);
+      final mouths = _SequenceMouthFinder([closed, open]);
+      final speech = FakeSpeech();
+      final turns = FakeTurnApi([reply('이 사이에 낀 건 없어 보여요.', TurnNext.listen)]);
+      final camera = FakeAutoCaptureCamera([photo, photo]);
+      final c = cameraWith(speech, turns, camera, mouths: mouths);
+
+      await c.run('s_1', ImageKind.teeth);
+
+      expect(speech.spoken, contains(contains('입을 조금 더 벌리고')));
+      // 읽을 수 없는 사진(테스트용 바이트)은 자르지 못해 원래 박스 그대로 간다
+      expect(turns.mouthBoxes, [open]);
+      expect(c.shots, 1);
     });
 
     test('옷 카메라에서 얼굴 카메라로 가면 앞쪽 카메라를 켠다', () async {
@@ -832,6 +854,20 @@ class _SigningAccount extends FakeAccount {
 }
 
 /// 정해 둔 순서대로 윤곽점(또는 못 찾음)을 준다.
+class _SequenceMouthFinder implements MouthFinder {
+  _SequenceMouthFinder(this.boxes);
+
+  final List<MouthBox?> boxes;
+  int calls = 0;
+
+  @override
+  Future<MouthBox?> find(Uint8List jpeg) async =>
+      boxes[(calls++).clamp(0, boxes.length - 1)];
+
+  @override
+  Future<void> close() async {}
+}
+
 class _SequenceFaceFinder implements FaceLandmarkFinder {
   _SequenceFaceFinder(this.results);
 

@@ -209,6 +209,40 @@ class _Preview extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(56, top + 40, 56, 20),
               child: const CustomPaint(painter: _CornerPainter()),
             ),
+            // 화면 조명: 어두운 곳에서 앞쪽 카메라로 얼굴·입을 볼 때 화면을 하얗게 밝혀 비춘다.
+            // 돕는 분이 볼 수 있게 가운데에 작은 미리 보기만 남긴다.
+            ValueListenableBuilder<bool>(
+              valueListenable: camera.screenLight,
+              builder: (context, on, _) => on
+                  ? ColoredBox(
+                      color: Colors.white,
+                      child: Center(
+                        child: FractionallySizedBox(
+                          widthFactor: 0.35,
+                          heightFactor: 0.3,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: ValueListenableBuilder<CameraController?>(
+                              valueListenable: camera.preview,
+                              builder: (context, c, _) => c != null &&
+                                      c.value.isInitialized
+                                  ? FittedBox(
+                                      fit: BoxFit.cover,
+                                      clipBehavior: Clip.hardEdge,
+                                      child: SizedBox(
+                                        width: c.value.previewSize?.height ?? 1,
+                                        height: c.value.previewSize?.width ?? 1,
+                                        child: CameraPreview(c),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
             Positioned(
               left: 20,
               top: top + 10,

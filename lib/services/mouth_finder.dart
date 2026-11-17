@@ -62,6 +62,73 @@ MouthBox? mouthBoxFromLips(
   return MouthBox(x, y, rx(maxX) - x, ry(maxY) - y);
 }
 
+/// 찍은 사진의 입 박스가 서버(mcp-face-check `TeethCheckService.framing`) 기준을 넘는지 폰에서 먼저 본다.
+/// 넘으면 null, 아니면 다시 찍기 안내. 서버까지 사진을 올렸다가 "입을 더 벌려 주세요"를 듣는 왕복(느린 업로드로
+/// 10초 넘게)을 줄인다(2026-11-17 정지원). 박스가 없으면(입을 못 찾음) 다시 비추게 한다.
+String? mouthRetakeSpeech(MouthBox? box) {
+  if (box == null) return '입이 잘 안 보여요. 폰을 입 앞에 들고 "이~" 해 주세요.';
+  const edge = 0.005;
+  if (box.y <= edge) return '입이 화면 위쪽으로 잘렸어요. 폰을 조금 위로 올려 주세요.';
+  if (box.y + box.h >= 1 - edge) return '입이 화면 아래쪽으로 잘렸어요. 폰을 조금 아래로 내려 주세요.';
+  if (box.x <= edge || box.x + box.w >= 1 - edge) {
+    return '입이 화면 옆으로 잘렸어요. 폰을 입 정면으로 옮겨 주세요.';
+  }
+  if (box.w < teethMinMouthWidth) return '입이 작게 보여요. 폰을 입에 조금 더 가까이 대 주세요.';
+  if (box.h / box.w < teethMinOpenRatio) {
+    return '이가 잘 안 보여요. 입을 조금 더 벌리고 "이~" 해 주세요.';
+  }
+  return null;
+}
+
+/// 서버 기준(mcp-face-check `FaceCheckProperties.Teeth`)과 같은 값.
+const double teethMinMouthWidth = 0.15;
+const double teethMinOpenRatio = 0.10;
+
+/// 입 주변만 잘라 보낼 때 입 박스 긴 변의 몇 배로 자를지. 서버가 보는 가장 넓은 여백(1.5배)보다 넉넉하다.
+const double teethCropScale = 2.0;
+
+/// 잘라 보내는 입 사진의 긴 변 최대 픽셀. 서버 치아 모델 입력(384px, 입 긴 변 × 1.36)보다 조금 크게 남는다.
+const int teethCropMaxSide = 640;
+
+/// 이 사진에서 입 주변만 잘라 낸다. 얼굴 전체가 서버로 가지 않고(개인정보), 보낼 크기도 크게 준다(2026-11-17 정지원).
+///
+/// 입 박스 중심에서 긴 변(픽셀) × [teethCropScale] 정사각형을 자르고(사진 밖으로 나가면 사진 안으로 민다)
+/// 긴 변 [teethCropMaxSide] 이하로 줄인다. 입 박스는 잘라 낸 사진 기준 비율로 다시 계산한다.
+/// 사진을 읽지 못하면 원본과 원래 박스를 그대로 준다.
+({Uint8List jpeg, MouthBox box}) cropMouth(
+    ({Uint8List jpeg, MouthBox box}) input) {
+  final img.Image? decoded;
+  try {
+    decoded = img.decodeJpg(input.jpeg);
+  } on Object catch (_) {
+    return input;
+  }
+  if (decoded == null) return input;
+  final photo = img.bakeOrientation(decoded);
+  final w = photo.width, h = photo.height;
+  final b = input.box;
+  final side = (max(b.w * w, b.h * h) * teethCropScale).round();
+  final cw = min(side, w), ch = min(side, h);
+  final cx = (b.x + b.w / 2) * w, cy = (b.y + b.h / 2) * h;
+  final left = (cx - cw / 2).round().clamp(0, w - cw);
+  final top = (cy - ch / 2).round().clamp(0, h - ch);
+  var crop = img.copyCrop(photo, x: left, y: top, width: cw, height: ch);
+  if (max(cw, ch) > teethCropMaxSide) {
+    crop = cw >= ch
+        ? img.copyResize(crop,
+            width: teethCropMaxSide, interpolation: img.Interpolation.average)
+        : img.copyResize(crop,
+            height: teethCropMaxSide, interpolation: img.Interpolation.average);
+  }
+  final box = MouthBox(
+    (b.x * w - left) / cw,
+    (b.y * h - top) / ch,
+    b.w * w / cw,
+    b.h * h / ch,
+  );
+  return (jpeg: img.encodeJpg(crop, quality: 85), box: box);
+}
+
 /// 찍은 사진에서 입을 찾는다. 못 찾으면 null을 주고, 앱은 `mouthBox` 없이 보낸다(서버가 사진 가운데를 본다).
 abstract class MouthFinder {
   Future<MouthBox?> find(Uint8List jpeg);
