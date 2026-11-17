@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
+import 'package:screen_brightness/screen_brightness.dart';
 
 import 'capture_service.dart';
 import 'framing.dart';
@@ -182,8 +183,15 @@ abstract class AutoCaptureCamera {
   /// 구도에 따라 톡톡 소리를 내는지([FramingBeeper]). 내면 카메라를 처음 켤 때 소리 뜻을 알려 준다.
   bool get beeps;
 
+  /// 화면 조명(앞쪽 카메라 플래시 대신)이 켜졌는지. 켜지면 화면을 하얗게, 밝기를 가장 밝게 해 얼굴·입을 비춘다.
+  /// 어두우면 앞쪽 카메라에서 저절로 켜지고, 카메라를 끄거나 뒤쪽 카메라로 바꾸면 꺼진다(2026-11-17 정지원).
+  ValueListenable<bool> get screenLight;
+
   Future<void> close();
 }
+
+/// 화면 조명을 켰을 때 하는 말.
+const screenLightSpeech = '어두워서 화면을 밝게 켰어요. 그대로 있어 주세요.';
 
 class DeviceAutoCaptureCamera implements AutoCaptureCamera {
   DeviceAutoCaptureCamera({
@@ -205,6 +213,7 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
   final bool mirrorFront;
 
   final _preview = ValueNotifier<CameraController?>(null);
+  final _light = ValueNotifier<bool>(false);
   bool? _front;
   Completer<Uint8List?>? _waiting;
   Timer? _timer;
@@ -218,6 +227,24 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
 
   @override
   bool get beeps => true;
+
+  @override
+  ValueListenable<bool> get screenLight => _light;
+
+  /// 화면 조명을 켜거나 끈다. 밝기 조절이 안 되는 폰이어도 하얀 화면은 그대로 켠다.
+  Future<void> _setLight(bool on) async {
+    if (_light.value == on) return;
+    _light.value = on;
+    try {
+      if (on) {
+        await ScreenBrightness.instance.setApplicationScreenBrightness(1);
+      } else {
+        await ScreenBrightness.instance.resetApplicationScreenBrightness();
+      }
+    } on Object catch (e) {
+      debugPrint('화면 밝기 바꾸기 실패: $e');
+    }
+  }
 
   @override
   Future<void> open({required bool front}) async {
@@ -276,7 +303,19 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
     var lastGuideAt = -_guideGap;
     var saidSame = false;
 
+    // 앞쪽 카메라가 어두우면 화면 조명을 먼저 켠다. 그래도 어두우면 그때 불을 켜 달라고 한다.
+    bool lightUp(Duration now) {
+      if (_front != true || _light.value) return false;
+      unawaited(_setLight(true));
+      onGuide?.call(screenLightSpeech);
+      lastGuide = screenLightSpeech;
+      lastGuideAt = now;
+      _detector.reset();
+      return true;
+    }
+
     void guide(Framing f, Duration now) {
+      if (f.dark && lightUp(now)) return;
       if (f.ready) {
         if (lastGuide != f.speech) onGuide?.call(f.speech);
         lastGuide = f.speech;
@@ -329,8 +368,12 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
       darkSince = state == FrameState.dark ? (darkSince ?? now) : null;
       movingSince = state == FrameState.moving ? (movingSince ?? now) : null;
       if (!saidDark && darkSince != null && now - darkSince! > _darkHint) {
-        saidDark = true;
-        onHint?.call(CaptureHint.tooDark);
+        if (lightUp(now)) {
+          darkSince = null;
+        } else {
+          saidDark = true;
+          onHint?.call(CaptureHint.tooDark);
+        }
       }
       // 옷·몸을 찾을 때는 위치 안내가 대신한다.
       if (subject == Subject.any &&
@@ -343,8 +386,9 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
       if (state != FrameState.ready) return;
       // 얼굴은 폰마다 앞쪽 카메라 방향이 달라 못 찾을 수도 있다. 그래도 [_faceGate]가 지나면 예전처럼 멈추면 찍는다
       // (찍은 뒤 윤곽점 확인이 한 번 더 있다). 안내 때문에 아예 못 찍게 되지는 않게.
-      final gated = subject != Subject.any &&
-          !(subject == Subject.face && now > _faceGate);
+      final selfie = subject == Subject.face || subject == Subject.mouth;
+      final gate = subject == Subject.mouth ? _mouthGate : _faceGate;
+      final gated = subject != Subject.any && !(selfie && now > gate);
       if (gated) {
         final f = framing;
         if (f == null || !f.ready || now - framingAt > _framingFresh) return;
@@ -368,6 +412,10 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
 
   /// 얼굴을 이만큼 못 맞추면 구도 안내 없이 찍는다.
   static const _faceGate = Duration(seconds: 8);
+
+  /// 입은 맞출 게 많아서(크기·벌림·밝기) 조금 더 기다린다. 찍은 뒤 입 박스 확인이 한 번 더 있어서
+  /// 덜 맞은 사진은 보내기 전에 폰에서 다시 안내한다.
+  static const _mouthGate = Duration(seconds: 12);
 
   static const _darkHint = Duration(seconds: 2);
   static const _movingHint = Duration(seconds: 8);
@@ -424,6 +472,7 @@ class DeviceAutoCaptureCamera implements AutoCaptureCamera {
   @override
   Future<void> close() async {
     await cancel();
+    await _setLight(false);
     final controller = _preview.value;
     _preview.value = null;
     _front = null;
@@ -517,6 +566,9 @@ class FakeAutoCaptureCamera implements AutoCaptureCamera {
 
   @override
   ValueListenable<CameraController?> get preview => ValueNotifier(null);
+
+  @override
+  final ValueNotifier<bool> screenLight = ValueNotifier(false);
 
   @override
   Future<void> open({required bool front}) async => opened.add(front);

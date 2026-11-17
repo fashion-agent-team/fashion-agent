@@ -157,11 +157,11 @@ void main() {
       expect(beeps, after, reason: '멈추면 조용');
     });
 
-    test('옷·몸·얼굴은 소리 뜻을 알려 주고, 이는 알려 주지 않는다', () {
+    test('옷·몸·얼굴·이 모두 소리 뜻을 알려 준다(이도 2026-11-17부터 입 위치 안내)', () {
       expect(beepHintFor(ImageKind.outfit), contains('빨라지면 잘하고 있는 거예요'));
       expect(beepHintFor(ImageKind.worn), isNotNull);
       expect(beepHintFor(ImageKind.face), isNotNull);
-      expect(beepHintFor(ImageKind.teeth), isNull);
+      expect(beepHintFor(ImageKind.teeth), contains('이~'));
     });
   });
 

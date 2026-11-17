@@ -18,12 +18,12 @@ import '../services/turn_api.dart';
 /// 가까이 대서 눈썹·턱이 화면 밖으로 나가는 일이 가장 흔하다.
 const faceRetrySpeech = '얼굴이 다 안 보여요. 폰을 조금 멀리 들어서 이마부터 턱까지 화면에 다 들어오게 해 주세요.';
 
-/// 카메라를 처음 켤 때 하는 소리 구도 안내 설명. 구도 안내가 없는 이(치아)는 null.
+/// 카메라를 처음 켤 때 하는 소리 구도 안내 설명. 이(치아)도 2026-11-17부터 입 위치 안내가 있다.
 String? beepHintFor(ImageKind kind) => switch (kind) {
       ImageKind.outfit => '옷이 화면 가운데로 올수록 톡톡 소리가 빨라져요. 소리가 빨라지면 잘하고 있는 거예요.',
       ImageKind.worn => '몸이 화면에 잘 들어올수록 톡톡 소리가 빨라져요. 소리가 빨라지면 잘하고 있는 거예요.',
       ImageKind.face => '얼굴이 화면 가운데로 올수록 톡톡 소리가 빨라져요. 소리가 빨라지면 잘하고 있는 거예요.',
-      ImageKind.teeth => null,
+      ImageKind.teeth => '입이 화면 가운데에서 잘 보일수록 톡톡 소리가 빨라져요. "이~" 하고 이를 보여 주세요.',
     };
 
 /// agent가 `camera_*`를 주면 도는 카메라 대화. 카메라를 켜 둔 채로 멈추면 한 장씩 보낸다.
@@ -95,6 +95,10 @@ class CameraTurnController extends ChangeNotifier {
   /// 윤곽점 없이는 서버가 판단하지 못해서(no_landmarks), 이만큼은 폰에서 바로 다시 안내한다.
   static const maxFaceMisses = 2;
 
+  /// 이 사진에서 입 박스가 서버 기준에 못 미친 수. [maxMouthMisses]까지는 보내지 않고 다시 안내한다.
+  int _mouthMisses = 0;
+  static const maxMouthMisses = 2;
+
   bool _closing = false;
 
   /// 이번 실행에서 소리 구도 안내를 알려 줬는지.
@@ -110,6 +114,7 @@ class CameraTurnController extends ChangeNotifier {
     message = '';
     _timeouts = 0;
     _faceMisses = 0;
+    _mouthMisses = 0;
     _closing = false;
     final done = _done = Completer<TurnReply?>();
     try {
@@ -229,7 +234,7 @@ class CameraTurnController extends ChangeNotifier {
           ImageKind.outfit => Subject.garment,
           ImageKind.worn => Subject.body,
           ImageKind.face => Subject.face,
-          _ => Subject.any,
+          ImageKind.teeth => Subject.mouth,
         },
         onGuide: (speech) => unawaited(_say(speech)),
       );
@@ -271,14 +276,37 @@ class CameraTurnController extends ChangeNotifier {
           return;
         }
         _faceMisses = 0;
+        var photo = shot;
+        var box = kind == ImageKind.teeth ? await _findMouth(shot) : null;
+        if (round != _round || !running) return;
+        // 이 사진도 서버 기준(입 크기·벌림·잘림)을 폰에서 먼저 본다. 안 맞으면 보내지 않고 바로 다시 안내한다.
+        if (kind == ImageKind.teeth &&
+            mouths != null &&
+            _mouthMisses < maxMouthMisses) {
+          final retake = mouthRetakeSpeech(box);
+          if (retake != null) {
+            _mouthMisses++;
+            await _say(retake);
+            _watch();
+            return;
+          }
+        }
+        _mouthMisses = 0;
+        // 입 주변만 잘라 보낸다(얼굴 전체를 보내지 않고, 보낼 크기도 작다).
+        if (box != null) {
+          final cut = await compute(cropMouth, (jpeg: shot, box: box));
+          if (round != _round || !running) return;
+          photo = cut.jpeg;
+          box = cut.box;
+        }
         shots++;
         // 찍혔다는 걸 바로 알린다. 답을 기다리는 동안 읽는다.
         final saying = _say('찍었어요. 잘 볼게요.');
         final loc = await location.current();
-        final box = kind == ImageKind.teeth ? await _findMouth(shot) : null;
+        final send = photo, sendBox = box;
         await _handle(
-            () => turns.show(_sessionId, kind, shot,
-                location: loc, mouthBox: box, faceLandmarks: marks),
+            () => turns.show(_sessionId, kind, send,
+                location: loc, mouthBox: sendBox, faceLandmarks: marks),
             before: saying);
       } finally {
         _setBusy(false);
