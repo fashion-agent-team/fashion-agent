@@ -266,7 +266,7 @@ typedef MouthView = ({Rect? inner, Rect lips, double? luma});
 /// 서버(mcp-face-check `TeethCheckService.framing`)는 입 안쪽 너비가 사진의 15%보다 작거나, 높이 ÷ 너비가 0.10보다
 /// 작으면 다시 찍으라고 한다. 폰에서는 조금 넉넉하게 봐서 찍은 사진이 서버 기준을 넘게 한다.
 ///
-/// 2026-11-17 폰 확인("이빨 인식을 못 한다"): ML Kit은 얼굴 전체가 보여야 입을 찾는다. 입만 크게 들이대면 얼굴을 못 찾는다.
+/// 2026-11-17 폰 확인("이빨 인식을 못 한다"): ML Kit은 눈부터 턱까지는 보여야 입을 찾는다(이마는 잘려도 된다). 입만 크게 들이대면 얼굴을 못 찾는다.
 /// 그래서 "가까이"는 서버 기준을 겨우 넘는 정도(0.16)만 요구하고, 입술이 화면의 60%를 넘으면 멀리 들라고 한다.
 const double mouthMinWidth = 0.16;
 const double mouthMaxLipsWidth = 0.6;
@@ -284,7 +284,7 @@ Framing frameMouth(MouthView? mouth, {bool faceSeen = false}) {
     return faceSeen
         ? const Framing.fix('입이 잘 안 보여요. 고개를 똑바로 하고 "이~" 해 주세요.', 0.1)
         : const Framing.fix(
-            '얼굴이 안 보여요. 얼굴 전체가 화면에 들어오게 폰을 조금 떨어뜨려 들고 "이~" 해 주세요.');
+            '얼굴이 안 보여요. 눈부터 턱까지 화면에 들어오게 폰을 조금 떨어뜨려 들고 "이~" 해 주세요.');
   }
   final lips = mouth.lips, inner = mouth.inner;
   final open = inner == null

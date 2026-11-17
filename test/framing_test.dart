@@ -167,10 +167,10 @@ void main() {
           luma: luma,
         );
 
-    test('얼굴을 못 찾으면 얼굴 전체가 들어오게 떨어뜨리라고 한다', () {
+    test('얼굴을 못 찾으면 눈부터 턱까지 들어오게 떨어뜨리라고 한다', () {
       final f = frameMouth(null);
       expect(f.ready, isFalse);
-      expect(f.speech, contains('얼굴 전체'));
+      expect(f.speech, contains('눈부터 턱까지'));
       expect(f.closeness, 0);
       expect(frameMouth(null, faceSeen: true).speech, contains('입이 잘 안 보여요'));
     });
