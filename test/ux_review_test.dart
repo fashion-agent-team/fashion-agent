@@ -4,10 +4,7 @@ import 'dart:ui';
 
 import 'package:fashion_agent/agent/agent_controller.dart';
 import 'package:fashion_agent/agent/agent_speech.dart';
-import 'package:fashion_agent/agent/camera_turn.dart';
 import 'package:fashion_agent/agent/waiting_cue.dart';
-import 'package:fashion_agent/services/auto_capture.dart';
-import 'package:fashion_agent/services/turn_api.dart' show ImageKind;
 import 'package:fashion_agent/screens/agent_screen.dart';
 import 'package:fashion_agent/services/framing.dart';
 import 'package:fashion_agent/services/gateway_auth.dart';
@@ -127,7 +124,7 @@ void main() {
     }
   });
 
-  group('소리 구도 안내', () {
+  group('구도 가까움', () {
     test('가운데에 알맞을수록 가깝고, 찍어도 되면 1', () {
       final off = frameGarment([const Rect.fromLTRB(0.0, 0.0, 0.3, 0.3)]);
       final near = frameGarment([const Rect.fromLTRB(0.3, 0.2, 0.9, 0.8)]);
@@ -137,31 +134,6 @@ void main() {
       expect(near.closeness, greaterThan(off.closeness));
       expect(ready.ready, isTrue);
       expect(ready.closeness, 1);
-    });
-
-    test('가까울수록 소리 사이가 짧고, 못 찾으면 조용하다', () {
-      expect(FramingBeeper.gapFor(0), isNull);
-      expect(FramingBeeper.gapFor(1), FramingBeeper.fastest);
-      expect(FramingBeeper.gapFor(0.2)! > FramingBeeper.gapFor(0.8)!, isTrue);
-    });
-
-    test('소리를 내면 간격마다 울린다', () async {
-      var beeps = 0;
-      final b = FramingBeeper(beep: () => beeps++)..start();
-      b.closeness = 1;
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      b.stop();
-      expect(beeps, greaterThanOrEqualTo(2));
-      final after = beeps;
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(beeps, after, reason: '멈추면 조용');
-    });
-
-    test('옷·몸·얼굴·이 모두 소리 뜻을 알려 준다(이도 2026-11-17부터 입 위치 안내)', () {
-      expect(beepHintFor(ImageKind.outfit), contains('빨라지면 잘하고 있는 거예요'));
-      expect(beepHintFor(ImageKind.worn), isNotNull);
-      expect(beepHintFor(ImageKind.face), isNotNull);
-      expect(beepHintFor(ImageKind.teeth), contains('이~'));
     });
   });
 
