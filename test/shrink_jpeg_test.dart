@@ -54,4 +54,11 @@ void main() {
     final junk = Uint8List.fromList([1, 2, 3]);
     expect(shrinkJpeg((jpeg: junk, maxSide: sendMaxSide)), same(junk));
   });
+
+  test('얼굴 사진은 긴 변 1080으로 줄인다', () {
+    final out = img.decodeJpg(
+        shrinkJpeg((jpeg: jpeg(1080, 1920), maxSide: sendMaxSideFace)))!;
+    expect(out.height, 1080);
+    expect(out.width, 608);
+  });
 }

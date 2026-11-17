@@ -253,7 +253,7 @@ class CameraTurnController extends ChangeNotifier {
           maxSide: switch (kind) {
             ImageKind.teeth => sendMaxSideTeeth,
             ImageKind.outfit || ImageKind.worn => sendMaxSideClothes,
-            ImageKind.face => sendMaxSide,
+            ImageKind.face => sendMaxSideFace,
           },
         ));
         if (round != _round || !running) return;
