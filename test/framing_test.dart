@@ -167,11 +167,23 @@ void main() {
           luma: luma,
         );
 
-    test('입을 못 찾으면 입 앞에 들라고 한다', () {
+    test('얼굴을 못 찾으면 얼굴 전체가 들어오게 떨어뜨리라고 한다', () {
       final f = frameMouth(null);
       expect(f.ready, isFalse);
-      expect(f.speech, contains('입이 안 보여요'));
+      expect(f.speech, contains('얼굴 전체'));
       expect(f.closeness, 0);
+      expect(frameMouth(null, faceSeen: true).speech, contains('입이 잘 안 보여요'));
+    });
+
+    test('입술 윤곽 없이 입 끝 점만 찾아도 크기·자리는 본다', () {
+      MouthView corners(double width) => (
+            inner: null,
+            lips: Rect.fromCenter(
+                center: const Offset(0.5, 0.6), width: width, height: 0.1),
+            luma: 150,
+          );
+      expect(frameMouth(corners(0.4)).ready, isTrue);
+      expect(frameMouth(corners(0.12)).speech, contains('가까이'));
     });
 
     test('가운데에서 크게, 벌리고, 밝으면 찍는다', () {

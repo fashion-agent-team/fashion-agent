@@ -528,7 +528,24 @@ class FramingBeeper {
     _timer = null;
   }
 
+  /// 아이폰은 앱이 만든 채널(ios/Runner/AppDelegate.swift `FramingBeepPlugin`)로 낸다. 카메라가 켜진 동안 듣기(녹음)가
+  /// 켜져 있으면 iOS가 시스템 소리·진동을 막아서, Flutter 기본 소리로는 아무것도 안 났다(2026-11-17 폰 확인).
+  /// 채널이 없으면(안드로이드·테스트) 예전처럼 시스템 소리와 진동을 쓴다.
   static void _systemBeep() {
+    if (defaultTargetPlatform == TargetPlatform.iOS && _nativeBeep) {
+      unawaited(_beepChannel.invokeMethod<void>('tick').catchError((Object e) {
+        if (e is MissingPluginException) _nativeBeep = false;
+        _fallbackBeep();
+      }));
+      return;
+    }
+    _fallbackBeep();
+  }
+
+  static const _beepChannel = MethodChannel('simcheong/beep');
+  static bool _nativeBeep = true;
+
+  static void _fallbackBeep() {
     unawaited(
         SystemSound.play(SystemSoundType.click).catchError((Object _) {}));
     unawaited(HapticFeedback.selectionClick().catchError((Object _) {}));

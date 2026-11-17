@@ -260,12 +260,16 @@ const double faceUnevenLuma = 35;
 ///
 /// [inner]는 입 안쪽(윗입술 아래선 + 아랫입술 위선) 상자, 곧 서버 `mouthBox`와 같은 점으로 만든다.
 /// [lips]는 입술 바깥선까지 감싼 상자로, 화면 끝에 걸렸는지 볼 때 쓴다. [luma]는 서버가 잘라 보는 자리(입 안쪽 긴 변 × 1.36)의 밝기.
-typedef MouthView = ({Rect inner, Rect lips, double? luma});
+/// [inner]가 null이면 입술 윤곽 없이 입 끝 점(왼쪽·오른쪽·아래)만 찾은 것이다. 벌림은 찍은 뒤 정밀 확인에 맡긴다.
+typedef MouthView = ({Rect? inner, Rect lips, double? luma});
 
 /// 서버(mcp-face-check `TeethCheckService.framing`)는 입 안쪽 너비가 사진의 15%보다 작거나, 높이 ÷ 너비가 0.10보다
 /// 작으면 다시 찍으라고 한다. 폰에서는 조금 넉넉하게 봐서 찍은 사진이 서버 기준을 넘게 한다.
-const double mouthMinWidth = 0.2;
-const double mouthMaxLipsWidth = 0.8;
+///
+/// 2026-11-17 폰 확인("이빨 인식을 못 한다"): ML Kit은 얼굴 전체가 보여야 입을 찾는다. 입만 크게 들이대면 얼굴을 못 찾는다.
+/// 그래서 "가까이"는 서버 기준을 겨우 넘는 정도(0.16)만 요구하고, 입술이 화면의 60%를 넘으면 멀리 들라고 한다.
+const double mouthMinWidth = 0.16;
+const double mouthMaxLipsWidth = 0.6;
 const double mouthMinOpen = 0.12;
 
 /// 서버는 입 자리 밝기 L* 25 아래를 어둡다고 본다. 프레임 밝기로 옮긴 첫 값.
@@ -275,12 +279,19 @@ const double mouthDarkLuma = 65;
 ///
 /// 얼굴과 같이 좌우는 말하지 않는다(앞쪽 카메라 좌우가 폰마다 다를 수 있다). 위아래는 얼굴이 똑바로 찾아졌다는 뜻이라
 /// 화면 위쪽 = 사용자 머리 쪽이어서 그대로 말한다.
-Framing frameMouth(MouthView? mouth) {
+Framing frameMouth(MouthView? mouth, {bool faceSeen = false}) {
   if (mouth == null) {
-    return const Framing.fix('입이 안 보여요. 폰을 입 앞에 들고 "이~" 해 주세요.');
+    return faceSeen
+        ? const Framing.fix('입이 잘 안 보여요. 고개를 똑바로 하고 "이~" 해 주세요.', 0.1)
+        : const Framing.fix(
+            '얼굴이 안 보여요. 얼굴 전체가 화면에 들어오게 폰을 조금 떨어뜨려 들고 "이~" 해 주세요.');
   }
   final lips = mouth.lips, inner = mouth.inner;
-  final open = inner.width <= 0 ? 0.0 : inner.height / inner.width;
+  final open = inner == null
+      ? mouthMinOpen
+      : inner.width <= 0
+          ? 0.0
+          : inner.height / inner.width;
   final c = mouthCloseness(lips, open);
   final cutLeft = lips.left <= _edge,
       cutRight = lips.right >= 1 - _edge,
@@ -298,7 +309,7 @@ Framing frameMouth(MouthView? mouth) {
   if (cutLeft || cutRight) {
     return Framing.fix('입이 화면 옆으로 나갔어요. 폰을 입 정면으로 천천히 옮겨 주세요.', c);
   }
-  if (inner.width < mouthMinWidth) {
+  if ((inner?.width ?? lips.width * 0.85) < mouthMinWidth) {
     return Framing.fix('입이 작게 보여요. 폰을 입에 조금 더 가까이 대 주세요.', c);
   }
   if (open < mouthMinOpen) {
