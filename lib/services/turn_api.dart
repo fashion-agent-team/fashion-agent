@@ -1,0 +1,458 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'gateway_auth.dart';
+import 'mouth_finder.dart';
+
+/// agent가 정한 다음 동작. 계약 `docs/contracts/openapi.yaml`의 `TurnResponse.next`.
+enum TurnNext {
+  listen,
+  cameraOutfit,
+  cameraWorn,
+  cameraFace,
+  cameraTeeth,
+  done;
+
+  static TurnNext parse(String? s) => switch (s) {
+        'listen' => listen,
+        'camera_outfit' => cameraOutfit,
+        'camera_worn' => cameraWorn,
+        'camera_face' => cameraFace,
+        'camera_teeth' => cameraTeeth,
+        _ => done,
+      };
+
+  /// 카메라를 켜 둬야 하면 그 카메라가 볼 것. 아니면 null.
+  ImageKind? get camera => switch (this) {
+        cameraOutfit => ImageKind.outfit,
+        cameraWorn => ImageKind.worn,
+        cameraFace => ImageKind.face,
+        cameraTeeth => ImageKind.teeth,
+        _ => null,
+      };
+}
+
+/// 보내는 사진의 종류.
+///
+/// - outfit: 내려놓은 옷을 뒤쪽 카메라로 위에서 비춘다.
+/// - worn: 옷을 입고 폰을 세워 둔 채 뒤쪽 카메라 앞에서 한 바퀴 돈다(앞·뒤).
+/// - face·teeth: 앞쪽 카메라로 찍고 셀카처럼 좌우를 뒤집어 보낸다.
+enum ImageKind {
+  outfit,
+  worn,
+  face,
+  teeth;
+
+  bool get selfie => this == face || this == teeth;
+}
+
+/// 옷을 보여 주는 방식. agent가 처음에 묻고, 앱이 기억해서 다음부터 보낸다.
+enum OutfitMode {
+  laid,
+  worn;
+
+  static OutfitMode? parse(String? s) => switch (s) {
+        'laid' => laid,
+        'worn' => worn,
+        _ => null,
+      };
+}
+
+/// 고른 방식을 폰에 기억한다.
+abstract class OutfitModeStore {
+  Future<OutfitMode?> load();
+  Future<void> save(OutfitMode mode);
+}
+
+class LocalOutfitModeStore implements OutfitModeStore {
+  static const _key = 'outfit.mode';
+
+  @override
+  Future<OutfitMode?> load() async =>
+      OutfitMode.parse((await SharedPreferences.getInstance()).getString(_key));
+
+  @override
+  Future<void> save(OutfitMode mode) async =>
+      (await SharedPreferences.getInstance()).setString(_key, mode.name);
+}
+
+class MemoryOutfitModeStore implements OutfitModeStore {
+  OutfitMode? mode;
+
+  @override
+  Future<OutfitMode?> load() async => mode;
+
+  @override
+  Future<void> save(OutfitMode m) async => mode = m;
+}
+
+/// 계약의 `Location`. 위치 권한이 없으면 서울로 보내고 [fallback]을 켠다.
+class TurnLocation {
+  const TurnLocation(this.lat, this.lon, {this.fallback = false});
+
+  static const seoul = TurnLocation(37.5665, 126.9780, fallback: true);
+
+  final double lat;
+  final double lon;
+  final bool fallback;
+
+  Map<String, dynamic> toJson() =>
+      {'lat': lat, 'lon': lon, 'locationFallback': fallback};
+}
+
+/// agent의 답 한 번.
+class TurnReply {
+  const TurnReply({
+    required this.sessionId,
+    required this.speech,
+    required this.next,
+    this.resultType,
+    this.outfitMode,
+    this.gptConsent,
+    this.colorDetail,
+  });
+
+  factory TurnReply.fromJson(Map<String, dynamic> json) => TurnReply(
+        sessionId: json['sessionId'] as String,
+        speech: json['speech'] as String? ?? '',
+        next: TurnNext.parse(json['next'] as String?),
+        resultType:
+            (json['result'] as Map<String, dynamic>?)?['type'] as String?,
+        outfitMode: OutfitMode.parse((json['result']
+            as Map<String, dynamic>?)?['outfitMode'] as String?),
+        gptConsent: json['gptConsent'] as bool?,
+        colorDetail: json['colorDetail'] as bool?,
+      );
+
+  final String sessionId;
+
+  /// 앱이 그대로 읽어 줄 문장.
+  final String speech;
+  final TurnNext next;
+
+  /// `outfit_advice`, `outfit_check`, `weather` 등. 앱은 [speech]만 읽어도 된다.
+  final String? resultType;
+
+  /// agent가 정한(사용자가 고른) 옷 보여 주는 방식. 있으면 앱이 기억한다.
+  final OutfitMode? outfitMode;
+
+  /// 사용자가 이번에 "더 정확한 AI에게 물어봐도 될까요?"에 답했으면 그 답. 앱이 기억해 다음부터 allowGpt로 보낸다.
+  final bool? gptConsent;
+
+  /// 사용자가 이번에 "색 설명 짧게/자세히"라고 했으면 그 값. 앱이 기억해 다음부터 colorDetail로 보낸다.
+  final bool? colorDetail;
+}
+
+/// `POST /api/v1/agent/turn`. 게이트웨이에 로그인했을 때만 쓴다.
+abstract class TurnApi {
+  /// 게이트웨이 토큰이 있으면 true. 없으면 앱은 폰 안 기능(키워드)으로 처리한다.
+  Future<bool> get available;
+
+  /// 사용자가 한 말을 보낸다. 첫 말이면 [sessionId]는 null.
+  Future<TurnReply> say(String? sessionId, String utterance,
+      {TurnLocation? location});
+
+  /// 자동으로 찍은 사진 한 장(JPEG)을 보낸다. 이 사진이면 [mouthBox], 얼굴 사진이면 [faceLandmarks]를 같이 보낼 수 있다.
+  Future<TurnReply> show(String? sessionId, ImageKind kind, Uint8List jpeg,
+      {TurnLocation? location,
+      MouthBox? mouthBox,
+      Map<String, Object>? faceLandmarks});
+
+  /// `POST /api/v1/agent/warm`. 첫 "오늘 뭐 입지?"에 쓸 날씨·오늘 일정을 서버가 미리 불러 두게 한다.
+  /// 답(202)은 본문이 없다. [TurnWarmer]가 앱이 켜지거나 다시 앞으로 올 때 부른다.
+  Future<void> warm({TurnLocation? location});
+}
+
+/// 앱이 켜지거나 다시 앞으로 올 때 서버에 미리 준비를 보낸다(2026-11-15).
+/// 그날 첫 추천이 7초쯤 걸렸는데(서버가 날씨를 새로 받느라 6초), 미리 받아 두면 두 번째처럼 2초 안팎이 된다.
+///
+/// 기다리지 않고(unawaited) 부르고, [interval] 안에 다시 부르면 보내지 않는다. 실패해도 조용히 넘어간다.
+/// 위치는 대화와 같은 [LocationProvider]에서 받아서(권한 창은 띄우지 않음) 서버 캐시의 동네가 첫 추천과 같다.
+class TurnWarmer {
+  TurnWarmer(this.api, this.location,
+      {this.interval = const Duration(minutes: 5), DateTime Function()? now})
+      : _now = now ?? DateTime.now;
+
+  final TurnApi api;
+  final LocationProvider location;
+  final Duration interval;
+  final DateTime Function() _now;
+  DateTime? _sentAt;
+
+  /// 보냈으면 true. 너무 자주거나, 로그인하지 않았거나, 실패하면 false.
+  Future<bool> warm() async {
+    final last = _sentAt;
+    final now = _now();
+    if (last != null && now.difference(last) < interval) return false;
+    _sentAt = now;
+    try {
+      if (!await api.available) {
+        _sentAt = null;
+        return false;
+      }
+      await api.warm(location: await location.current());
+      return true;
+    } on Object catch (e) {
+      debugPrint('미리 준비 실패(괜찮음): $e');
+      return false;
+    }
+  }
+}
+
+class GatewayTurnApi implements TurnApi {
+  GatewayTurnApi(this.gateway,
+      {this.timeout = const Duration(seconds: 40),
+      OutfitModeStore? modes,
+      GptConsentStore? gptConsent,
+      ColorDetailStore? colorDetail})
+      : modes = modes ?? LocalOutfitModeStore(),
+        gptConsent = gptConsent ?? LocalGptConsentStore(),
+        colorDetail = colorDetail ?? LocalColorDetailStore();
+
+  /// GPT 확인·학습 저장 동의. 답했으면 요청마다 allowGpt로 보내고(true면 agent가 애매한 얼룩 조각만 GPT로 확인),
+  /// 아직이면 보내지 않는다. 그러면 agent가 처음 애매한 얼룩에서 묻고, 답을 [TurnReply.gptConsent]로 돌려준다.
+  final GptConsentStore gptConsent;
+
+  /// 색 설명 방식. 사용자가 바꾼 적이 있으면 요청마다 colorDetail로 보낸다(없으면 agent 기본: 자세히).
+  final ColorDetailStore colorDetail;
+
+  final GatewayAuth gateway;
+
+  /// 고른 방식을 말할 때마다 보내고, 답에 새 방식이 오면 기억한다.
+  final OutfitModeStore modes;
+
+  /// agent는 25초, 게이트웨이는 30초 안에 답한다. 사진 올리는 시간을 더해 조금 더 기다린다.
+  final Duration timeout;
+
+  static const _path = '/api/v1/agent/turn';
+
+  @override
+  Future<bool> get available => gateway.ensureSignedIn();
+
+  @override
+  Future<TurnReply> say(String? sessionId, String utterance,
+          {TurnLocation? location}) async =>
+      _post(turnRequestJson(
+          sessionId: sessionId,
+          utterance: utterance,
+          location: location,
+          outfitMode: await modes.load()));
+
+  @override
+  Future<TurnReply> show(String? sessionId, ImageKind kind, Uint8List jpeg,
+          {TurnLocation? location,
+          MouthBox? mouthBox,
+          Map<String, Object>? faceLandmarks}) =>
+      _post(turnRequestJson(
+          sessionId: sessionId,
+          kind: kind,
+          jpeg: jpeg,
+          location: location,
+          mouthBox: mouthBox,
+          faceLandmarks: faceLandmarks));
+
+  @override
+  Future<void> warm({TurnLocation? location}) async {
+    await gateway.send('POST', '/api/v1/agent/warm', json: {
+      if (location != null) 'location': location.toJson(),
+    }).timeout(const Duration(seconds: 10));
+  }
+
+  Future<TurnReply> _post(Map<String, dynamic> body) async {
+    final allow = await gptConsent.load();
+    if (allow != null) body['allowGpt'] = allow;
+    final detail = await colorDetail.load();
+    if (detail != null) body['colorDetail'] = detail;
+    final json =
+        await gateway.sendJson('POST', _path, json: body).timeout(timeout);
+    if (json == null) {
+      throw GatewayException(502, 'empty_reply', 'agent가 빈 답을 보냈어요');
+    }
+    final reply = TurnReply.fromJson(json);
+    final mode = reply.outfitMode;
+    if (mode != null) await modes.save(mode);
+    final answered = reply.gptConsent;
+    if (answered != null) await gptConsent.save(answered);
+    final changed = reply.colorDetail;
+    if (changed != null) await colorDetail.save(changed);
+    return reply;
+  }
+}
+
+/// 계약의 `TurnRequest` 모양.
+@visibleForTesting
+Map<String, dynamic> turnRequestJson({
+  String? sessionId,
+  String? utterance,
+  ImageKind? kind,
+  Uint8List? jpeg,
+  TurnLocation? location,
+  OutfitMode? outfitMode,
+  MouthBox? mouthBox,
+  Map<String, Object>? faceLandmarks,
+}) =>
+    {
+      if (sessionId != null) 'sessionId': sessionId,
+      if (utterance != null) 'utterance': utterance,
+      if (jpeg != null) ...{
+        'image': base64Encode(jpeg),
+        'imageKind': (kind ?? ImageKind.outfit).name,
+        'autoCaptured': true,
+        if (mouthBox != null) 'mouthBox': mouthBox.toJson(),
+        if (faceLandmarks != null) 'faceLandmarks': faceLandmarks,
+      },
+      if (location != null) 'location': location.toJson(),
+      if (outfitMode != null) 'outfitMode': outfitMode.name,
+    };
+
+/// 지금 위치. 권한이 없거나 늦으면 서울. 대화 중에는 10분 동안 같은 값을 쓴다.
+class LocationProvider {
+  LocationProvider(
+      {Future<TurnLocation?> Function()? read, DateTime Function()? now})
+      : _read = read ?? _readDevice,
+        _now = now ?? DateTime.now;
+
+  final Future<TurnLocation?> Function() _read;
+  final DateTime Function() _now;
+  TurnLocation? _cached;
+  DateTime? _at;
+
+  Future<TurnLocation> current() async {
+    final at = _at;
+    if (_cached != null &&
+        at != null &&
+        _now().difference(at) < const Duration(minutes: 10)) {
+      return _cached!;
+    }
+    final read = await _read();
+    if (read == null) return TurnLocation.seoul;
+    _at = _now();
+    return _cached = read;
+  }
+
+  static Future<TurnLocation?> _readDevice() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      // 권한 창은 온보딩에서 이미 띄웠다. 대화 중에는 새로 묻지 않는다.
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+      final last = await Geolocator.getLastKnownPosition();
+      final p = last ??
+          await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.low,
+              timeLimit: Duration(seconds: 5),
+            ),
+          );
+      return TurnLocation(p.latitude, p.longitude);
+    } on Object catch (e) {
+      debugPrint('위치 확인 실패, 서울로 보냅니다: $e');
+      return null;
+    }
+  }
+}
+
+/// 오류를 사용자에게 읽어 줄 말로 바꾼다.
+String turnErrorSpeech(Object error) {
+  if (error is GatewayException) {
+    return switch (error.status) {
+      401 => '로그인이 풀렸어요. 이번에는 이 폰 안의 기능으로 도와 드릴게요.',
+      413 => '사진이 너무 커서 보내지 못했어요. 다시 한 번 보여 주세요.',
+      429 => '요청이 너무 많아요. 잠시 뒤에 다시 말씀해 주세요.',
+      504 => '서버가 답하는 데 너무 오래 걸렸어요. 잠시 뒤에 다시 말씀해 주세요.',
+      _ => '서버에서 문제가 생겼어요. 잠시 뒤에 다시 말씀해 주세요.',
+    };
+  }
+  if (error is TimeoutException) {
+    return '서버가 답하는 데 너무 오래 걸렸어요. 잠시 뒤에 다시 말씀해 주세요.';
+  }
+  return '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.';
+}
+
+/// GPT 확인·학습 저장 동의를 폰에 기억한다(2026-11-10 진행 님: 처음 애매한 얼룩이 나올 때 한 번만 묻는다).
+abstract class GptConsentStore {
+  /// 답하지 않았으면 null.
+  Future<bool?> load();
+  Future<void> save(bool allow);
+}
+
+class LocalGptConsentStore implements GptConsentStore {
+  static const _key = 'gpt.consent';
+
+  @override
+  Future<bool?> load() async {
+    try {
+      return (await SharedPreferences.getInstance()).getBool(_key);
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> save(bool allow) async {
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_key, allow);
+    } on Object {
+      // 저장 못 하면 다음에 다시 물어본다.
+    }
+  }
+}
+
+class MemoryGptConsentStore implements GptConsentStore {
+  MemoryGptConsentStore([this.value]);
+
+  bool? value;
+
+  @override
+  Future<bool?> load() async => value;
+
+  @override
+  Future<void> save(bool allow) async => value = allow;
+}
+
+/// 색 설명 방식을 폰에 기억한다(2026-11-13 진행 님: "색 설명 짧게/자세히"로 바꿀 수 있게).
+/// true면 감각·느낌까지, false면 이름만(빨강·초록은 짧은 비유). 바꾼 적 없으면 null.
+abstract class ColorDetailStore {
+  Future<bool?> load();
+  Future<void> save(bool detailed);
+}
+
+class LocalColorDetailStore implements ColorDetailStore {
+  static const _key = 'color.detail';
+
+  @override
+  Future<bool?> load() async {
+    try {
+      return (await SharedPreferences.getInstance()).getBool(_key);
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> save(bool detailed) async {
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_key, detailed);
+    } on Object {
+      // 저장 못 하면 agent 기본(자세히)으로 돌아간다.
+    }
+  }
+}
+
+class MemoryColorDetailStore implements ColorDetailStore {
+  MemoryColorDetailStore([this.value]);
+
+  bool? value;
+
+  @override
+  Future<bool?> load() async => value;
+
+  @override
+  Future<void> save(bool detailed) async => value = detailed;
+}

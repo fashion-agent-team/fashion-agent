@@ -1,0 +1,294 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+
+/// 게이트웨이가 준 토큰. 계약은 `docs/contracts/openapi.yaml`의 `Tokens`.
+class GatewayTokens {
+  const GatewayTokens({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.expiresAt,
+  });
+
+  final String accessToken;
+  final String refreshToken;
+  final DateTime expiresAt;
+
+  Map<String, dynamic> toJson() => {
+        'accessToken': accessToken,
+        'refreshToken': refreshToken,
+        'expiresAt': expiresAt.toIso8601String(),
+      };
+
+  factory GatewayTokens.fromJson(Map<String, dynamic> json) => GatewayTokens(
+        accessToken: json['accessToken'] as String,
+        refreshToken: json['refreshToken'] as String,
+        expiresAt: DateTime.parse(json['expiresAt'] as String),
+      );
+}
+
+/// 토큰을 보관하는 곳. 앱은 키체인/키스토어([SecureTokenStore])를 쓰고, 테스트는 메모리를 쓴다.
+abstract class TokenStore {
+  Future<GatewayTokens?> read();
+  Future<void> write(GatewayTokens tokens);
+  Future<void> clear();
+}
+
+class SecureTokenStore implements TokenStore {
+  SecureTokenStore([FlutterSecureStorage? storage])
+      : _storage = storage ?? const FlutterSecureStorage();
+
+  static const _key = 'gateway_tokens';
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<GatewayTokens?> read() async {
+    final raw = await _storage.read(key: _key);
+    if (raw == null) return null;
+    try {
+      return GatewayTokens.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> write(GatewayTokens tokens) =>
+      _storage.write(key: _key, value: jsonEncode(tokens.toJson()));
+
+  @override
+  Future<void> clear() => _storage.delete(key: _key);
+}
+
+class MemoryTokenStore implements TokenStore {
+  GatewayTokens? tokens;
+
+  @override
+  Future<GatewayTokens?> read() async => tokens;
+
+  @override
+  Future<void> write(GatewayTokens t) async => tokens = t;
+
+  @override
+  Future<void> clear() async => tokens = null;
+}
+
+/// 게이트웨이 오류. [code]는 계약의 오류 코드(`unauthorized`, `rate_limited` 등).
+class GatewayException implements Exception {
+  GatewayException(this.status, this.code, [this.message]);
+
+  final int status;
+  final String code;
+  final String? message;
+
+  @override
+  String toString() =>
+      'GatewayException($status $code${message == null ? '' : ': $message'})';
+}
+
+/// 게이트웨이 로그인과 토큰 관리.
+///
+/// - [login]: Firebase ID 토큰을 게이트웨이 토큰으로 바꾼다.
+/// - [send]: 토큰을 붙여 보낸다. 만료가 가까우면 먼저 갱신하고, 401이면 한 번 갱신해서 다시 보낸다.
+/// - 갱신까지 실패하면 토큰을 지우고 [GatewayException] `unauthorized`를 던진다. 앱은 다시 로그인하면 된다.
+class GatewayAuth {
+  GatewayAuth({
+    required this.baseUrl,
+    required this.tokens,
+    http.Client? client,
+    DateTime Function()? now,
+    this.devDeviceId,
+  })  : _client = client ?? http.Client(),
+        _now = now ?? DateTime.now;
+
+  final Uri baseUrl;
+  final TokenStore tokens;
+
+  /// 구글 로그인을 안 했을 때 개발용 로그인(`POST /api/v1/auth/dev`)에 쓸 이 폰의 id.
+  /// null이면 개발용 로그인을 하지 않는다. 게이트웨이가 `APP_ENV=dev`일 때만 받아 준다.
+  final Future<String> Function()? devDeviceId;
+
+  /// 개발용 로그인을 게이트웨이가 거절했으면(발표 빌드 등) 이번 실행에서는 다시 묻지 않는다.
+  bool _devRefused = false;
+  Future<bool>? _devLoggingIn;
+  final http.Client _client;
+  final DateTime Function() _now;
+
+  /// 동시에 여러 요청이 401을 받아도 갱신은 한 번만 한다. 게이트웨이는 같은 refresh 토큰을 두 번 쓰면 전부 끊는다.
+  Future<GatewayTokens>? _refreshing;
+
+  /// 만료 이만큼 전부터 미리 갱신한다.
+  static const _skew = Duration(minutes: 1);
+
+  Uri _url(String path) => baseUrl.resolve(path);
+
+  Future<bool> get isSignedIn async => await tokens.read() != null;
+
+  /// 토큰이 있으면 true. 없으면 개발용 로그인을 해 본다.
+  ///
+  /// 2026-11-09 정지원: 로그인 안 했을 때도 로그인 상태와 똑같이 서버(옷 상태 모델 등)를 쓴다.
+  /// 그래서 구글 로그인 전이거나 Firebase가 안 될 때는 이 폰의 id로 개발용 로그인을 한다.
+  Future<bool> ensureSignedIn() async {
+    if (await isSignedIn) return true;
+    final id = devDeviceId;
+    if (id == null || _devRefused) return false;
+    return _devLoggingIn ??=
+        _devLogin(id).whenComplete(() => _devLoggingIn = null);
+  }
+
+  Future<bool> _devLogin(Future<String> Function() deviceId) async {
+    try {
+      final res = await _client.post(
+        _url('/api/v1/auth/dev'),
+        headers: {'content-type': 'application/json'},
+        body: jsonEncode({'deviceId': await deviceId()}),
+      );
+      await tokens.write(_tokensFrom(_decode(res)));
+      return true;
+    } on GatewayException catch (e) {
+      // 404·403 등: 게이트웨이가 개발용 로그인을 꺼 두었다. 401·5xx는 다음에 다시 해 본다.
+      if (e.status >= 400 && e.status < 500 && e.status != 429) {
+        _devRefused = true;
+      }
+      debugPrint('개발용 로그인 실패: $e');
+      return false;
+    } on Object catch (e) {
+      debugPrint('개발용 로그인 실패(연결): $e');
+      return false;
+    }
+  }
+
+  /// Firebase ID 토큰으로 로그인한다. 새로 가입했으면 true.
+  Future<bool> login(String firebaseIdToken) async {
+    final res = await _client.post(
+      _url('/api/v1/auth/login'),
+      headers: {'content-type': 'application/json'},
+      body: jsonEncode({'idToken': firebaseIdToken}),
+    );
+    final body = _decode(res);
+    await tokens.write(_tokensFrom(body));
+    return body['isNewUser'] == true;
+  }
+
+  Future<void> signOut() => tokens.clear();
+
+  /// 토큰을 붙여 [method] [path]를 부른다. 2xx가 아니면 [GatewayException].
+  Future<http.Response> send(String method, String path, {Object? json}) async {
+    var current = await tokens.read();
+    if (current == null) {
+      throw GatewayException(401, 'unauthorized', '로그인하지 않았어요');
+    }
+    if (!_now().isBefore(current.expiresAt.subtract(_skew))) {
+      current = await _refreshOrRelogin(current);
+    }
+
+    var res = await _sendOnce(method, path, json, current.accessToken);
+    if (res.statusCode == 401) {
+      current = await _refreshOrRelogin(current);
+      res = await _sendOnce(method, path, json, current.accessToken);
+    }
+    if (res.statusCode >= 300) _decode(res);
+    return res;
+  }
+
+  /// [send] 후 JSON 본문을 돌려준다. 본문이 없으면 null.
+  Future<Map<String, dynamic>?> sendJson(String method, String path,
+      {Object? json}) async {
+    final res = await send(method, path, json: json);
+    if (res.body.isEmpty) return null;
+    return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  Future<http.Response> _sendOnce(
+      String method, String path, Object? json, String access) {
+    final req = http.Request(method, _url(path))
+      ..headers['authorization'] = 'Bearer $access';
+    if (json != null) {
+      req.headers['content-type'] = 'application/json';
+      req.body = jsonEncode(json);
+    }
+    return _client.send(req).then(http.Response.fromStream);
+  }
+
+  /// 갱신한다. 서버가 갱신을 401로 거절하면(서버 DB나 비밀값이 바뀜) 개발용 로그인을 한 번 해서 이어 간다.
+  ///
+  /// 2026-11-12 시뮬레이터: 예전 서버 토큰이 남아 있으면 갱신이 401로 끊기고, 토큰만 지운 채 그 요청이 실패해서
+  /// 첫 안내가 폰 목소리로 나왔다. 개발용 로그인이 안 되면 예전처럼 `unauthorized`를 던진다.
+  Future<GatewayTokens> _refreshOrRelogin(GatewayTokens stale) async {
+    try {
+      return await _refresh(stale);
+    } on GatewayException catch (e) {
+      if (e.status != 401) rethrow;
+      if (!await ensureSignedIn()) rethrow;
+      final fresh = await tokens.read();
+      if (fresh == null) rethrow;
+      return fresh;
+    }
+  }
+
+  Future<GatewayTokens> _refresh(GatewayTokens stale) {
+    return _refreshing ??=
+        _doRefresh(stale).whenComplete(() => _refreshing = null);
+  }
+
+  Future<GatewayTokens> _doRefresh(GatewayTokens stale) async {
+    // 다른 요청이 이미 갱신했으면 그 토큰을 쓴다.
+    final latest = await tokens.read();
+    if (latest != null && latest.refreshToken != stale.refreshToken) {
+      return latest;
+    }
+
+    final res = await _client.post(
+      _url('/api/v1/auth/refresh'),
+      headers: {'content-type': 'application/json'},
+      body: jsonEncode({'refreshToken': stale.refreshToken}),
+    );
+    if (res.statusCode == 401) {
+      await tokens.clear();
+    }
+    final fresh = _tokensFrom(_decode(res));
+    await tokens.write(fresh);
+    return fresh;
+  }
+
+  GatewayTokens _tokensFrom(Map<String, dynamic> body) => GatewayTokens(
+        accessToken: body['accessToken'] as String,
+        refreshToken: body['refreshToken'] as String,
+        expiresAt:
+            _now().add(Duration(seconds: (body['expiresIn'] as num).toInt())),
+      );
+
+  Map<String, dynamic> _decode(http.Response res) {
+    Map<String, dynamic>? body;
+    try {
+      body = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>?;
+    } on Object {
+      body = null;
+    }
+    if (res.statusCode >= 300) {
+      throw GatewayException(
+        res.statusCode,
+        body?['code'] as String? ?? 'http_${res.statusCode}',
+        body?['message'] as String?,
+      );
+    }
+    return body ?? const {};
+  }
+}
+
+/// 이 폰의 개발용 로그인 id. 처음 한 번 만들어 키체인/키스토어에 둔다(앱을 지우면 새로 만든다).
+Future<String> secureDeviceId([FlutterSecureStorage? storage]) async {
+  final store = storage ?? const FlutterSecureStorage();
+  const key = 'dev_device_id';
+  final saved = await store.read(key: key);
+  if (saved != null && saved.isNotEmpty) return saved;
+  final rnd = Random.secure();
+  final id =
+      'phone-${List.generate(16, (_) => rnd.nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
+  await store.write(key: key, value: id);
+  return id;
+}
