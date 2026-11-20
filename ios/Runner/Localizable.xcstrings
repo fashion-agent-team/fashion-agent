@@ -1,0 +1,28 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "심청이에게 오늘 입을 옷을 물어봐요.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "심청이에게 오늘 입을 옷을 물어봐요."
+          }
+        }
+      }
+    },
+    "오늘 뭐 입지": {
+      "extractionState": "manual",
+      "localizations": {
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘 뭐 입지"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

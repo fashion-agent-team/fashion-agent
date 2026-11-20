@@ -1,0 +1,6 @@
+/* 시리 단축어 문장. 키는 AppDelegate.swift의 phrases와 같아야 한다. */
+"${applicationName}한테 오늘 뭐 입지" = "${applicationName}한테 오늘 뭐 입지";
+"${applicationName}에게 오늘 뭐 입지" = "${applicationName}에게 오늘 뭐 입지";
+"${applicationName} 오늘 뭐 입지" = "${applicationName} 오늘 뭐 입지";
+"${applicationName} 오늘 뭐 입을까" = "${applicationName} 오늘 뭐 입을까";
+"${applicationName}한테 오늘 뭐 입을까" = "${applicationName}한테 오늘 뭐 입을까";
