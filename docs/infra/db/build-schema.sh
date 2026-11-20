@@ -7,13 +7,13 @@ cd "$(dirname "$0")"
 out=../schema.sql
 {
   echo "-- ====================================================================="
-  echo "-- 패션 에이전트 전체 DB (PostgreSQL 16 + pgvector). 손으로 고치지 마세요."
+  echo "-- 패션 에이전트 전체 DB (PostgreSQL 17 + pgvector). 손으로 고치지 마세요."
   echo "-- docs/infra/db/build-schema.sh 가 docs/infra/db/<서비스>/V*.sql 을 이어 붙여 만듭니다."
   echo "-- 설계: specs/005-database/data-model.md, 실행 확인: docs/infra/db/README.md"
   echo "-- ====================================================================="
   echo
   echo "CREATE EXTENSION IF NOT EXISTS vector SCHEMA public;"
-  for s in account schedule closet helper; do
+  for s in account schedule closet; do   # helper는 mcp-helper 보관(2026-11-12)으로 뺌
     echo
     echo "-- ---------------------------------------------------------------------"
     echo "-- schema: $s"

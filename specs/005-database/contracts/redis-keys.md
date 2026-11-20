@@ -1,11 +1,10 @@
 # Redis 키 약속
 
-Redis는 오래 남길 필요가 없는 값만 둡니다. 꺼져도 사용자는 새 대화로 시작할 뿐 데이터는 잃지 않습니다.
+Redis는 오래 남길 필요가 없는 값만 둡니다. 지금은 agent 대화 세션만 씁니다. 게이트웨이 사용량 제한(분당 30회, 사진 10회)은 게이트웨이가 한 대라 메모리(`RateLimiter`)로 셉니다(2026-11-20 확인). 꺼져도 사용자는 새 대화로 시작할 뿐 데이터는 잃지 않습니다.
 
 | 키 | 주인 | 값 | TTL | 근거 |
 | --- | --- | --- | --- | --- |
 | `agent:session:{userId}:{sessionId}` | agent | 세션 JSON(아래) | 30분, 쓸 때마다 다시 30분 | agent `RedisSessionStore`, `agent.session-ttl: 30m` |
-| `request_rate_limiter.{userId}.tokens` / `.timestamp` | gateway | Spring Cloud Gateway `RedisRateLimiter`가 관리 | 라이브러리가 정함 | 약속 문서 4절(분당 30회, 사진 분당 10회) |
 
 ## agent 세션 값
 
