@@ -26,7 +26,7 @@ class DevicePermissionService implements PermissionService {
   final DeviceListenService listen;
   final CaptureService camera;
 
-  /// 일정 알림(전날 저녁·당일 아침). 서버가 없으면 null이고 묻지 않는다.
+  /// 일정 알림(며칠 전 아침·당일 아침). 서버가 없으면 null이고 묻지 않는다.
   final ReminderScheduler? reminders;
 
   @override

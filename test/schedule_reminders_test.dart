@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:fashion_agent/agent/agent_controller.dart';
+import 'package:fashion_agent/agent/agent_speech.dart';
 import 'package:fashion_agent/models/schedule_event.dart';
 import 'package:fashion_agent/models/user_profile.dart';
 import 'package:fashion_agent/services/gateway_auth.dart';
@@ -58,7 +59,7 @@ void main() {
   final now = DateTime(2026, 11, 11, 10);
 
   group('언제 알릴지', () {
-    test('일정 하나: 전날 저녁 8시와 당일 아침 8시', () {
+    test('일정 하나: 전날 아침 8시와 당일 아침 8시', () {
       final wedding = ev(
         '친구 결혼식',
         DateTime(2026, 11, 14, 14),
@@ -66,7 +67,7 @@ void main() {
       );
       final plans = planReminders([wedding], now);
       expect(plans.map((p) => p.at), [
-        DateTime(2026, 11, 13, 20),
+        DateTime(2026, 11, 13, 8),
         DateTime(2026, 11, 14, 8),
       ]);
       expect(plans.first.kind, ReminderKind.before);
@@ -95,13 +96,16 @@ void main() {
         ev('아침 회의', DateTime(2026, 11, 11, 9)),
         // 오늘 저녁: 전날 알림·아침 알림 모두 지남
         ev('저녁 약속', DateTime(2026, 11, 11, 19)),
-        // 내일: 오늘 저녁 8시, 내일 아침 8시
+        // 내일: 오늘 아침 8시는 지남, 내일 아침 8시만
         ev('면접', DateTime(2026, 11, 12, 15)),
+        // 모레: 내일 아침 8시(전날), 모레 아침 8시
+        ev('회의', DateTime(2026, 11, 13, 15)),
       ];
       final plans = planReminders(events, now);
-      expect(plans.map((p) => p.at), [
-        DateTime(2026, 11, 11, 20),
-        DateTime(2026, 11, 12, 8),
+      expect(plans.map((p) => '${p.kind.name} ${p.at}'), [
+        'before ${DateTime(2026, 11, 12, 8)}',
+        'sameDay ${DateTime(2026, 11, 12, 8)}',
+        'sameDay ${DateTime(2026, 11, 13, 8)}',
       ]);
     });
 
@@ -112,7 +116,7 @@ void main() {
       ];
       final plans = planReminders(events, now);
       expect(plans, hasLength(2));
-      const list = '내일 일정이 2개 있어요. 오전 10시 회의, 오후 7시 친구 생일 모임.';
+      const list = '좋은 아침이에요. 내일 일정이 2개 있어요. 오전 10시 회의, 오후 7시 친구 생일 모임.';
       expect(plans.first.body, startsWith(list));
     });
   });
@@ -123,21 +127,23 @@ void main() {
       expect(planReminders([off], now), isEmpty);
     });
 
-    test('사흘 전 저녁 8시와 당일 아침', () {
+    test('사흘 전 아침 8시와 당일 아침', () {
       final wedding = ev(
         '친구 결혼식',
         DateTime(2026, 11, 14, 14),
         place: '더채플앳청담',
         daysBefore: 3,
       );
-      final plans = planReminders([wedding], now, agentName: '심청이');
+      // 11-11 오전 10시면 그날 아침 8시가 지났으니 하루 앞에서 본다.
+      final plans = planReminders([wedding], DateTime(2026, 11, 10, 21),
+          agentName: '심청이');
       expect(plans.map((p) => p.at), [
-        DateTime(2026, 11, 11, 20),
+        DateTime(2026, 11, 11, 8),
         DateTime(2026, 11, 14, 8),
       ]);
       expect(plans.first.title, '다가오는 일정');
       final body = plans.first.body;
-      const head = '사흘 뒤 11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식이 있어요.';
+      const head = '좋은 아침이에요. 사흘 뒤 11월 14일 토요일 오후 2시, 더채플앳청담에서 친구 결혼식이 있어요.';
       expect(body, startsWith(head));
       expect(body, contains('빨래나 수선이 필요하면 지금 해 두세요.'));
       expect(body, endsWith('부른 뒤 "11월 14일에 뭐 입지?"라고 물어보세요.'));
@@ -152,12 +158,12 @@ void main() {
     test('모레 일정은 "모레 뭐 입지?"', () {
       final interview = ev('면접', DateTime(2026, 11, 14, 10), daysBefore: 2);
       final plans = planReminders([interview], now);
-      expect(plans.first.at, DateTime(2026, 11, 12, 20));
-      expect(plans.first.body, startsWith('모레 오전 10시, 면접이 있어요.'));
+      expect(plans.first.at, DateTime(2026, 11, 12, 8));
+      expect(plans.first.body, startsWith('좋은 아침이에요. 모레 오전 10시, 면접이 있어요.'));
       expect(plans.first.body, contains('"모레 뭐 입지?"'));
     });
 
-    test('같은 저녁에 뜨는 다른 날 일정은 하나로 모은다', () {
+    test('같은 아침에 뜨는 다른 날 일정은 하나로 모은다', () {
       final events = [
         ev('회의', DateTime(2026, 11, 13, 10)),
         ev('결혼식', DateTime(2026, 11, 15, 12), daysBefore: 3),
@@ -165,9 +171,9 @@ void main() {
       final plans = planReminders(events, now);
       final eve = plans.where((p) => p.kind == ReminderKind.before);
       expect(eve, hasLength(1));
-      expect(eve.single.at, DateTime(2026, 11, 12, 20));
+      expect(eve.single.at, DateTime(2026, 11, 12, 8));
       const items = '내일 오전 10시 회의, 사흘 뒤 11월 15일 일요일 오후 12시 결혼식.';
-      expect(eve.single.body, startsWith('다가오는 일정이 2개 있어요. $items'));
+      expect(eve.single.body, startsWith('좋은 아침이에요. 다가오는 일정이 2개 있어요. $items'));
     });
 
     test('서버가 준 remind·remindDaysBefore를 읽는다', () {
@@ -200,8 +206,8 @@ void main() {
         DateTime(2026, 11, 13),
         agentName: '심청이',
       );
-      expect(body, startsWith('내일 오후 2시, 더채플앳청담에서 친구 결혼식이 있어요. '));
-      expect(body, contains('입고 갈 옷을 오늘 미리 골라 두면 아침이 편해요.'));
+      expect(body, startsWith('좋은 아침이에요. 내일 오후 2시, 더채플앳청담에서 친구 결혼식이 있어요. '));
+      expect(body, contains('입고 갈 옷을 오늘 저녁에 미리 골라 두면 내일 아침이 편해요.'));
       expect(body, endsWith('"심청이" 하고 부른 뒤 "내일 뭐 입지?"라고 물어보세요.'));
     });
 
@@ -214,6 +220,90 @@ void main() {
     });
   });
 
+  // spec 002 US6(2026-11-20 정지원): "29일 저녁 8시 일정을 3일 전에 알려 줘"면 26일 저녁 8시가 아니라
+  // 26일 아침에 "사흘 뒤 오후 8시에 일정이 있어요"라고 알려 준다.
+  group('며칠 전 알림은 그날 아침 인사로', () {
+    final party = ev('친구 모임', DateTime(2026, 11, 29, 20), daysBefore: 3);
+
+    test(
+        'Given 29일 오후 8시 일정을 3일 전에 알려 달라고 함 '
+        'When 20일에 알림을 맞추면 Then 26일 아침 8시에 미리 알림이 뜬다', () {
+      // given
+      final today = DateTime(2026, 11, 20, 15);
+
+      // when
+      final plans = planReminders([party], today);
+
+      // then
+      final before = plans.singleWhere((p) => p.kind == ReminderKind.before);
+      expect(before.at, DateTime(2026, 11, 26, 8));
+      expect(before.body,
+          startsWith('좋은 아침이에요. 사흘 뒤 11월 29일 일요일 오후 8시, 친구 모임이 있어요.'));
+      expect(
+          plans.map((p) => p.at), isNot(contains(DateTime(2026, 11, 26, 20))));
+    });
+
+    test(
+        'Given 3일 전에 알려 달라고 한 29일 일정 When 26일 아침에 앱을 열면 '
+        'Then 인사 뒤에 "사흘 뒤 … 오후 8시" 일정을 말한다', () {
+      // given
+      final events = [party];
+
+      // when
+      final line = greetingSchedule(events, DateTime(2026, 11, 26, 7, 30));
+
+      // then
+      expect(line, '사흘 뒤 11월 29일 일요일 오후 8시, 친구 모임이 있어요.');
+    });
+
+    test(
+        'Given 3일 전에 알려 달라고 한 29일 일정 When 25일·27일에 앱을 열면 '
+        'Then 그 일정은 말하지 않는다', () {
+      // given
+      final events = [party];
+
+      // when
+      final fourDays = greetingSchedule(events, DateTime(2026, 11, 25, 9));
+      final twoDays = greetingSchedule(events, DateTime(2026, 11, 27, 9));
+
+      // then
+      expect(fourDays, isNull);
+      expect(twoDays, isNull);
+    });
+
+    test(
+        'Given 오늘 회의와 오늘 미리 알릴 며칠 뒤 일정 When 앱을 열면 '
+        'Then 오늘 일정 다음에 "그리고"로 며칠 뒤 일정을 말한다', () {
+      // given
+      final events = [
+        party,
+        ev('회의', DateTime(2026, 11, 26, 10)),
+        ev('알림 끈 약속', DateTime(2026, 11, 26, 12), remind: false),
+        ev('이미 끝난 조깅', DateTime(2026, 11, 26, 7)),
+      ];
+
+      // when
+      final line = greetingSchedule(events, DateTime(2026, 11, 26, 8, 30));
+
+      // then
+      expect(
+          line, '오늘 오전 10시, 회의가 있어요. 그리고 사흘 뒤 11월 29일 일요일 오후 8시, 친구 모임이 있어요.');
+    });
+
+    test(
+        'Given 며칠 전인지 정하지 않은 내일 일정 When 오늘 앱을 열면 '
+        'Then 전날로 보고 "내일" 일정을 말한다', () {
+      // given
+      final events = [ev('면접', DateTime(2026, 11, 27, 14))];
+
+      // when
+      final line = greetingSchedule(events, DateTime(2026, 11, 26, 9));
+
+      // then
+      expect(line, '내일 오후 2시, 면접이 있어요.');
+    });
+  });
+
   group('서버 일정으로 맞추기', () {
     test('오늘부터 16일 일정을 한 번에 받아 예약을 통째로 바꾼다', () async {
       final source = FakeScheduleSource([
@@ -221,10 +311,11 @@ void main() {
         ev('결혼식', DateTime(2026, 11, 14, 14)),
       ]);
       final scheduler = MemoryReminderScheduler();
+      // 아침 8시 전에 열었다.
       final reminders = ScheduleReminders(
         source: source,
         scheduler: scheduler,
-        now: () => now,
+        now: () => DateTime(2026, 11, 11, 7),
       );
 
       expect(await reminders.sync(agentName: '심청이'), 4);
@@ -247,7 +338,7 @@ void main() {
       final reminders = ScheduleReminders(
         source: source,
         scheduler: scheduler,
-        now: () => now,
+        now: () => DateTime(2026, 11, 11, 7),
       );
       await reminders.sync();
       source.fail = true;
@@ -398,6 +489,73 @@ void main() {
       expect(turns.sent, ['say:오늘 뭐 입지?']);
       expect(speech.spoken, isNot(contains(startsWith('앗'))));
     });
+  });
+
+  test(
+      'Given 26일, 3일 전에 알려 달라고 한 29일 오후 8시 일정 When 앱을 열면 '
+      'Then 인사 바로 뒤에 그 일정을 말하고, 받은 일정으로 알림도 맞춘다', () async {
+    // given
+    final speech = FakeSpeech();
+    final source = FakeScheduleSource(
+        [ev('친구 모임', DateTime(2026, 11, 29, 20), daysBefore: 3)]);
+    final scheduler = MemoryReminderScheduler();
+    final agent = AgentController(
+      speech: speech,
+      listen: ScriptedListen(const []),
+      profiles: InMemoryProfileStore(
+          const UserProfile(agentName: '하늘', consent: consentVersion)),
+      onboarding: onboardingWith(speech, const []),
+      weatherService: FakeWeatherService(),
+      turns: FakeTurnApi(const []),
+      reminders: ScheduleReminders(
+        source: source,
+        scheduler: scheduler,
+        now: () => DateTime(2026, 11, 26, 7, 30),
+      ),
+    );
+
+    // when
+    await agent.start();
+    await settle();
+
+    // then
+    expect(speech.spoken.take(2), [
+      returningGreeting('하늘'),
+      '사흘 뒤 11월 29일 일요일 오후 8시, 친구 모임이 있어요.',
+    ]);
+    expect(source.asked, hasLength(1)); // 인사 때 받은 일정을 알림 맞추기에 다시 쓴다
+    expect(scheduler.replaces, 1);
+    expect(scheduler.scheduled.map((p) => p.at), [
+      DateTime(2026, 11, 26, 8),
+      DateTime(2026, 11, 29, 8),
+    ]);
+  });
+
+  test('Given 오늘 말할 일정이 없음 When 앱을 열면 Then 인사만 하고 일정 말은 붙이지 않는다', () async {
+    // given
+    final speech = FakeSpeech();
+    final agent = AgentController(
+      speech: speech,
+      listen: ScriptedListen(const []),
+      profiles: InMemoryProfileStore(
+          const UserProfile(agentName: '하늘', consent: consentVersion)),
+      onboarding: onboardingWith(speech, const []),
+      weatherService: FakeWeatherService(),
+      turns: FakeTurnApi(const []),
+      reminders: ScheduleReminders(
+        source: FakeScheduleSource(
+            [ev('친구 모임', DateTime(2026, 11, 29, 20), daysBefore: 3)]),
+        scheduler: MemoryReminderScheduler(),
+        now: () => DateTime(2026, 11, 25, 9),
+      ),
+    );
+
+    // when
+    await agent.start();
+    await settle();
+
+    // then
+    expect(speech.spoken, isNot(contains(contains('친구 모임'))));
   });
 
   test('시리 단축어로 들어온 말을 한 번만 보낸다', () async {
