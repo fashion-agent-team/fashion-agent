@@ -6,6 +6,7 @@ import '../models/user_profile.dart';
 import '../services/listen_service.dart';
 import '../services/gateway_auth.dart';
 import '../services/profile_store.dart';
+import '../models/schedule_event.dart';
 import '../services/schedule_reminders.dart';
 import '../services/speech_service.dart';
 import '../services/turn_api.dart';
@@ -91,7 +92,7 @@ class AgentController extends ChangeNotifier {
   final TurnApi? turns;
   final LocationProvider location;
 
-  /// 일정 전날·당일 폰 알림. 서버에서 일정을 받아 예약하므로 [turns]가 있을 때만 쓴다.
+  /// 일정 며칠 전·당일 폰 알림과 앱 인사 뒤 일정 안내. 서버에서 일정을 받아 예약하므로 [turns]가 있을 때만 쓴다.
   final ScheduleReminders? reminders;
   bool _askedNotifications = false;
 
@@ -124,6 +125,7 @@ class AgentController extends ChangeNotifier {
   /// 처음 실행이면 온보딩을, 아니면 인사를 한다. 그다음 원하는 기능을 듣는다.
   Future<void> start() async {
     await _busy(() async {
+      List<ScheduleEvent>? fetched;
       profile = await profiles.load();
       if (profile == null || !profile!.isOnboarded) {
         profile = await onboarding.run();
@@ -136,8 +138,16 @@ class AgentController extends ChangeNotifier {
         await _reconnect();
         // 인사를 듣는 동안 서버가 날씨·일정을 미리 받아 둔다.
         warmUp();
+        // 인사를 읽는 동안 일정도 받아 둔다. 인사 뒤에 오늘 일정과 오늘 미리 알릴 며칠 뒤 일정을 말한다.
+        final schedule = _fetchSchedule();
         await _say(returningGreeting(profile!.agentName!,
             callName: profile!.callName));
+        fetched = await schedule.timeout(scheduleWait, onTimeout: () => null);
+        // 일정 알림을 눌러 켰으면 알림에서 이미 들었으니 다시 말하지 않는다.
+        final line = fetched == null || _pendingAsk != null
+            ? null
+            : await reminders!.greeting(events: fetched);
+        if (line != null) await _say(line);
         // 동의 단계가 생기기 전에 깔았던 사용자는 한 번만 묻는다.
         if (!profile!.consented) {
           final at = await onboarding.askConsent();
@@ -149,7 +159,7 @@ class AgentController extends ChangeNotifier {
       }
       warmUp();
       await _askNotifications();
-      unawaited(_syncReminders());
+      unawaited(_syncReminders(events: fetched));
       unawaited(speech.prefetch(const [
         '말씀해 주세요.',
         '네, 말씀해 주세요.',
@@ -557,14 +567,32 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  /// 서버 일정으로 전날·당일 알림을 다시 예약한다. 실패해도 대화는 그대로 이어 간다.
-  Future<void> _syncReminders() async {
+  /// 인사 뒤 일정 안내를 이보다 오래 기다리지 않는다. 늦으면 안내 없이 바로 듣는다.
+  static const scheduleWait = Duration(seconds: 3);
+
+  /// 앱 인사 뒤에 말할 일정을 받는다. 서버가 없거나 못 받으면 null.
+  Future<List<ScheduleEvent>?> _fetchSchedule() async {
+    final r = reminders;
+    final api = turns;
+    if (r == null || api == null) return null;
+    try {
+      if (!await api.available) return null;
+      return await r.fetch();
+    } on Object catch (e) {
+      debugPrint('인사 일정 받기 실패: $e');
+      return null;
+    }
+  }
+
+  /// 서버 일정으로 며칠 전·당일 알림을 다시 예약한다. 실패해도 대화는 그대로 이어 간다.
+  /// [events]가 있으면(인사 때 받음) 다시 받지 않는다.
+  Future<void> _syncReminders({List<ScheduleEvent>? events}) async {
     final r = reminders;
     final api = turns;
     if (r == null || api == null) return;
     try {
       if (!await api.available) return;
-      await r.sync(agentName: wakeName);
+      await r.sync(agentName: wakeName, events: events);
     } on Object catch (e) {
       debugPrint('일정 알림 맞추기 실패: $e');
     }

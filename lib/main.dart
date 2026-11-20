@@ -96,7 +96,7 @@ Future<void> main() async {
   unawaited(weather.prefetch());
   final turns = gateway == null ? null : GatewayTurnApi(gateway);
   final location = LocationProvider();
-  // 일정 전날 저녁·당일 아침 알림. 서버 일정을 받아 폰 안에 예약한다(원격 푸시는 유료 Apple 계정이 필요해서).
+  // 일정 며칠 전 아침·당일 아침 알림. 서버 일정을 받아 폰 안에 예약한다(원격 푸시는 유료 Apple 계정이 필요해서).
   LocalReminderScheduler? reminderScheduler;
   ScheduleReminders? reminders;
   if (gateway != null && !kIsWeb && !_fakeCamera) {
