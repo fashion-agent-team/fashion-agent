@@ -4,33 +4,35 @@
 -- dev 로그인(POST /api/v1/auth/dev {"deviceId":"dev-seed-device"})이 이 사용자로 들어옵니다.
 -- 그 deviceId로 먼저 로그인해 다른 id의 사용자가 이미 있으면 사용자는 넣지 않고, 아래 표들은 FK 오류로 멈춥니다(그 사용자를 지우고 다시 실행).
 
-INSERT INTO account.users (id, provider, dev_device_id, last_login_at)
-VALUES ('11111111-1111-1111-1111-111111111111', 'dev', 'dev-seed-device', now())
+INSERT INTO account.users (id, last_login_at)
+VALUES ('11111111-1111-1111-1111-111111111111', now())
 ON CONFLICT DO NOTHING;
+
+INSERT INTO account.user_identities (user_id, issuer, subject, sign_in_provider)
+VALUES ('11111111-1111-1111-1111-111111111111', 'dev', 'dev-seed-device', 'dev')
+ON CONFLICT (issuer, subject) DO NOTHING;
 
 INSERT INTO account.profiles (user_id, name, job, height_cm, agent_name)
 VALUES ('11111111-1111-1111-1111-111111111111', '테스트', '대학생', 172.0, '코디')
 ON CONFLICT (user_id) DO NOTHING;
 
-INSERT INTO schedule.events (id, user_id, title, start_at, place, place_category, occasion, occasion_source)
+INSERT INTO schedule.places (kakao_place_id, place_name, category)
+VALUES ('seed_1', '판교 사옥', '회사'), ('seed_2', '더채플앳청담', '예식장')
+ON CONFLICT (kakao_place_id) DO NOTHING;
+
+INSERT INTO schedule.events (id, user_id, title, start_at, place, kakao_place_id, occasion, occasion_source)
 VALUES
   ('e_seed_1', '11111111-1111-1111-1111-111111111111', '면접',
    (date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') + interval '10 hours') AT TIME ZONE 'Asia/Seoul',
-   '판교 사옥', '회사', 'formal', 'title'),
+   '판교 사옥', 'seed_1', 'formal', 'title'),
   ('e_seed_2', '11111111-1111-1111-1111-111111111111', '친구 결혼식',
    (date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') + interval '1 day 14 hours') AT TIME ZONE 'Asia/Seoul',
-   '더채플앳청담', '예식장', 'wedding', 'title')
+   '더채플앳청담', 'seed_2', 'wedding', 'title')
 ON CONFLICT (id) DO UPDATE SET start_at = EXCLUDED.start_at, notified_at = NULL, updated_at = now();
 
-INSERT INTO closet.garments (id, user_id, category, name, color_name, color_family, tone, formality, description)
+INSERT INTO closet.garments (id, user_id, category, name, color_name, color_family, tone, formality, pattern)
 VALUES
-  ('c_seed_1', '11111111-1111-1111-1111-111111111111', 'top',   '셔츠', '흰색', 'white', 'light', 'smart',
-   '{"category":"top","name":"셔츠","colorName":"흰색","pattern":"solid","defects":[]}'),
-  ('c_seed_2', '11111111-1111-1111-1111-111111111111', 'outer', '자켓', '회색', 'gray',  'mid',   'smart',
-   '{"category":"outer","name":"자켓","colorName":"회색","pattern":"solid","defects":[]}')
+  ('c_seed_1', '11111111-1111-1111-1111-111111111111', 'top',   '셔츠', '흰색', 'white', 'light', 'smart', 'solid'),
+  ('c_seed_2', '11111111-1111-1111-1111-111111111111', 'outer', '자켓', '회색', 'gray',  'mid',   'smart', 'solid')
 ON CONFLICT (id) DO NOTHING;
 -- 임베딩은 SQL로 만들 수 없어 비워 둡니다. mcp-closet이 embedding IS NULL인 옷을 채웁니다(specs/005-database/tasks.md T014).
-
-INSERT INTO helper.contacts (id, user_id, name, phone, relation)
-VALUES ('h_seed_1', '11111111-1111-1111-1111-111111111111', '엄마', '01000000000', '가족')
-ON CONFLICT (id) DO NOTHING;
