@@ -9,7 +9,7 @@
 | [closet/](closet/V1__init.sql) | `closet` | mcp-closet | 같음 |
 | [helper/](helper/V1__init.sql) | `helper` | mcp-helper(보관) | 쓰지 않음. `schema.sql`·`checks.sql`에서 뺐음 |
 
-2026-11-20 기준 각 폴더는 그 레포 `develop`의 V4까지와 똑같습니다(account V1~V4, schedule V1~V4, closet V1~V4). 레포에 새 버전이 들어가면 이 폴더에도 같은 파일을 넣습니다.
+2026-11-20 기준 각 폴더는 그 레포 `develop`의 V4까지와 똑같습니다(account V1~V4, schedule V1~V5, closet V1~V4. schedule V5는 mcp-schedule PR #12). 레포에 새 버전이 들어가면 이 폴더에도 같은 파일을 넣습니다.
 
 agent·mcp-weather·mcp-clothes-state·mcp-face-check는 DB가 없습니다. agent의 대화 상태는 Redis에 둡니다(게이트웨이 사용량 제한은 메모리)([redis-keys.md](../../../specs/005-database/contracts/redis-keys.md)).
 
@@ -49,7 +49,7 @@ psql -v ON_ERROR_STOP=1 -d fashion_check -f seed-dev.sql # 선택: 개발용 예
 ## 확인한 것 (2026-11-20, V4 정규화 뒤)
 
 - PostgreSQL 16.15 + pgvector에서 `../schema.sql` 한 번에 실행 → 표 11개 (운영 젯슨은 PostgreSQL 17, 같은 마이그레이션이 Flyway로 적용됨)
-- `checks.sql` 검사 36개 통과 (로그인 수단 (issuer, subject) UNIQUE, 장소 FK, 입은 날 (garment_id, worn_on) UNIQUE, 얼룩 기록과 옷 지우기, 사진 칸은 옷 작은 사진 하나, 스키마를 넘는 FK 0개 등)
+- `checks.sql` 검사 37개 통과 (로그인 수단 (issuer, subject) UNIQUE, 장소 FK, 알림 시각 remind_time, 입은 날 (garment_id, worn_on) UNIQUE, 얼룩 기록과 옷 지우기, 사진 칸은 옷 작은 사진 하나, 스키마를 넘는 FK 0개 등)
 - `seed-dev.sql` 두 번 실행해도 같은 결과
 
 ## 처음 확인한 것 (2026-11-04, V1)

@@ -2,7 +2,7 @@
 
 실행 SQL은 [docs/infra/db/](../../docs/infra/db/README.md)의 서비스별 `V*.sql`(각 레포 Flyway 마이그레이션 복사본)입니다. 이 문서와 SQL이 다르면 SQL이 맞고, 이 문서를 고칩니다.
 
-2026-11-20 기준: 각 레포 `develop`의 V4(정규화)까지 반영. account V4·schedule V4·closet V4는 젯슨 운영 DB(PostgreSQL 17 + pgvector)에도 적용됨.
+2026-11-20 기준: 각 레포 `develop`의 V4(정규화)까지와 mcp-schedule V5(`remind_time`, mcp-schedule PR #12) 반영. account V4·schedule V4·closet V4는 젯슨 운영 DB(PostgreSQL 17 + pgvector)에도 적용됨.
 
 ## 한눈에
 
@@ -86,6 +86,7 @@ erDiagram
     varchar occasion_source "title|place|default"
     boolean remind
     int remind_days_before
+    time remind_time "null이면 아침 8시"
     timestamptz notified_at
     timestamptz care_reminded_at
   }
@@ -176,7 +177,8 @@ erDiagram
 | | `place`, `kakao_place_id` FK(places) | 말한 장소 그대로, 카카오에서 찾았으면 그 id(못 찾으면 null) |
 | | `occasion` | mourning·wedding·formal·business·active·casual, 기본 casual |
 | | `occasion_source` | title·place·default. 정하는 순서는 제목 → 장소 → 기본값 |
-| | `remind`, `remind_days_before` | 폰 알림을 받을지, 며칠 전 저녁에 미리 알릴지. null이면 전날 저녁 + 당일 아침 |
+| | `remind`, `remind_days_before` | 폰 알림을 받을지, 며칠 전에 미리 알릴지. null이면 전날 저녁 + 당일 아침 |
+| | `remind_time` | 미리 알림을 띄울 시각(V5, `time`). null이면 아침 8시, `remind_days_before`가 0이면 당일 알림 시각. `remind`가 false면 null |
 | | `notified_at`, `care_reminded_at` | 서버가 기록만 하는 시각(일정 알림은 앱이 폰 로컬 알림으로 띄움) |
 
 인덱스: `(user_id, start_at)`은 하루 조회, `(start_at)`은 아침 알림. 테스트를 H2로도 돌려서 부분 인덱스 대신 일반 인덱스입니다.

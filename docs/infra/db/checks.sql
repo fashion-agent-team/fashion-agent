@@ -102,9 +102,12 @@ SELECT pg_temp.must_fail('FR-S1 제목 공백 거부',
 SELECT pg_temp.must_fail('FR-S2 자리 종류는 6개 중 하나',
   $q$INSERT INTO schedule.events (id, user_id, title, start_at, occasion) VALUES ('e_x', '00000000-0000-0000-0000-00000000000a', '파티', now(), 'party')$q$, '23514');
 INSERT INTO schedule.events (id, user_id, title, start_at) VALUES ('e_5', '00000000-0000-0000-0000-00000000000b', '약속', '2026-11-22T12:00:00+09:00');
-SELECT pg_temp.must_be('FR-S2 장소를 못 찾으면 평상·기본값, 알림은 켜짐·며칠 전은 아직 안 물음',
-  (SELECT occasion || '/' || occasion_source || '/' || remind || '/' || coalesce(remind_days_before::text, 'null')
-     FROM schedule.events WHERE id = 'e_5'), 'casual/default/true/null');
+SELECT pg_temp.must_be('FR-S2 장소를 못 찾으면 평상·기본값, 알림은 켜짐·며칠 전·시각은 아직 안 물음(아침 8시)',
+  (SELECT occasion || '/' || occasion_source || '/' || remind || '/' || coalesce(remind_days_before::text, 'null') || '/' || coalesce(remind_time::text, 'null')
+     FROM schedule.events WHERE id = 'e_5'), 'casual/default/true/null/null');
+UPDATE schedule.events SET remind_days_before = 2, remind_time = '16:00' WHERE id = 'e_5';
+SELECT pg_temp.must_be('FR-S4 "2일 전 오후 4시에 알려 줘"',
+  (SELECT remind_days_before || '@' || remind_time FROM schedule.events WHERE id = 'e_5'), '2@16:00:00');
 
 -- 아침 8시: 오늘 일정 중 알림 안 보낸 것만, 보낸 뒤에는 다시 안 잡힘
 UPDATE schedule.events SET notified_at = now() WHERE id = 'e_1';
