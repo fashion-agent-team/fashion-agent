@@ -48,6 +48,8 @@ struct SimcheongShortcuts: AppShortcutsProvider {
         "\(.applicationName)한테 오늘 뭐 입지",
         "\(.applicationName)에게 오늘 뭐 입지",
         "\(.applicationName) 오늘 뭐 입지",
+        "\(.applicationName) 오늘 뭐 입을까",
+        "\(.applicationName)한테 오늘 뭐 입을까",
       ]
     )
   }
