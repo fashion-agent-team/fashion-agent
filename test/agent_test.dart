@@ -146,9 +146,9 @@ void main() {
     });
 
     test('키·몸무게는 숫자나 한글 수로 받는다', () {
-      expect(parseMeasure('백칠십 센티요', min: 80, max: 230), 170);
-      expect(parseMeasure('62.5킬로', min: 20, max: 250), 62.5);
-      expect(parseMeasure('3', min: 80, max: 230), isNull);
+      expect(parseMeasure('백칠십 센티요', min: 50, max: 250), 170);
+      expect(parseMeasure('62.5킬로', min: 10, max: 300), 62.5);
+      expect(parseMeasure('3', min: 50, max: 250), isNull);
     });
 
     test('이름·성별·직업', () {
@@ -252,6 +252,50 @@ void main() {
       expect(profile.heightCm, 170);
       expect(speech.spoken.where((s) => s.contains('키는 몇 센티미터인가요?')).length,
           greaterThanOrEqualTo(2));
+    });
+
+    test(
+        'US2-3 Given 키·몸무게를 경계값으로 말함 When 저장하면 Then 키 50~250cm·몸무게 10~300kg만 받고 넘으면 다시 묻는다',
+        () async {
+      // given
+      final speech = FakeSpeech();
+
+      // when: 키 251(거절) → 250, 몸무게 9(거절) → 300
+      final tall = await onboardingWith(speech, [
+        '하늘',
+        '네',
+        '김민수예요',
+        '1990년 3월 5일',
+        '남자',
+        '회사원이에요',
+        '251',
+        '250',
+        '9',
+        '300',
+        '네',
+      ]).run();
+      // when: 가장 작은 값 키 50, 몸무게 10
+      final small = await onboardingWith(FakeSpeech(), [
+        '하늘',
+        '네',
+        '김민수예요',
+        '1990년 3월 5일',
+        '남자',
+        '회사원이에요',
+        '50',
+        '10',
+        '네',
+      ]).run();
+
+      // then
+      expect(tall.heightCm, 250);
+      expect(tall.weightKg, 300);
+      expect(speech.spoken.where((s) => s.contains('키는 몇 센티미터인가요?')).length,
+          greaterThanOrEqualTo(2));
+      expect(speech.spoken.where((s) => s.contains('몸무게는 몇 킬로그램인가요?')).length,
+          greaterThanOrEqualTo(2));
+      expect(small.heightCm, 50);
+      expect(small.weightKg, 10);
     });
 
     test('틀렸다고 하면 고칠 항목만 다시 묻는다', () async {
