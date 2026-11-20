@@ -22,6 +22,7 @@ ScheduleEvent ev(
   String? place,
   bool remind = true,
   int? daysBefore,
+  ({int hour, int minute})? time,
 }) {
   return ScheduleEvent(
     title: title,
@@ -29,6 +30,7 @@ ScheduleEvent ev(
     place: place,
     remind: remind,
     remindDaysBefore: daysBefore,
+    remindTime: time,
   );
 }
 
@@ -301,6 +303,108 @@ void main() {
 
       // then
       expect(line, '내일 오후 2시, 면접이 있어요.');
+    });
+  });
+
+  // spec 002 US6-7(2026-11-20 정지원): "약속 2일 전 오후 4시에 알려 줘"처럼 시각도 정할 수 있다.
+  group('알림 시각을 정한 일정', () {
+    test(
+        'Given 29일 오후 8시 일정을 2일 전 오후 4시에 알려 달라고 함 '
+        'When 알림을 맞추면 Then 27일 오후 4시에 뜨고 아침 8시에는 뜨지 않는다', () {
+      // given
+      final party = ev('친구 모임', DateTime(2026, 11, 29, 20),
+          daysBefore: 2, time: (hour: 16, minute: 0));
+
+      // when
+      final plans = planReminders([party], DateTime(2026, 11, 20, 15));
+
+      // then
+      final before = plans.singleWhere((p) => p.kind == ReminderKind.before);
+      expect(before.at, DateTime(2026, 11, 27, 16));
+      expect(before.body, startsWith('모레 오후 8시, 친구 모임이 있어요.'));
+      expect(before.body, isNot(contains('좋은 아침')));
+      expect(
+          plans.map((p) => p.at), isNot(contains(DateTime(2026, 11, 27, 8))));
+      expect(plans.map((p) => p.at), contains(DateTime(2026, 11, 29, 8)));
+    });
+
+    test(
+        'Given 같은 날 아침 8시 알림 일정과 오후 4시 알림 일정 When 알림을 맞추면 '
+        'Then 두 알림이 따로, 서로 다른 번호로 뜬다', () {
+      // given
+      final events = [
+        ev('회의', DateTime(2026, 11, 28, 10)),
+        ev('친구 모임', DateTime(2026, 11, 29, 20),
+            daysBefore: 1, time: (hour: 16, minute: 0)),
+        ev('면접', DateTime(2026, 11, 29, 9), daysBefore: 1),
+      ];
+
+      // when
+      final plans = planReminders(events, DateTime(2026, 11, 20, 15));
+
+      // then
+      final on28 = plans.where((p) =>
+          p.kind == ReminderKind.before && p.day == DateTime(2026, 11, 28));
+      expect(on28.map((p) => p.at),
+          [DateTime(2026, 11, 28, 8), DateTime(2026, 11, 28, 16)]);
+      expect(on28.first.body, contains('면접'));
+      expect(on28.last.body, contains('친구 모임'));
+      expect(plans.map((p) => p.id).toSet(), hasLength(plans.length));
+      expect(on28.first.id, 202611281);
+    });
+
+    test(
+        'Given 당일 오후 1시에 알려 달라고 한 오후 3시 일정 When 알림을 맞추면 '
+        'Then 그날 아침 알림 대신 오후 1시에 한 번 뜬다', () {
+      // given
+      final talk = ev('발표', DateTime(2026, 11, 25, 15),
+          daysBefore: 0, time: (hour: 13, minute: 0));
+
+      // when
+      final plans = planReminders([talk], DateTime(2026, 11, 20, 15));
+
+      // then
+      expect(plans, hasLength(1));
+      expect(plans.single.kind, ReminderKind.sameDay);
+      expect(plans.single.at, DateTime(2026, 11, 25, 13));
+      expect(plans.single.body, startsWith('오늘 오후 3시, 발표가 있어요.'));
+    });
+
+    test('Given 전날 밤 9시 알림 When 문장을 만들면 Then "오늘 저녁에" 없이 내일 옷을 고르자고 한다', () {
+      // given
+      final e = ev('면접', DateTime(2026, 11, 26, 10),
+          daysBefore: 1, time: (hour: 21, minute: 0));
+
+      // when
+      final plan = planReminders([e], DateTime(2026, 11, 20, 15))
+          .firstWhere((p) => p.kind == ReminderKind.before);
+
+      // then
+      expect(plan.at, DateTime(2026, 11, 25, 21));
+      expect(plan.body, contains('입고 갈 옷을 오늘 미리 골라 두면 내일 아침이 편해요.'));
+    });
+
+    test(
+        'Given 서버가 remindTime "16:00"을 줌 When 일정을 읽으면 Then 16시 0분, 없거나 이상하면 null',
+        () {
+      // given
+      Map<String, dynamic> json(Object? time) => {
+            'title': '친구 모임',
+            'start': '2026-11-29T20:00:00+09:00',
+            'remindDaysBefore': 2,
+            'remindTime': time,
+          };
+
+      // when
+      final set = ScheduleEvent.fromJson(json('16:00'));
+      final none = ScheduleEvent.fromJson(json(null));
+      final bad = ScheduleEvent.fromJson(json('오후 4시'));
+
+      // then
+      expect(set.remindTime, (hour: 16, minute: 0));
+      expect(set.toJson()['remindTime'], '16:00');
+      expect(none.remindTime, isNull);
+      expect(bad.remindTime, isNull);
     });
   });
 

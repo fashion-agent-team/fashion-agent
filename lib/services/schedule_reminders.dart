@@ -94,6 +94,7 @@ class PlannedReminder {
 }
 
 /// 미리 알림은 그날 아침 8시(2026-11-20, 전에는 저녁 8시). 아침 인사처럼 "좋은 아침이에요"로 시작한다.
+/// 일정에 시각을 정했으면([ScheduleEvent.remindTime], "2일 전 오후 4시") 그 시각에 띄운다.
 const beforeHour = 8;
 
 const _goodMorning = '좋은 아침이에요.';
@@ -122,30 +123,47 @@ List<PlannedReminder> planReminders(
   String? agentName,
 }) {
   final sameDay = <DateTime, List<ScheduleEvent>>{};
+  // 시각을 정한 당일 알림(remindDaysBefore 0 + remindTime). 일정마다 따로 뜬다.
+  final sameDayAt = <DateTime, List<ScheduleEvent>>{};
+  // 미리 알림이 뜨는 때 → 그때 알릴 일정들. 같은 때 뜨는 알림은 하나로 모은다.
   final before = <DateTime, List<ScheduleEvent>>{};
   for (final e in events) {
     final start = e.start.toLocal();
     if (!e.remind || !start.isAfter(now)) continue;
     final day = DateTime(start.year, start.month, start.day);
+    final days = e.remindDaysBefore ?? defaultDaysBefore;
+    final time = e.remindTime;
+    if (days == 0 && time != null) {
+      final at = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+      // 시작보다 늦으면 쓸모가 없으니 아침 알림으로 둔다.
+      if (at.isBefore(start)) {
+        sameDayAt.putIfAbsent(at, () => []).add(e);
+        continue;
+      }
+    }
     sameDay.putIfAbsent(day, () => []).add(e);
     final alertDay = beforeAlertDay(e);
-    if (alertDay != null) before.putIfAbsent(alertDay, () => []).add(e);
+    if (alertDay != null) {
+      final at = DateTime(alertDay.year, alertDay.month, alertDay.day,
+          time?.hour ?? beforeHour, time?.minute ?? 0);
+      before.putIfAbsent(at, () => []).add(e);
+    }
   }
   final plans = <PlannedReminder>[];
-  for (final d in before.keys) {
-    final list = before[d]!;
+  for (final at in before.keys) {
+    final list = before[at]!;
     list.sort((a, b) => a.start.compareTo(b.start));
-    final at = DateTime(d.year, d.month, d.day, beforeHour);
     if (!at.isAfter(now)) continue;
+    final d = DateTime(at.year, at.month, at.day);
     final onlyTomorrow = list.every((e) => _daysBetween(d, e.start) == 1);
     plans.add(PlannedReminder(
-      id: _dayNumber(d) * 10 + 1,
+      id: _reminderId(at, ReminderKind.before),
       kind: ReminderKind.before,
       day: d,
       at: at,
       title: onlyTomorrow ? '내일 일정' : '다가오는 일정',
       eventDay: _dayOf(list.first.start),
-      body: beforeBody(list, d, agentName: agentName),
+      body: beforeBody(list, d, agentName: agentName, at: at),
     ));
   }
   for (final day in sameDay.keys) {
@@ -165,8 +183,35 @@ List<PlannedReminder> planReminders(
       body: sameDayBody(list, agentName: agentName),
     ));
   }
+  for (final at in sameDayAt.keys) {
+    final list = sameDayAt[at]!;
+    list.sort((a, b) => a.start.compareTo(b.start));
+    if (!at.isAfter(now)) continue;
+    final day = DateTime(at.year, at.month, at.day);
+    plans.add(PlannedReminder(
+      id: _reminderId(at, ReminderKind.sameDay),
+      kind: ReminderKind.sameDay,
+      day: day,
+      at: at,
+      title: '오늘 일정',
+      body: sameDayBody(list, agentName: agentName),
+    ));
+  }
   plans.sort((a, b) => a.at.compareTo(b.at));
   return plans;
+}
+
+/// 알림 번호. 아침 8시 미리 알림은 예전처럼 날짜*10+1(예: 202611131).
+/// 시각을 정한 알림은 같은 날 여러 개일 수 있어 10억 + (2020-01-01부터 분)*2 + 종류(32비트 안).
+int _reminderId(DateTime at, ReminderKind kind) {
+  final isDefault =
+      kind == ReminderKind.before && at.hour == beforeHour && at.minute == 0;
+  if (isDefault) return _dayNumber(at) * 10 + 1;
+  final days = DateTime.utc(at.year, at.month, at.day)
+      .difference(DateTime.utc(2020))
+      .inDays;
+  final minutes = days * 1440 + at.hour * 60 + at.minute;
+  return 1000000000 + minutes * 2 + kind.index;
 }
 
 /// [e]를 미리 알리는 날. [ScheduleEvent.remindDaysBefore]일 전(정하지 않았으면 전날). 알림을 껐거나 0이면 null.
@@ -299,7 +344,7 @@ String _call(String? agentName) {
 
 /// 미리 알림 문장. 화면 읽기(VoiceOver·TalkBack)로 들어도 알기 쉽게 짧게 쓴다. 기호·이모지는 넣지 않는다.
 ///
-/// 아침에 뜨므로 "좋은 아침이에요."로 시작한다.
+/// 아침(11시 전)에 뜨면 "좋은 아침이에요."로 시작한다. [at]은 알림이 뜨는 때(비우면 아침 8시).
 ///
 /// - 전날: "좋은 아침이에요. 내일 오후 2시, 더채플앳청담에서 친구 결혼식이 있어요. 입고 갈 옷을 오늘 저녁에 미리 …"
 /// - 며칠 전: "좋은 아침이에요. 사흘 뒤 11월 14일 토요일 오후 2시, … 있어요. 입고 갈 옷을 미리 챙겨 두면 좋아요. …"
@@ -308,7 +353,10 @@ String beforeBody(
   List<ScheduleEvent> events,
   DateTime alertDay, {
   String? agentName,
+  DateTime? at,
 }) {
+  final hour = at?.hour ?? beforeHour;
+  final hello = hour < 11 ? '$_goodMorning ' : '';
   final first = events.first;
   final firstWhen = whenFrom(alertDay, first.start);
   final days = _daysBetween(alertDay, first.start);
@@ -333,13 +381,15 @@ String beforeBody(
   }
   final call = _call(agentName);
   if (days == 1) {
-    const early = '입고 갈 옷을 오늘 저녁에 미리 골라 두면 내일 아침이 편해요.';
-    return '$_goodMorning $what $early 앱을 열고 $call"내일 뭐 입지?"라고 물어보세요.';
+    final early = hour < 18
+        ? '입고 갈 옷을 오늘 저녁에 미리 골라 두면 내일 아침이 편해요.'
+        : '입고 갈 옷을 오늘 미리 골라 두면 내일 아침이 편해요.';
+    return '$hello$what $early 앱을 열고 $call"내일 뭐 입지?"라고 물어보세요.';
   }
   final t = first.start.toLocal();
   final ask = days == 2 ? '모레' : '${t.month}월 ${t.day}일에';
   const prepare = '입고 갈 옷을 미리 챙겨 두면 좋아요. 빨래나 수선이 필요하면 지금 해 두세요.';
-  return '$_goodMorning $what $prepare 앱을 열고 $call"$ask 뭐 입지?"라고 물어보세요.';
+  return '$hello$what $prepare 앱을 열고 $call"$ask 뭐 입지?"라고 물어보세요.';
 }
 
 /// 당일 아침 알림 문장.
