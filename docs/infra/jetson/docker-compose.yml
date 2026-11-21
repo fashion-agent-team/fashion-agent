@@ -103,10 +103,10 @@ services:
     <<: *app
     build: ../fashion-agent-agent
     image: fashion-agent/agent:local
-    mem_limit: 352m
+    mem_limit: 448m
     environment:
       TZ: Asia/Seoul
-      JAVA_TOOL_OPTIONS: "-Xmx144m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      JAVA_TOOL_OPTIONS: "-Xmx176m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
       # 맥북은 mcp,openai(세션 메모리 보관). 여기서는 Redis를 붙여 세션을 Redis에 둠.
       SPRING_PROFILES_ACTIVE: mcp,openai,redis
       REDIS_HOST: redis
@@ -114,24 +114,23 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:?.env에 OPENAI_API_KEY 필요}
       AGENT_OPENAI_MODEL: ${AGENT_OPENAI_MODEL:-gpt-5.4-mini}
       AGENT_OPENAI_REASONING: ${AGENT_OPENAI_REASONING:-none}
-      MCP_WEATHER_URL: http://mcp-weather:8091/mcp
+      MCP_WEATHER_URL: ${MCP_WEATHER_URL:-http://mcp-weather:8091/mcp}
       MCP_SCHEDULE_URL: http://mcp-schedule:8092/mcp
-      MCP_CLOTHES_STATE_URL: http://mcp-clothes-state:8093/mcp
-      MCP_FACE_CHECK_URL: http://mcp-face-check:8094/mcp
+      MCP_CLOTHES_STATE_URL: ${MCP_CLOTHES_STATE_URL:-http://mcp-clothes-state:8093/mcp}
+      MCP_FACE_CHECK_URL: ${MCP_FACE_CHECK_URL:-http://mcp-face-check:8094/mcp}
       MCP_CLOSET_URL: http://mcp-closet:8095/mcp
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
     depends_on:
       redis: { condition: service_healthy }
-      mcp-weather: { condition: service_healthy }
       mcp-schedule: { condition: service_healthy }
-      mcp-clothes-state: { condition: service_healthy }
-      mcp-face-check: { condition: service_healthy }
       mcp-closet: { condition: service_healthy }
 
+  # 2026-11-14부터 모델 서버 젯슨(node/docker-compose.yml)에서 돎. 여기서 다시 띄우려면 --profile local-heavy
   mcp-weather:
     <<: *app
+    profiles: [local-heavy]
     build: ../mcp-weather
     image: fashion-agent/mcp-weather:local
     mem_limit: 256m
@@ -146,7 +145,7 @@ services:
     <<: *app
     build: ../mcp-schedule
     image: fashion-agent/mcp-schedule:local
-    mem_limit: 288m
+    mem_limit: 384m
     environment:
       TZ: Asia/Seoul
       JAVA_TOOL_OPTIONS: "-Xmx112m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
@@ -161,16 +160,18 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
 
+  # 2026-11-13부터 모델 서버 젯슨(node/docker-compose.yml)에서 돎. 여기서 다시 띄우려면 --profile local-heavy
   mcp-clothes-state:
     <<: *app
+    profiles: [local-heavy]
     build: ../mcp-clothes-state
     image: fashion-agent/mcp-clothes-state:local
     # FashionSigLIP(354MB ONNX)를 켜면 네이티브 메모리가 약 400MB 더 듭니다.
     # 메모리가 모자라면 .env에서 CLOTHES_EMBED_MODEL= 로 비우고 mem_limit을 512m로 내리세요(embedding 없이 응답).
-    mem_limit: 832m
+    mem_limit: 1280m
     environment:
       TZ: Asia/Seoul
-      JAVA_TOOL_OPTIONS: "-Xmx160m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      JAVA_TOOL_OPTIONS: "-Xmx192m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CLOTHES_EMBED_MODEL: ${CLOTHES_EMBED_MODEL:-}
       CLOTHES_CANDIDATE_DIR: /app/data/train-candidates
@@ -183,14 +184,16 @@ services:
     depends_on:
       volume-init: { condition: service_completed_successfully }
 
+  # 2026-11-13부터 모델 서버 젯슨(node/docker-compose.yml)에서 돎. 여기서 다시 띄우려면 --profile local-heavy
   mcp-face-check:
     <<: *app
+    profiles: [local-heavy]
     build: ../mcp-face-check
     image: fashion-agent/mcp-face-check:local
-    mem_limit: 512m
+    mem_limit: 768m
     environment:
       TZ: Asia/Seoul
-      JAVA_TOOL_OPTIONS: "-Xmx256m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      JAVA_TOOL_OPTIONS: "-Xmx320m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8094/actuator/health || exit 1"]
@@ -200,10 +203,10 @@ services:
     build: ../mcp-closet
     image: fashion-agent/mcp-closet:local
     # PR #9부터 FashionSigLIP 글 모델(int8 ~111MB)로 imageQuery를 켬. 문서상 서버 메모리 약 1.1GB
-    mem_limit: 1200m
+    mem_limit: 1408m
     environment:
       TZ: Asia/Seoul
-      JAVA_TOOL_OPTIONS: "-Xmx128m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      JAVA_TOOL_OPTIONS: "-Xmx160m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fashion
       SPRING_DATASOURCE_USERNAME: fashion
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -213,6 +216,7 @@ services:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8095/actuator/health || exit 1"]
     depends_on:
       postgres: { condition: service_healthy }
+
 
   # Cloudflare Tunnel (simcheong.java21.net 등). .env에 CLOUDFLARE_TUNNEL_TOKEN을 넣고
   #   docker compose --profile tunnel up -d cloudflared
@@ -235,6 +239,24 @@ services:
     volumes:
       - clothes-candidates:/data/clothes
     networks: [fashion]
+
+  # SigLIP2 So400m 이미지 벡터(옷 종류 보조 경로, 2026-11-19). 모델 서버의 mcp-clothes-state가 Tailscale(이 젯슨 IP:8096)로만 부름.
+  # 가중치는 ../models/so400m(읽기 전용). 끄려면 docker compose stop so400m-embed (clothes-state는 800ms 넘으면 지금 결과로 답함)
+  so400m-embed:
+    <<: *app
+    build: ../so400m-embed
+    image: fashion-agent/so400m-embed:local
+    runtime: nvidia
+    mem_limit: 2560m
+    memswap_limit: 2560m
+    ports: ["${APP_TS_IP:-127.0.0.1}:8096:8096"]   # .env의 APP_TS_IP = 이 젯슨의 Tailscale IP
+    environment:
+      TZ: Asia/Seoul
+      SO400M_WEIGHTS: /models/so400m/open_clip_model.safetensors
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ../models/so400m:/models/so400m:ro
 
 networks:
   fashion: {}

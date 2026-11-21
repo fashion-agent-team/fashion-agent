@@ -33,7 +33,7 @@ DB: PostgreSQL 17 + pgvector (스키마 account, schedule, closet), Redis 7
 
 - 처음엔 한 대에 다 올렸는데 8GB에 다 들어가지 않아 2026-11-13쯤 무거운 사진 모델과 학습을 다른 젯슨으로 옮겼습니다. agent는 MCP 서버를 주소로만 불러서 `MCP_*_URL` 환경 변수만 바꿨습니다.
 - 두 젯슨은 Tailscale 사설망으로 이어집니다. 바깥에서는 `simcheong.java21.net`(리버스 프록시) → Tailscale Funnel → 앱 서버 젯슨의 Nginx(:80)로 들어옵니다.
-- 이미지는 GHCR에서 받지 않고 각 젯슨에서 레포를 받아 arm64로 직접 빌드합니다. 자세한 순서는 [infra/jetson/README.md](infra/jetson/README.md)에 있습니다. 젯슨에 있는 compose 파일이 기준이고, 이 레포의 `infra/jetson/docker-compose.yml`에는 아직 so400m-embed와 모델 서버 분리가 반영되지 않았습니다.
+- 이미지는 GHCR에서 받지 않고 각 젯슨에서 레포를 받아 arm64로 직접 빌드합니다. 자세한 순서는 [infra/jetson/README.md](infra/jetson/README.md)에 있습니다. 앱 서버는 `infra/jetson/docker-compose.yml`, 모델 서버는 `infra/jetson/node/docker-compose.yml`이고, 2026-11-21 젯슨에 있는 파일과 맞췄습니다(Tailscale IP만 `.env` 변수로 뺐습니다).
 - 비밀 값(OpenAI 키, Azure 키, 카카오 키, DB 비밀번호 등)은 젯슨의 `.env`에만 둡니다. 레포와 앱에는 넣지 않습니다.
 
 ## 레포별 기술 스택
