@@ -1,6 +1,13 @@
 # 젯슨 배포 (jetson-deploy)
 
-맥북에서 `bootRun`으로 돌리던 서버 8개 + PostgreSQL + Redis를 팀 젯슨(team4, Jetson Orin Nano 8GB)에 Docker Compose로 옮긴 설정입니다.
+맥북에서 `bootRun`으로 돌리던 서버 8개 + PostgreSQL + Redis를 팀 젯슨에 Docker Compose로 옮긴 설정입니다. 처음엔 젯슨 한 대(team4)에 다 올렸는데 8GB에 다 들어가지 않아서, 2026-11-13부터 **젯슨 오린 나노 8GB 두 대**로 나눠 돌립니다(2026-11-21 기준).
+
+| 기기 | compose | 올라간 것 |
+|---|---|---|
+| 앱 서버 젯슨 (team4) | `docker-compose.yml` | nginx, gateway, edge-tts, agent, mcp-schedule, mcp-closet, so400m-embed, postgres, redis |
+| 모델 서버 젯슨 (fashion-agent) | `node/docker-compose.yml` | mcp-clothes-state, mcp-face-check, mcp-weather, 모델 학습 |
+
+두 젯슨은 Tailscale 사설망으로 이어집니다. agent는 MCP 서버를 주소로만 불러서, 옮길 때 앱 서버 `.env`의 `MCP_*_URL`만 바꿨습니다.
 앱은 `https://simcheong.java21.net` 하나로 접속하고, 맥북이 꺼져 있어도, 와이파이·LTE 어디서든 됩니다.
 
 ## 전체 흐름
@@ -15,15 +22,17 @@
 Tailscale Funnel (젯슨이 바깥으로 연결을 걸어 둠, 공유기 포트 안 엶)
   │ http://127.0.0.1:80
   ▼
-젯슨 Docker Compose (네트워크 fashion)
-  nginx:80 ─ gateway:8080 ─┬ agent:8081 ─ MCP 5개
-                            │    mcp-weather:8091  mcp-schedule:8092  mcp-clothes-state:8093
-                            │    mcp-face-check:8094  mcp-closet:8095
+앱 서버 젯슨 Docker Compose (네트워크 fashion)
+  nginx:80 ─ gateway:8080 ─┬ edge-tts:8099
+                            ├ agent:8081 ─┬ mcp-schedule:8092  mcp-closet:8095   (같은 젯슨)
+                            │             └ Tailscale ─▶ 모델 서버 젯슨
+                            │                  mcp-weather:8091  mcp-clothes-state:8093  mcp-face-check:8094
+                            │                  mcp-clothes-state ─ Tailscale ─▶ 앱 서버 so400m-embed:8096 (애매한 옷 종류만)
                             ├ /api/v1/schedules/** → mcp-schedule
                             └ postgres:5432 (pgvector pg17), redis:6379
 ```
 
-- 밖에서 들어오는 문은 **gateway 하나**입니다. MCP 서버들은 밖에 열지 않고 컨테이너 이름(`http://mcp-weather:8091/mcp` 등)으로 서로 부릅니다. 인증은 gateway가 합니다.
+- 밖에서 들어오는 문은 **gateway 하나**입니다. 같은 젯슨의 MCP 서버는 컨테이너 이름(`http://mcp-closet:8095/mcp` 등)으로, 모델 서버 젯슨의 MCP 서버와 so400m-embed는 Tailscale IP에만 연 포트로 부릅니다. 인증은 gateway가 합니다.
 - 서버 이미지는 젯슨에서 각 레포의 Dockerfile로 직접 빌드합니다(arm64). ghcr 이미지는 쓰지 않습니다.
 - 맥북 PostgreSQL의 `fashion` DB(account·closet·helper·schedule 스키마)를 `pg_dump`로 옮겼습니다.
 
@@ -31,7 +40,8 @@ Tailscale Funnel (젯슨이 바깥으로 연결을 걸어 둠, 공유기 포트 
 
 | 파일 | 하는 일 |
 |---|---|
-| `docker-compose.yml` | 서비스 12개(+선택 cloudflared). 메모리 상한, JVM 옵션, 헬스체크, 서비스 사이 주소 |
+| `docker-compose.yml` | 앱 서버 젯슨. 서비스 9개(+선택 cloudflared). weather·clothes-state·face-check는 `--profile local-heavy`일 때만 여기서 뜸 |
+| `node/docker-compose.yml` | 모델 서버 젯슨. mcp-clothes-state, mcp-face-check, mcp-weather. 포트는 `TS_IP`(Tailscale IP)에만 엶 |
 | `nginx/default.conf` | gateway로 프록시. 업로드 20MB, 타임아웃 300초(GPT), WebSocket/SSE |
 | `postgres/init.sql` | 새 DB일 때 vector 확장과 스키마 4개 생성 |
 | `.env.example` | 키 **이름**만. 실제 `.env`는 커밋 금지(권한 600) |
@@ -48,25 +58,52 @@ Tailscale Funnel (젯슨이 바깥으로 연결을 걸어 둠, 공유기 포트 
 ~/fashion-servers/
   fashion-agent-gateway/  fashion-agent-agent/  mcp-weather/  mcp-schedule/
   mcp-clothes-state/  mcp-face-check/  mcp-closet/
+  so400m-embed/    ← mcp-clothes-state/so400m-embed 내용
   jetson-deploy/   ← 이 폴더 (docs/infra/jetson 내용)
-  models/marqo-fashionSigLIP-vision.onnx
+  models/so400m/open_clip_model.safetensors
 ```
 
-## 메모리 (젯슨 8GB를 다른 팀원 작업과 같이 씀)
+모델 서버 젯슨:
+
+```
+~/fashion-servers/
+  mcp-clothes-state/  mcp-face-check/  mcp-weather/
+  fashion-agent-node/   ← node/ 폴더 내용 + .env
+  models/marqo-fashionSigLIP-vision.onnx  models/fsiglip_lora_pattern8.onnx
+```
+
+두 젯슨 `.env`에서 서로를 가리키는 값(키 이름만):
+
+| 젯슨 | 이름 | 값 |
+|---|---|---|
+| 앱 서버 | `MCP_WEATHER_URL`, `MCP_CLOTHES_STATE_URL`, `MCP_FACE_CHECK_URL` | `http://<모델 서버 Tailscale IP>:8091/mcp` 등 |
+| 앱 서버 | `APP_TS_IP` | 앱 서버 자신의 Tailscale IP (so400m-embed 포트를 여기에만 엶) |
+| 모델 서버 | `TS_IP` | 모델 서버 자신의 Tailscale IP |
+| 모델 서버 | `CLOTHES_SO400M_URL` | `http://<앱 서버 Tailscale IP>:8096` (비우면 so400m 보조 꺼짐) |
+
+## 메모리 (2026-11-21 배포 값)
+
+앱 서버 젯슨 (다른 팀원 작업과 같이 씀):
 
 | 서비스 | mem_limit | -Xmx | 비고 |
 |---|---|---|---|
 | gateway | 320m | 128m | `dev` 프로필(개발용 로그인 켬) |
-| edge-tts | 96m | - | 엣지 목소리(선희) 사이드카, 파이썬. 발표용 |
-| agent | 352m | 144m | `mcp,openai,redis` 프로필, 세션은 Redis |
-| mcp-weather | 256m | 112m | |
-| mcp-schedule | 288m | 112m | |
-| mcp-clothes-state | 832m | 160m | YOLO 2개 + FashionSigLIP vision 354MB. `.env`에서 `CLOTHES_EMBED_MODEL=` 비우면 끔(512m로 줄여도 됨) |
-| mcp-face-check | 512m | 256m | 힙 128m로는 모델 로딩 중 OOM이라 올림 |
-| mcp-closet | 1200m | 128m | e5-small + FashionSigLIP 글 모델(int8, imageQuery). 실제 약 1.0GB |
+| edge-tts | 96m | - | 엣지 목소리(선희·인준·현수) 사이드카, 파이썬 |
+| agent | 448m | 176m | `mcp,openai,redis` 프로필, 세션은 Redis |
+| mcp-schedule | 384m | 112m | |
+| mcp-closet | 1408m | 160m | e5-small + FashionSigLIP 글 모델(int8, imageQuery) |
+| so400m-embed | 2560m | - | GPU(fp16), 스왑 금지. 가중치 약 827MB |
 | postgres | 128m | – | shared_buffers 32MB, 서비스마다 Hikari 풀 3개 |
 | redis | 48m | – | maxmemory 32MB, 디스크 저장 안 함(사진 세션이 남지 않게) |
 | nginx | 32m | – | |
+
+모델 서버 젯슨 (모델 학습과 같이 씀, 서버마다 스왑 금지):
+
+| 서비스 | mem_limit | -Xmx | 비고 |
+|---|---|---|---|
+| mcp-clothes-state | 2048m | 230m | YOLO26n들 + 색 CNN + FashionSigLIP vision + 무늬 LoRA(fp32 372MB) |
+| mcp-face-check | 1024m | 320m | BiSeNet + 좌우 비교·눈화장·치아 모델 |
+| mcp-weather | 320m | 112m | |
 
 JVM 공통: `-XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError`.
 상한을 넘으면 그 컨테이너만 죽고 `restart: unless-stopped`로 다시 뜹니다. `docker stats --no-stream`으로 보고 조정하세요.
@@ -98,9 +135,16 @@ docker compose up -d postgres
 ```
 젯슨:
 ```bash
-./scripts/up.sh              # 이미지 8개 빌드(약 15분) + 실행
+./scripts/up.sh              # 이미지 빌드(약 15분) + 실행
 ./scripts/funnel.sh          # 인터넷 공개
 ```
+
+모델 서버 젯슨 (`node/docker-compose.yml`을 `~/fashion-servers/fashion-agent-node/`에 두고 `.env`를 채운 뒤):
+```bash
+cd ~/fashion-servers/fashion-agent-node
+docker compose up -d --build
+```
+그다음 앱 서버 `.env`의 `MCP_*_URL`을 모델 서버 주소로 바꾸고 `docker compose up -d agent`로 agent만 다시 띄웁니다.
 Funnel 설정과 컨테이너(`restart: unless-stopped`)는 젯슨을 재부팅해도 자동으로 다시 켜집니다.
 
 Nginx Proxy Manager(java21.net)의 사이트: 도메인 `simcheong.java21.net`, 업스트림 `https://team4.<tailnet>.ts.net`, Let's Encrypt, WebSocket 켬, 타임아웃 300초, **`client_max_body_size 20m`**.
@@ -147,3 +191,4 @@ flutter install --release            # 연결된 폰에 설치(앱 데이터가 
 | `502` / 응답 없음 | 프록시 매니저 → 젯슨 경로가 끊김 | 젯슨 `tailscale funnel status`, 업스트림 주소 확인. 강사님 서버는 젯슨 내부 IP로는 못 닿음 |
 | 서비스가 계속 재시작 | 메모리 상한 초과(OOM) | `docker compose logs <서비스>`에서 `OutOfMemoryError` 확인 → 해당 `mem_limit`·`-Xmx` 올리기 |
 | 전체가 느림 | 젯슨 메모리 부족 → swap | `free -h`, `docker stats`. 안 쓰는 프로세스 정리, SigLIP 끄기 |
+| 옷 확인만 안 됨 | 모델 서버 젯슨이 꺼졌거나 Tailscale이 끊김 | 모델 서버에서 `docker compose ps`, 앱 서버에서 `curl http://<모델 서버 Tailscale IP>:8093/actuator/health` |
