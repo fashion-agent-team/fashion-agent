@@ -63,14 +63,14 @@ MCP 서버는 Streamable HTTP로 `http://<서비스>:<포트>/mcp`를 엽니다.
 ```
 앱 ──Firebase 로그인(구글. Apple은 유료 개발자 계정이 생기면, 2026-11-05)──▶ Firebase ID 토큰
 앱 ──POST /api/v1/auth/login {idToken}──▶ gateway: Firebase Admin으로 확인 → 우리 JWT 발급
-앱 ──Authorization: Bearer <JWT>──▶ gateway: JWT 확인 → X-User-Id 헤더를 붙여 agent 등으로 전달
+앱 ──Authorization: Bearer <JWT>──▶ gateway: JWT 확인 → 같은 토큰을 그대로 agent 등으로 전달
 ```
 
-- JWT는 게이트웨이만 만들고 확인합니다(HS256, 비밀 값 `JWT_SECRET`). 액세스 토큰 1시간, 리프레시 토큰 30일.
+- JWT는 게이트웨이만 만듭니다(HS256, 비밀 값 `JWT_SECRET`). 액세스 토큰 1시간, 리프레시 토큰 30일.
 - 클레임: `sub`(우리 사용자 id, UUID), `provider`(`apple`·`google`·`dev`), `iat`, `exp`.
-- 게이트웨이는 앱이 보낸 `X-User-Id`를 **지우고** 자기가 확인한 값으로 다시 붙입니다. 뒤쪽 서비스는 `X-User-Id`를 믿고, 외부에 포트를 열지 않습니다.
+- 사용자 id를 헤더에 따로 싣지 않습니다(2026-11-23 결정, 예전 `X-User-Id` 헤더 없앰). 게이트웨이가 확인한 `Authorization: Bearer` 토큰을 그대로 넘기고, agent·mcp-schedule이 게이트웨이와 같은 `JWT_SECRET`으로 다시 확인해 `sub`를 사용자 id로 씁니다. 앱이 `X-User-Id`를 넣어 보내도 게이트웨이가 지웁니다. 뒤쪽 서비스는 외부에 포트를 열지 않습니다.
 - Firebase 설정 전에도 같이 개발할 수 있게 `POST /api/v1/auth/dev {deviceId}`를 둡니다. `APP_ENV=dev`일 때만 켜지고 발표 빌드에서는 꺼집니다.
-- **userId는 GPT가 정하지 않습니다.** agent가 MCP 도구를 부를 때 `X-User-Id` 값으로 덮어써서 넣습니다. 다른 사람의 옷장·일정을 읽는 일을 막기 위해서입니다.
+- **userId는 GPT가 정하지 않습니다.** agent가 MCP 도구를 부를 때 로그인 토큰에서 꺼낸 사용자 id로 덮어써서 넣습니다. 다른 사람의 옷장·일정을 읽는 일을 막기 위해서입니다.
 
 ## 4. 오류 응답
 
