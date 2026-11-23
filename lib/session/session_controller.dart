@@ -78,7 +78,7 @@ class SessionController extends ChangeNotifier {
     _set(SessionStep.preparing);
     try {
       weather = await weatherService.fetchTodayWeather();
-    } catch (_) {
+    } on Object catch (_) {
       weather = null;
     }
     todayEvents = await schedule.on(_now());
@@ -214,7 +214,7 @@ class SessionController extends ChangeNotifier {
       }
       await wardrobe.addAll(scan.garments);
       return scan;
-    } catch (_) {
+    } on Object catch (_) {
       _set(SessionStep.capturing);
       await _say('분석하지 못했어요. 인터넷 연결을 확인하고 다시 위쪽을 눌러 주세요.');
       return null;

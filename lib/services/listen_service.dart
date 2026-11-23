@@ -123,7 +123,7 @@ class DeviceListenService implements ListenService {
     if (recorder != null) await recorder.start();
     final heard = await done.future
         .timeout(listenFor + const Duration(seconds: 5), onTimeout: () {
-      _stt.stop();
+      unawaited(_stt.stop());
       return _heard.isEmpty ? null : _heard;
     });
     if (recorder == null) return heard;

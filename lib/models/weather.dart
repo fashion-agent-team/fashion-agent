@@ -15,7 +15,8 @@ class Weather {
       {bool isFallbackLocation = false}) {
     final current = json['current'] as Map<String, dynamic>;
     final daily = json['daily'] as Map<String, dynamic>;
-    double firstOf(String key) => (daily[key] as List).first.toDouble();
+    double firstOf(String key) =>
+        ((daily[key] as List).first as num).toDouble();
     final rainChance = (daily['precipitation_probability_max'] as List).first;
 
     return Weather(
