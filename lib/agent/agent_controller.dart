@@ -187,7 +187,7 @@ class AgentController extends ChangeNotifier {
     final linked = profile!.copyWith(accountId: id);
     try {
       await onboarding.account.upload(id, linked);
-    } catch (_) {
+    } on Object catch (_) {
       // 회원정보 올리기는 다음에 다시 해도 된다. 대화는 이어 간다.
     }
     await profiles.save(linked);
@@ -509,7 +509,7 @@ class AgentController extends ChangeNotifier {
       if (id != null) {
         try {
           await onboarding.account.upload(id, after);
-        } catch (_) {
+        } on Object catch (_) {
           // 폰에는 저장했다. 서버에는 다음에 다시 올리면 된다.
         }
       }
@@ -549,7 +549,7 @@ class AgentController extends ChangeNotifier {
     try {
       final weather = await weatherService.fetchTodayWeather();
       return '${weather.toSpeech()} ${dailyRangeAdvice(weather) ?? ''}'.trim();
-    } catch (_) {
+    } on Object catch (_) {
       return '미안해요, 날씨를 못 가져왔어요. 인터넷이 연결돼 있는지 한번 봐 주실래요?';
     }
   }
@@ -697,7 +697,7 @@ class AgentController extends ChangeNotifier {
     if (id == null) return;
     try {
       await onboarding.account.upload(id, after);
-    } catch (_) {
+    } on Object catch (_) {
       // 폰에는 저장했다.
     }
   }

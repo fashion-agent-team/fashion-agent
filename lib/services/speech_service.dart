@@ -29,12 +29,12 @@ class SpeechService {
     _tts.setCancelHandler(() => _deviceSpeaking = false);
     _tts.setErrorHandler((_) => _deviceSpeaking = false);
     // 안내가 끝난 뒤 다음 안내로 넘어가도록 speak가 읽기를 마칠 때까지 기다리게 한다.
-    _tts.awaitSpeakCompletion(true);
+    unawaited(_tts.awaitSpeakCompletion(true));
     if (_isIOS) {
-      _tts.setSharedInstance(true);
+      unawaited(_tts.setSharedInstance(true));
     }
-    _tts.setVolume(1.0);
-    _tts.setSpeechRate(_rate);
+    unawaited(_tts.setVolume(1.0));
+    unawaited(_tts.setSpeechRate(_rate));
     unawaited(_loadRate());
   }
 
@@ -434,11 +434,17 @@ class SpeechService {
   /// 문장 사이에 쉬는 시간.
   static const sentencePause = Duration(milliseconds: 350);
 
+  AudioPlayer _newPlayer() {
+    final player = AudioPlayer();
+    unawaited(player.setReleaseMode(ReleaseMode.stop));
+    return player;
+  }
+
   /// [keepContext]면 오디오 설정을 다시 잡지 않는다. 같은 안내의 다음 조각은 사이에 마이크를 켜지 않아서
   /// 설정이 그대로다(2026-11-12: 조각마다 다시 잡느라 0.1~0.3초씩 쉬었다).
   Future<void> _play(Uint8List bytes,
       {String? mimeType, bool keepContext = false}) async {
-    final player = _player ??= AudioPlayer()..setReleaseMode(ReleaseMode.stop);
+    final player = _player ??= _newPlayer();
     if (!keepContext) {
       await player.setAudioContext(
           AudioContextConfig(focus: AudioContextConfigFocus.duckOthers)

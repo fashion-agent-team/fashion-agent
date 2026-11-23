@@ -51,7 +51,7 @@ class FakeVisionService implements VisionService {
             'tone': 'mid',
             'material': '데님 같음',
             'formality': 'casual',
-            'defects': [],
+            'defects': <Object>[],
             'box': {'x': 0.2, 'y': 0.55, 'w': 0.6, 'h': 0.4},
             'confidence': 0.88,
           },

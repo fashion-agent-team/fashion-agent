@@ -50,7 +50,7 @@ class WeatherService {
   Future<void> prefetch() async {
     try {
       await _today(askPermission: false);
-    } catch (_) {
+    } on Object catch (_) {
       // 물어볼 때 다시 받는다.
     }
   }
@@ -84,6 +84,8 @@ class WeatherService {
         _cache[key] = _Cached(weather, now);
         return weather;
       } finally {
+        // remove가 돌려주는 건 지금 이 Future 자신이라 기다리면 안 된다(자기를 영원히 기다림).
+        // ignore: unawaited_futures
         _inFlight.remove(key);
       }
     }();
@@ -132,7 +134,7 @@ class WeatherService {
             ),
           );
       return (latitude: p.latitude, longitude: p.longitude);
-    } catch (_) {
+    } on Object catch (_) {
       return null;
     }
   }
