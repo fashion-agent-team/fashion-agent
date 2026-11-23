@@ -311,12 +311,12 @@ class OnboardingFlow {
         return v == null ? p : p.copyWith(job: v);
       case _Field.height:
         final v = await _ask(
-            '키는 몇 센티미터인가요?', (t) => parseMeasure(t, min: 80, max: 230),
+            '키는 몇 센티미터인가요?', (t) => parseMeasure(t, min: 50, max: 250),
             skippable: true);
         return v == null ? p : p.copyWith(heightCm: v);
       case _Field.weight:
         final v = await _ask(
-            '몸무게는 몇 킬로그램인가요?', (t) => parseMeasure(t, min: 20, max: 250),
+            '몸무게는 몇 킬로그램인가요?', (t) => parseMeasure(t, min: 10, max: 300),
             skippable: true);
         return v == null ? p : p.copyWith(weightKg: v);
     }

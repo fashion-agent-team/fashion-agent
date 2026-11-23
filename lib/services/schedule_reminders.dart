@@ -6,7 +6,10 @@ import 'package:timezone/timezone.dart' as tz;
 import '../models/schedule_event.dart';
 import 'gateway_auth.dart';
 
-// 일정 전날 저녁과 당일 아침에 폰 알림을 띄운다(2026-11-11 진행 님 요청).
+// 일정 며칠 전(기본 전날) 아침과 당일 아침에 폰 알림을 띄운다(2026-11-11 진행 님 요청).
+// 2026-11-20 정지원: "29일 저녁 8시 일정을 3일 전에 알려 줘"면 26일 저녁 8시가 아니라 26일 아침에
+// "사흘 뒤 저녁 8시에 일정이 있어요"라고 알려 줘야 한다. 그래서 미리 알림을 아침 8시로 옮기고,
+// 그날 앱을 열면 인사 뒤에도 같은 일정을 말한다([greetingSchedule]).
 //
 // 원격 푸시(FCM·APNs)는 유료 Apple 개발자 계정이 있어야 해서, 지금은 앱이 서버(mcp-schedule)에서
 // 앞으로 며칠 일정을 받아 폰 안에 알림을 예약한다. 앱을 열 때, 대화를 마칠 때, 앱으로 돌아올 때마다 다시 맞춘다.
@@ -45,7 +48,7 @@ String isoDate(DateTime d) {
 
 /// 알림 종류.
 enum ReminderKind {
-  /// 며칠 전(기본 전날) 저녁: 미리 옷을 골라 두라고.
+  /// 며칠 전(기본 전날) 아침: 며칠 뒤 일정이 있으니 옷을 미리 챙기라고.
   before,
 
   /// 당일 아침: 나가기 전에 옷을 같이 보자고.
@@ -90,8 +93,11 @@ class PlannedReminder {
   String toString() => '$id ${kind.name} $at $body';
 }
 
-/// 미리 알림은 저녁 8시.
-const beforeHour = 20;
+/// 미리 알림은 그날 아침 8시(2026-11-20, 전에는 저녁 8시). 아침 인사처럼 "좋은 아침이에요"로 시작한다.
+/// 일정에 시각을 정했으면([ScheduleEvent.remindTime], "2일 전 오후 4시") 그 시각에 띄운다.
+const beforeHour = 8;
+
+const _goodMorning = '좋은 아침이에요.';
 
 /// 일정을 넣을 때 며칠 전인지 정하지 않았으면 전날.
 const defaultDaysBefore = 1;
@@ -108,7 +114,7 @@ const earliestHour = 5;
 
 /// [events]로 [now] 뒤에 띄울 알림을 정한다. 이미 지난 알림, 이미 시작한 일정, 알림을 끈 일정은 뺀다.
 ///
-/// 일정마다 [ScheduleEvent.remindDaysBefore]일 전 저녁 8시(정하지 않았으면 전날)와 당일 아침에 알린다.
+/// 일정마다 [ScheduleEvent.remindDaysBefore]일 전 아침 8시(정하지 않았으면 전날)와 당일 아침에 알린다.
 /// 같은 날 뜨는 알림은 하나로 모은다.
 /// [agentName]이 있으면 "심청이" 하고 부르라고 알려 준다(화면을 누르지 않고 이름을 불러 말하는 앱이라서).
 List<PlannedReminder> planReminders(
@@ -117,33 +123,47 @@ List<PlannedReminder> planReminders(
   String? agentName,
 }) {
   final sameDay = <DateTime, List<ScheduleEvent>>{};
+  // 시각을 정한 당일 알림(remindDaysBefore 0 + remindTime). 일정마다 따로 뜬다.
+  final sameDayAt = <DateTime, List<ScheduleEvent>>{};
+  // 미리 알림이 뜨는 때 → 그때 알릴 일정들. 같은 때 뜨는 알림은 하나로 모은다.
   final before = <DateTime, List<ScheduleEvent>>{};
   for (final e in events) {
     final start = e.start.toLocal();
     if (!e.remind || !start.isAfter(now)) continue;
     final day = DateTime(start.year, start.month, start.day);
-    sameDay.putIfAbsent(day, () => []).add(e);
     final days = e.remindDaysBefore ?? defaultDaysBefore;
-    if (days > 0) {
-      final alertDay = DateTime(day.year, day.month, day.day - days);
-      before.putIfAbsent(alertDay, () => []).add(e);
+    final time = e.remindTime;
+    if (days == 0 && time != null) {
+      final at = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+      // 시작보다 늦으면 쓸모가 없으니 아침 알림으로 둔다.
+      if (at.isBefore(start)) {
+        sameDayAt.putIfAbsent(at, () => []).add(e);
+        continue;
+      }
+    }
+    sameDay.putIfAbsent(day, () => []).add(e);
+    final alertDay = beforeAlertDay(e);
+    if (alertDay != null) {
+      final at = DateTime(alertDay.year, alertDay.month, alertDay.day,
+          time?.hour ?? beforeHour, time?.minute ?? 0);
+      before.putIfAbsent(at, () => []).add(e);
     }
   }
   final plans = <PlannedReminder>[];
-  for (final d in before.keys) {
-    final list = before[d]!;
+  for (final at in before.keys) {
+    final list = before[at]!;
     list.sort((a, b) => a.start.compareTo(b.start));
-    final at = DateTime(d.year, d.month, d.day, beforeHour);
     if (!at.isAfter(now)) continue;
+    final d = DateTime(at.year, at.month, at.day);
     final onlyTomorrow = list.every((e) => _daysBetween(d, e.start) == 1);
     plans.add(PlannedReminder(
-      id: _dayNumber(d) * 10 + 1,
+      id: _reminderId(at, ReminderKind.before),
       kind: ReminderKind.before,
       day: d,
       at: at,
       title: onlyTomorrow ? '내일 일정' : '다가오는 일정',
       eventDay: _dayOf(list.first.start),
-      body: beforeBody(list, d, agentName: agentName),
+      body: beforeBody(list, d, agentName: agentName, at: at),
     ));
   }
   for (final day in sameDay.keys) {
@@ -163,8 +183,81 @@ List<PlannedReminder> planReminders(
       body: sameDayBody(list, agentName: agentName),
     ));
   }
+  for (final at in sameDayAt.keys) {
+    final list = sameDayAt[at]!;
+    list.sort((a, b) => a.start.compareTo(b.start));
+    if (!at.isAfter(now)) continue;
+    final day = DateTime(at.year, at.month, at.day);
+    plans.add(PlannedReminder(
+      id: _reminderId(at, ReminderKind.sameDay),
+      kind: ReminderKind.sameDay,
+      day: day,
+      at: at,
+      title: '오늘 일정',
+      body: sameDayBody(list, agentName: agentName),
+    ));
+  }
   plans.sort((a, b) => a.at.compareTo(b.at));
   return plans;
+}
+
+/// 알림 번호. 아침 8시 미리 알림은 예전처럼 날짜*10+1(예: 202611131).
+/// 시각을 정한 알림은 같은 날 여러 개일 수 있어 10억 + (2020-01-01부터 분)*2 + 종류(32비트 안).
+int _reminderId(DateTime at, ReminderKind kind) {
+  final isDefault =
+      kind == ReminderKind.before && at.hour == beforeHour && at.minute == 0;
+  if (isDefault) return _dayNumber(at) * 10 + 1;
+  final days = DateTime.utc(at.year, at.month, at.day)
+      .difference(DateTime.utc(2020))
+      .inDays;
+  final minutes = days * 1440 + at.hour * 60 + at.minute;
+  return 1000000000 + minutes * 2 + kind.index;
+}
+
+/// [e]를 미리 알리는 날. [ScheduleEvent.remindDaysBefore]일 전(정하지 않았으면 전날). 알림을 껐거나 0이면 null.
+DateTime? beforeAlertDay(ScheduleEvent e) {
+  if (!e.remind) return null;
+  final days = e.remindDaysBefore ?? defaultDaysBefore;
+  if (days <= 0) return null;
+  final start = e.start.toLocal();
+  return DateTime(start.year, start.month, start.day - days);
+}
+
+/// 앱을 열고 인사한 뒤 읽을 일정 안내. 오늘 아직 시작하지 않은 일정과, 오늘이 미리 알릴 날인 며칠 뒤 일정.
+/// 알림을 끈 일정은 뺀다. 말할 게 없으면 null.
+///
+/// 예: "오늘 오전 10시, 회의가 있어요. 그리고 사흘 뒤 11월 29일 일요일 오후 8시, 친구 모임이 있어요."
+String? greetingSchedule(List<ScheduleEvent> events, DateTime now) {
+  final today = DateTime(now.year, now.month, now.day);
+  final todays = <ScheduleEvent>[];
+  final ahead = <ScheduleEvent>[];
+  for (final e in events) {
+    if (!e.remind || !e.start.toLocal().isAfter(now)) continue;
+    final days = _daysBetween(today, e.start);
+    if (days == 0) {
+      todays.add(e);
+    } else if (beforeAlertDay(e) == today) {
+      ahead.add(e);
+    }
+  }
+  if (todays.isEmpty && ahead.isEmpty) return null;
+  int byStart(ScheduleEvent a, ScheduleEvent b) => a.start.compareTo(b.start);
+  todays.sort(byStart);
+  ahead.sort(byStart);
+  final parts = <String>[];
+  if (todays.length == 1) {
+    parts.add('오늘 ${_oneEvent(todays.single)} 있어요.');
+  } else if (todays.isNotEmpty) {
+    final items = [
+      for (final e in todays) '${spokenTime(e.start.toLocal())} ${e.title}'
+    ];
+    parts.add('오늘 일정이 ${todays.length}개 있어요. ${items.join(', ')}.');
+  }
+  for (final e in ahead) {
+    final and = parts.isEmpty ? '' : '그리고 ';
+    parts.add('$and${whenFrom(today, e.start)} ${_oneEvent(e)} 있어요.');
+  }
+  return parts.join(' ');
 }
 
 DateTime _dayOf(DateTime t) {
@@ -251,14 +344,19 @@ String _call(String? agentName) {
 
 /// 미리 알림 문장. 화면 읽기(VoiceOver·TalkBack)로 들어도 알기 쉽게 짧게 쓴다. 기호·이모지는 넣지 않는다.
 ///
-/// - 전날: "내일 오후 2시, 더채플앳청담에서 친구 결혼식이 있어요. 입고 갈 옷을 오늘 미리 골라 두면 …"
-/// - 며칠 전: "사흘 뒤 11월 14일 토요일 오후 2시, … 있어요. 입고 갈 옷을 미리 챙겨 두면 좋아요. …"
-/// - 여러 개: "내일 일정이 2개 있어요. 오전 10시 회의, 오후 7시 친구 생일 모임. …"
+/// 아침(11시 전)에 뜨면 "좋은 아침이에요."로 시작한다. [at]은 알림이 뜨는 때(비우면 아침 8시).
+///
+/// - 전날: "좋은 아침이에요. 내일 오후 2시, 더채플앳청담에서 친구 결혼식이 있어요. 입고 갈 옷을 오늘 저녁에 미리 …"
+/// - 며칠 전: "좋은 아침이에요. 사흘 뒤 11월 14일 토요일 오후 2시, … 있어요. 입고 갈 옷을 미리 챙겨 두면 좋아요. …"
+/// - 여러 개: "좋은 아침이에요. 내일 일정이 2개 있어요. 오전 10시 회의, 오후 7시 친구 생일 모임. …"
 String beforeBody(
   List<ScheduleEvent> events,
   DateTime alertDay, {
   String? agentName,
+  DateTime? at,
 }) {
+  final hour = at?.hour ?? beforeHour;
+  final hello = hour < 11 ? '$_goodMorning ' : '';
   final first = events.first;
   final firstWhen = whenFrom(alertDay, first.start);
   final days = _daysBetween(alertDay, first.start);
@@ -283,13 +381,15 @@ String beforeBody(
   }
   final call = _call(agentName);
   if (days == 1) {
-    const early = '입고 갈 옷을 오늘 미리 골라 두면 아침이 편해요.';
-    return '$what $early 앱을 열고 $call"내일 뭐 입지?"라고 물어보세요.';
+    final early = hour < 18
+        ? '입고 갈 옷을 오늘 저녁에 미리 골라 두면 내일 아침이 편해요.'
+        : '입고 갈 옷을 오늘 미리 골라 두면 내일 아침이 편해요.';
+    return '$hello$what $early 앱을 열고 $call"내일 뭐 입지?"라고 물어보세요.';
   }
   final t = first.start.toLocal();
   final ask = days == 2 ? '모레' : '${t.month}월 ${t.day}일에';
   const prepare = '입고 갈 옷을 미리 챙겨 두면 좋아요. 빨래나 수선이 필요하면 지금 해 두세요.';
-  return '$what $prepare 앱을 열고 $call"$ask 뭐 입지?"라고 물어보세요.';
+  return '$hello$what $prepare 앱을 열고 $call"$ask 뭐 입지?"라고 물어보세요.';
 }
 
 /// 당일 아침 알림 문장.
@@ -346,7 +446,7 @@ class LocalReminderScheduler implements ReminderScheduler {
     final android = AndroidNotificationDetails(
       'schedule',
       '일정 알림',
-      channelDescription: '일정 전날 저녁과 당일 아침에 옷을 같이 고르자고 알려 줘요.',
+      channelDescription: '일정 며칠 전 아침과 당일 아침에 옷을 같이 고르자고 알려 줘요.',
       importance: Importance.high,
       priority: Priority.high,
       styleInformation: BigTextStyleInformation(body),
@@ -495,21 +595,38 @@ class ScheduleReminders {
   /// 동시에 여러 번 불러도 한 번만 돈다.
   Future<int?>? _running;
 
-  /// 일정을 받아 알림을 바꾼다. 예약한 알림 수를 돌려준다.
-  /// 일정을 못 받으면(서버 꺼짐 등) 예약해 둔 알림은 그대로 두고 null.
-  Future<int?> sync({String? agentName}) {
-    return _running ??= _sync(agentName).whenComplete(() => _running = null);
-  }
-
-  Future<int?> _sync(String? agentName) async {
+  /// 오늘부터 [days]일 일정. 못 받으면(서버 꺼짐 등) null.
+  Future<List<ScheduleEvent>?> fetch() async {
     final now = _now();
     final from = DateTime(now.year, now.month, now.day);
     final to = DateTime(now.year, now.month, now.day + days - 1);
-    final List<ScheduleEvent> events;
     try {
-      events = await source.between(from, to);
+      return await source.between(from, to);
     } on Object catch (e) {
-      debugPrint('일정 알림: 일정을 못 받아 예약한 알림을 그대로 둡니다: $e');
+      debugPrint('일정을 못 받았어요: $e');
+      return null;
+    }
+  }
+
+  /// 앱 인사 뒤에 읽을 일정 안내([greetingSchedule]). [events]가 없으면 서버에서 받는다. 말할 게 없거나 못 받으면 null.
+  Future<String?> greeting({List<ScheduleEvent>? events}) async {
+    final list = events ?? await fetch();
+    return list == null ? null : greetingSchedule(list, _now());
+  }
+
+  /// 일정을 받아 알림을 바꾼다. 예약한 알림 수를 돌려준다.
+  /// [events]를 주면(앱 인사 때 이미 받음) 다시 받지 않는다.
+  /// 일정을 못 받으면(서버 꺼짐 등) 예약해 둔 알림은 그대로 두고 null.
+  Future<int?> sync({String? agentName, List<ScheduleEvent>? events}) {
+    return _running ??=
+        _sync(agentName, events).whenComplete(() => _running = null);
+  }
+
+  Future<int?> _sync(String? agentName, List<ScheduleEvent>? given) async {
+    final now = _now();
+    final events = given ?? await fetch();
+    if (events == null) {
+      debugPrint('일정 알림: 일정을 못 받아 예약한 알림을 그대로 둡니다.');
       return null;
     }
     final plans = planReminders(events, now, agentName: agentName);

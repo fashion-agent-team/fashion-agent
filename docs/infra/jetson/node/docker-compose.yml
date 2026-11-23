@@ -1,0 +1,99 @@
+# 모델 서버 젯슨(fashion-agent)에서 DB를 안 쓰는 무거운 MCP 셋을 띄웁니다. 2026-11-13부터 앱 서버 젯슨(team4)에서 옮겨 왔어요.
+#   mcp-clothes-state :8093  (YOLO26n·색 CNN·FashionSigLIP vision·무늬 LoRA, ONNX)
+#   mcp-face-check    :8094
+#   mcp-weather       :8091  (2026-11-14 추가, DB 안 씀)
+# 앱 서버의 agent가 Tailscale로 http://<이 젯슨 Tailscale IP>:8091·8093·8094/mcp 를 부릅니다
+# (앱 서버 .env의 MCP_WEATHER_URL, MCP_CLOTHES_STATE_URL, MCP_FACE_CHECK_URL).
+# 포트는 Tailscale IP에만 엽니다(학원 와이파이 같은 LAN에는 안 열림).
+# 젯슨 폴더 구조:
+#   ~/fashion-servers/fashion-agent-node/   이 파일, .env (TS_IP, OPENAI_API_KEY, CLOTHES_EMBED_MODEL, CLOTHES_PATTERN_LORA_MODEL, CLOTHES_SO400M_URL)
+#   ~/fashion-servers/mcp-clothes-state/, mcp-face-check/, mcp-weather/   build context
+#   ~/fashion-servers/models/               FashionSigLIP vision ONNX, 무늬 LoRA ONNX
+# 이 젯슨에서는 모델 학습도 돌아서, 서버마다 memswap_limit = mem_limit로 스왑을 막았어요.
+name: fashion-agent-node
+
+x-app: &app
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+x-health: &health
+  interval: 30s
+  timeout: 5s
+  retries: 5
+  start_period: 180s
+
+services:
+  mcp-clothes-state:
+    <<: *app
+    build: ../mcp-clothes-state
+    image: fashion-agent/mcp-clothes-state:local
+    # 2026-11-17: 무늬 LoRA 모델(fp32 372MB, ONNX Runtime 네이티브 메모리) 때문에 1536m → 2048m
+    mem_limit: 2048m
+    memswap_limit: 2048m   # 스왑 0 (2026-11-17, 학습에 밀려 스왑으로 가지 않게)
+    ports: ["${TS_IP:-127.0.0.1}:8093:8093"]
+    environment:
+      TZ: Asia/Seoul
+      JAVA_TOOL_OPTIONS: "-Xmx230m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CLOTHES_EMBED_MODEL: ${CLOTHES_EMBED_MODEL:-}
+      CLOTHES_PATTERN_LORA_MODEL: ${CLOTHES_PATTERN_LORA_MODEL:-}
+      # 2026-11-19 아주 애매한 옷만 앱 서버 젯슨의 So400m 벡터 서버로 다시 고름(비우면 끔, 800ms 넘으면 지금 결과)
+      # .env에 CLOTHES_SO400M_URL=http://<앱 서버 Tailscale IP>:8096
+      CLOTHES_SO400M_URL: ${CLOTHES_SO400M_URL:-}
+      # 2026-11-17 메모리 맞추기(mcp-clothes-state OrtSupport). 비우면 서버 기본값
+      MALLOC_ARENA_MAX: ${CLOTHES_MALLOC_ARENA_MAX:-}
+      CLOTHES_ORT_ARENA: ${CLOTHES_ORT_ARENA:-}
+      CLOTHES_ORT_MEM_PATTERN: ${CLOTHES_ORT_MEM_PATTERN:-}
+      CLOTHES_ORT_PREPACK: ${CLOTHES_ORT_PREPACK:-}
+      CLOTHES_ORT_THREADS: ${CLOTHES_ORT_THREADS:-}
+      CLOTHES_ORT_SHARED_THREADS: ${CLOTHES_ORT_SHARED_THREADS:-}
+      CLOTHES_CANDIDATE_DIR: /app/data/train-candidates
+    volumes:
+      - ../models:/models:ro
+      - clothes-candidates:/app/data
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8093/actuator/health || exit 1"]
+    depends_on:
+      volume-init: { condition: service_completed_successfully }
+
+  mcp-face-check:
+    <<: *app
+    build: ../mcp-face-check
+    image: fashion-agent/mcp-face-check:local
+    mem_limit: 1024m
+    memswap_limit: 1024m   # 스왑 0 (2026-11-17, 학습에 밀려 스왑으로 가지 않게)
+    ports: ["${TS_IP:-127.0.0.1}:8094:8094"]
+    environment:
+      TZ: Asia/Seoul
+      JAVA_TOOL_OPTIONS: "-Xmx320m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8094/actuator/health || exit 1"]
+
+  mcp-weather:
+    <<: *app
+    build: ../mcp-weather
+    image: fashion-agent/mcp-weather:local
+    mem_limit: 320m
+    memswap_limit: 320m   # 스왑 0 (2026-11-17, 학습에 밀려 스왑으로 가지 않게)
+    ports: ["${TS_IP:-127.0.0.1}:8091:8091"]
+    environment:
+      TZ: Asia/Seoul
+      JAVA_TOOL_OPTIONS: "-Xmx112m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8091/actuator/health || exit 1"]
+
+  # clothes-state는 USER 1000으로 돌아서 새 볼륨 주인을 1000으로 바꿔 둠(한 번 돌고 끝남)
+  volume-init:
+    image: busybox:1.36
+    restart: "no"
+    command: ["chown", "-R", "1000:1000", "/data/clothes"]
+    volumes:
+      - clothes-candidates:/data/clothes
+
+volumes:
+  clothes-candidates: {}

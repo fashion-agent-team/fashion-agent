@@ -39,7 +39,9 @@ class MlKitSubjectFinder implements SubjectFinder {
   /// 정밀한 윤곽점은 찍은 뒤 [MlKitFaceLandmarkFinder]·[MlKitMouthFinder]가 다시 찾는다.
   FaceDetector get _faceDetector => _faces ??= FaceDetector(
       options: FaceDetectorOptions(
-          performanceMode: FaceDetectorMode.fast, enableContours: true));
+          performanceMode: FaceDetectorMode.fast,
+          enableContours: true,
+          enableLandmarks: true));
 
   PoseDetector get _poseDetector => _poses ??= PoseDetector(
       options: PoseDetectorOptions(mode: PoseDetectionMode.stream));
@@ -48,7 +50,10 @@ class MlKitSubjectFinder implements SubjectFinder {
   Future<Framing?> look(
       CameraImage frame, CameraDescription camera, Subject subject) async {
     if (subject == Subject.any) return const Framing.ready();
-    final input = _input(frame, camera);
+    // 얼굴·입은 윤곽(입술 선)까지 찾아야 해서 덜 줄인다. 4칸마다 하나(270×480)면 얼굴이 작아 윤곽을 못 찾았다
+    // (ML Kit 윤곽은 얼굴이 200픽셀 넘어야 잘 된다, 2026-11-17 "이빨 인식을 못 한다").
+    final selfie = subject == Subject.face || subject == Subject.mouth;
+    final input = _input(frame, camera, step: selfie ? 2 : 4);
     if (input == null) return null;
     final (image, w, h) = input;
     try {
@@ -69,7 +74,8 @@ class MlKitSubjectFinder implements SubjectFinder {
         double luma(Rect region) => _luma(frame, camera, region);
         if (subject == Subject.mouth) {
           return frameMouth(
-              biggest == null ? null : mouthView(biggest, w, h, luma: luma));
+              biggest == null ? null : mouthView(biggest, w, h, luma: luma),
+              faceSeen: biggest != null);
         }
         final faces = [for (final f in found) norm(f.boundingBox)];
         if (biggest == null) return frameFace(faces);
@@ -106,7 +112,8 @@ class MlKitSubjectFinder implements SubjectFinder {
 
   /// 프레임을 똑바로 선 그림으로. 돌려준 크기는 화면(세로) 기준이다.
   (InputImage, double, double)? _input(
-      CameraImage frame, CameraDescription camera) {
+      CameraImage frame, CameraDescription camera,
+      {int step = 4}) {
     if (frame.planes.isEmpty) return null;
     if (Platform.isIOS) {
       final plane = frame.planes.first;
@@ -114,7 +121,8 @@ class MlKitSubjectFinder implements SubjectFinder {
           width: frame.width,
           height: frame.height,
           bytesPerRow: plane.bytesPerRow,
-          rotation: camera.sensorOrientation);
+          rotation: camera.sensorOrientation,
+          step: step);
       return (
         InputImage.fromBytes(
           bytes: up.bytes,
@@ -218,7 +226,8 @@ FaceLight faceLight(Rect box, double Function(Rect region) luma) {
   );
 }
 
-/// 얼굴 윤곽에서 입(0~1)을 꺼낸다. 입술 윤곽이 없으면 null.
+/// 얼굴 윤곽에서 입(0~1)을 꺼낸다. 입술 윤곽이 없으면 입 끝 점(landmark)으로 입술 상자만 어림하고,
+/// 그것도 없으면 null.
 MouthView? mouthView(Face face, double w, double h,
     {double Function(Rect region)? luma}) {
   List<Point<int>>? pts(FaceContourType t) => face.contours[t]?.points;
@@ -226,16 +235,39 @@ MouthView? mouthView(Face face, double w, double h,
       lowerTop = pts(FaceContourType.lowerLipTop),
       upperTop = pts(FaceContourType.upperLipTop),
       lowerBottom = pts(FaceContourType.lowerLipBottom);
-  if (upperBottom == null || lowerTop == null) return null;
-  final inner = boundsOf([...upperBottom, ...lowerTop], w, h);
-  final lips = boundsOf(
-      [...upperBottom, ...lowerTop, ...?upperTop, ...?lowerBottom], w, h);
-  if (inner == null || lips == null) return null;
-  return (
-    inner: inner,
-    lips: lips,
-    luma: luma?.call(mouthCropRegion(inner, w, h))
-  );
+  if (upperBottom != null &&
+      lowerTop != null &&
+      upperBottom.isNotEmpty &&
+      lowerTop.isNotEmpty) {
+    final inner = boundsOf([...upperBottom, ...lowerTop], w, h);
+    final lips = boundsOf(
+        [...upperBottom, ...lowerTop, ...?upperTop, ...?lowerBottom], w, h);
+    if (inner != null && lips != null) {
+      return (
+        inner: inner,
+        lips: lips,
+        luma: luma?.call(mouthCropRegion(inner, w, h))
+      );
+    }
+  }
+  // 윤곽을 못 찾았을 때: 입 왼쪽·오른쪽·아래 점. 위쪽은 입 너비의 30%로 어림한다.
+  final corners = [
+    for (final t in [
+      FaceLandmarkType.leftMouth,
+      FaceLandmarkType.rightMouth,
+      FaceLandmarkType.bottomMouth
+    ])
+      if (face.landmarks[t] case final l?) l.position,
+  ];
+  if (corners.length < 2) return null;
+  final base = boundsOf(corners, w, h);
+  if (base == null || base.width <= 0) return null;
+  final lips = Rect.fromLTRB(
+      base.left,
+      (base.top - base.width * 0.3).clamp(0.0, 1.0),
+      base.right,
+      base.bottom.clamp(0.0, 1.0));
+  return (inner: null, lips: lips, luma: luma?.call(lips));
 }
 
 /// 점들(픽셀)을 감싸는 상자를 0~1로. 화면 밖 점은 잘라 낸다.

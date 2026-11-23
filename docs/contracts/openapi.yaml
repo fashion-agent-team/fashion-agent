@@ -342,6 +342,16 @@ components:
         outfitMode: { type: string, enum: [laid, worn], nullable: true, description: "사용자가 고른 옷 보여 주는 방식. 앱이 기억한 값. 없으면 첫 옷 추천에서 agent가 물어봄" }
         allowGpt: { type: boolean, nullable: true, description: "GPT 확인·학습 저장 동의. true면 애매한 얼룩 조각만 GPT로 확인, false면 안 함, 없으면 아직 안 물음(처음 애매한 얼룩에서 agent가 물음)" }
         colorDetail: { type: boolean, nullable: true, description: "색 설명 방식. true(없어도 같음)면 비유·온도·느낌까지, false면 이름만(빨강·초록은 짧은 비유). 사용자가 \"색 설명 짧게/자세히\"라고 하면 바뀜" }
+        wearer:
+          type: object
+          nullable: true
+          description: "옷 판단에 쓰는 내 정보. 앱은 보내지 않습니다. 게이트웨이가 DB의 프로필로 바디 끝에 넣고, 앱이 넣은 값은 덮어씁니다(2026-11-20, 예전 X-User-Profile 헤더 대신). 없는 칸은 빠지고, 저장된 정보가 없으면 null"
+          properties:
+            gender: { type: string }
+            ageGroup: { type: string, description: "예: 20대, 70대 이상" }
+            heightCm: { type: number }
+            weightKg: { type: number }
+            job: { type: string }
         autoCaptured: { type: boolean, default: true, description: 앱이 구도를 보고 자동으로 보낸 사진이면 true }
         faceLandmarks: { type: object, nullable: true, description: imageKind=face일 때 ML Kit 윤곽점 (mcp-tools.md의 landmarks) }
         faceFrames:

@@ -146,9 +146,9 @@ void main() {
     });
 
     test('키·몸무게는 숫자나 한글 수로 받는다', () {
-      expect(parseMeasure('백칠십 센티요', min: 80, max: 230), 170);
-      expect(parseMeasure('62.5킬로', min: 20, max: 250), 62.5);
-      expect(parseMeasure('3', min: 80, max: 230), isNull);
+      expect(parseMeasure('백칠십 센티요', min: 50, max: 250), 170);
+      expect(parseMeasure('62.5킬로', min: 10, max: 300), 62.5);
+      expect(parseMeasure('3', min: 50, max: 250), isNull);
     });
 
     test('이름·성별·직업', () {
@@ -200,6 +200,102 @@ void main() {
       expect(profile.birthDate, DateTime(1990, 3, 5));
       expect(profile.weightKg, isNull);
       expect(store.profile?.name, '김민수');
+    });
+
+    // specs/001-account-profile/spec.md US2-1, US2-3
+    test('US2-1 Given 온보딩 중 When 키만 말하고 나머지를 건너뛰면 Then 키만 저장되고 나머지는 비어 있다',
+        () async {
+      // given
+      final speech = FakeSpeech();
+      final store = InMemoryProfileStore();
+
+      // when
+      final profile = await onboardingWith(
+              speech,
+              [
+                '하늘', '네', // 에이전트 이름
+                '건너뛰기', '건너뛰기', '건너뛰기', '건너뛰기', '170', '건너뛰기', '네',
+              ],
+              store: store)
+          .run();
+
+      // then
+      expect(profile.heightCm, 170);
+      expect(profile.name, isNull);
+      expect(profile.birthDate, isNull);
+      expect(profile.gender, isNull);
+      expect(profile.job, isNull);
+      expect(profile.weightKg, isNull);
+      expect(store.profile?.heightCm, 170);
+    });
+
+    test('US2-3 Given 키를 300센티로 잘못 말함 When 저장하면 Then 받지 않고 키를 다시 묻는다',
+        () async {
+      // given
+      final speech = FakeSpeech();
+
+      // when
+      final profile = await onboardingWith(speech, [
+        '하늘',
+        '네',
+        '김민수예요',
+        '1990년 3월 5일',
+        '남자',
+        '회사원이에요',
+        '키 300센티',
+        '170',
+        '건너뛰기',
+        '네',
+      ]).run();
+
+      // then
+      expect(profile.heightCm, 170);
+      expect(speech.spoken.where((s) => s.contains('키는 몇 센티미터인가요?')).length,
+          greaterThanOrEqualTo(2));
+    });
+
+    test(
+        'US2-3 Given 키·몸무게를 경계값으로 말함 When 저장하면 Then 키 50~250cm·몸무게 10~300kg만 받고 넘으면 다시 묻는다',
+        () async {
+      // given
+      final speech = FakeSpeech();
+
+      // when: 키 251(거절) → 250, 몸무게 9(거절) → 300
+      final tall = await onboardingWith(speech, [
+        '하늘',
+        '네',
+        '김민수예요',
+        '1990년 3월 5일',
+        '남자',
+        '회사원이에요',
+        '251',
+        '250',
+        '9',
+        '300',
+        '네',
+      ]).run();
+      // when: 가장 작은 값 키 50, 몸무게 10
+      final small = await onboardingWith(FakeSpeech(), [
+        '하늘',
+        '네',
+        '김민수예요',
+        '1990년 3월 5일',
+        '남자',
+        '회사원이에요',
+        '50',
+        '10',
+        '네',
+      ]).run();
+
+      // then
+      expect(tall.heightCm, 250);
+      expect(tall.weightKg, 300);
+      expect(speech.spoken.where((s) => s.contains('키는 몇 센티미터인가요?')).length,
+          greaterThanOrEqualTo(2));
+      expect(speech.spoken.where((s) => s.contains('몸무게는 몇 킬로그램인가요?')).length,
+          greaterThanOrEqualTo(2));
+      expect(small.heightCm, 50);
+      expect(small.weightKg, 10);
     });
 
     test('틀렸다고 하면 고칠 항목만 다시 묻는다', () async {
@@ -350,6 +446,37 @@ void main() {
           '필요한 게 있으면 편하게 말씀해 주세요.');
       expect(speech.spoken[1], contains('일교차가 13도로 커요'));
       expect(speech.spoken.last, tapToTalk);
+    });
+
+    // specs/001-account-profile/spec.md US2-2
+    test('US2-2 Given 에이전트 이름이 비어 있는 사용자 When 앱을 열면 Then 온보딩을 다시 안내한다',
+        () async {
+      // given: 이름·키는 저장됐지만 에이전트 이름은 아직 정하지 않았다
+      final speech = FakeSpeech();
+      final agent = agentWith(speech, const [],
+          profile: const UserProfile(
+              name: '김민수', heightCm: 175, consent: consentVersion));
+
+      // when
+      await agent.start();
+
+      // then: 다시 온 인사 대신 온보딩 첫 질문(말 빠르기)부터 묻는다
+      expect(speech.spoken, contains(speedQuestion));
+      expect(speech.spoken, isNot(contains(startsWith('반가워요. 저 '))));
+    });
+
+    test('US2-2 Given 에이전트 이름이 있는 사용자 When 앱을 열면 Then 온보딩 없이 인사한다', () async {
+      // given
+      final speech = FakeSpeech();
+      final agent = agentWith(speech, const [],
+          profile: const UserProfile(agentName: '하늘', consent: consentVersion));
+
+      // when
+      await agent.start();
+
+      // then
+      expect(speech.spoken, isNot(contains(speedQuestion)));
+      expect(speech.spoken.first, startsWith('반가워요. 저 하늘이에요.'));
     });
 
     test('옷 검사를 말하면 옷 검사 화면을 연다', () async {
