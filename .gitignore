@@ -27,3 +27,6 @@ pubspec.lock
 
 # 각자 맥의 iOS 서명 값(scripts/ios-install.sh)
 ios/signing.local
+
+# flutter test --coverage 결과
+/coverage/
