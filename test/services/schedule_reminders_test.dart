@@ -12,9 +12,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'agent_test.dart'
+import '../agent/agent_test.dart'
     show FakeSpeech, ScriptedListen, FakeWeatherService, onboardingWith;
-import 'turn_test.dart' show FakeTurnApi, reply, settle;
+import '../agent/turn_test.dart' show FakeTurnApi, reply, settle;
 
 ScheduleEvent ev(
   String title,

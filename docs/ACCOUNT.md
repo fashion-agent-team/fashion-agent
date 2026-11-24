@@ -48,8 +48,8 @@ flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080
 
 ## 테스트
 
-- `test/gateway_auth_test.dart`: 로그인·갱신·동시 401·만료 직전 갱신·갱신 거절 시 로그아웃·회원정보 모양.
-- 온보딩은 `test/agent_test.dart`의 `FakeAccount`처럼 가짜 계정으로 돌린다.
+- `test/services/gateway_auth_test.dart`: 로그인·갱신·동시 401·만료 직전 갱신·갱신 거절 시 로그아웃·회원정보 모양.
+- 온보딩은 `test/agent/agent_test.dart`의 `FakeAccount`처럼 가짜 계정으로 돌린다.
 
 ## 저장하는 것
 
