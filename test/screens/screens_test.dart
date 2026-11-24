@@ -13,9 +13,9 @@ import 'package:fashion_agent/services/turn_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'agent_test.dart'
+import '../agent/agent_test.dart'
     show FakeSpeech, FakeWeatherService, ScriptedListen, onboardingWith;
-import 'turn_test.dart' show FakeTurnApi, here;
+import '../agent/turn_test.dart' show FakeTurnApi, here;
 
 /// 화면(위젯) 테스트. 마스코트가 계속 움직여서 pumpAndSettle은 끝나지 않으므로 정해진 시간만큼 pump한다.
 void main() {

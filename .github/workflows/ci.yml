@@ -31,5 +31,23 @@ jobs:
       - name: 정적 분석 (flutter analyze)
         run: flutter analyze
 
-      - name: 테스트 (flutter test)
-        run: flutter test
+      - name: 테스트 + 커버리지 (flutter test --coverage)
+        run: flutter test --coverage
+
+      # 줄 커버리지(테스트가 한 번이라도 실행한 lib/ 코드 줄의 비율)가 80% 미만이면 실패합니다.
+      - name: 커버리지 80% 확인
+        run: |
+          awk -F: '/^LF:/{t+=$2} /^LH:/{h+=$2} END{
+            p=100*h/t
+            printf "### 테스트 커버리지\n\n| 종류 | 비율 | 기준 |\n|---|---|---|\n| 줄(LINE) | %.1f%% (%d/%d) | 80%% 이상 |\n", p, h, t
+            if (p < 80) exit 1
+          }' coverage/lcov.info | tee -a "$GITHUB_STEP_SUMMARY"
+          exit ${PIPESTATUS[0]}
+
+      - name: 커버리지 보고서 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          retention-days: 7

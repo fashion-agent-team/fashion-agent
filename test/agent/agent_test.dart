@@ -15,7 +15,7 @@ import 'package:fashion_agent/services/speech_service.dart';
 import 'package:fashion_agent/services/weather_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'fake_speech_extras.dart';
+import '../helpers/fake_speech_extras.dart';
 
 class FakeSpeech with FakeSpeechExtras implements SpeechService {
   final spoken = <String>[];
