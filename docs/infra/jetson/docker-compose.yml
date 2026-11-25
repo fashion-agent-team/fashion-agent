@@ -71,10 +71,15 @@ services:
       SPRING_PROFILES_ACTIVE: dev          # 맥북과 같게: 개발용 로그인 켬
       GATEWAY_DEV_LOGIN: "true"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fashion
-      SPRING_DATASOURCE_USERNAME: fashion
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_USERNAME: ${GATEWAY_DB_USER:-fashion}
+      SPRING_DATASOURCE_PASSWORD: ${GATEWAY_DB_PASSWORD:-${POSTGRES_PASSWORD}}
       SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: "3"
       JWT_SECRET: ${JWT_SECRET:?.env에 JWT_SECRET 필요}
+      # 2026-11-25 보안: 개발용 로그인은 앱 빌드에 넣은 같은 키가 있어야 받음(비우면 예전처럼 누구나).
+      GATEWAY_DEV_LOGIN_KEY: ${GATEWAY_DEV_LOGIN_KEY:-}
+      GATEWAY_SIGNUPS_PER_DAY: ${GATEWAY_SIGNUPS_PER_DAY:-300}
+      # 기기 주소를 찾을 때 건너뛸 프록시(강사님 프록시 바깥 주소 등, 사설망·Tailscale은 기본)
+      GATEWAY_TRUSTED_PROXIES: ${GATEWAY_TRUSTED_PROXIES:-}
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       AGENT_URL: http://agent:8081
@@ -112,6 +117,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       OPENAI_API_KEY: ${OPENAI_API_KEY:?.env에 OPENAI_API_KEY 필요}
+      # 게이트웨이가 넘긴 로그인 토큰을 다시 확인(2026-11-23 PR #130). 게이트웨이와 같은 값.
+      JWT_SECRET: ${JWT_SECRET:?.env에 JWT_SECRET 필요}
+      # MCP 서버 내부 호출 키(2026-11-25). MCP 서버들과 같은 값, 비우면 안 보냄.
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
       AGENT_OPENAI_MODEL: ${AGENT_OPENAI_MODEL:-gpt-5.4-mini}
       AGENT_OPENAI_REASONING: ${AGENT_OPENAI_REASONING:-none}
       MCP_WEATHER_URL: ${MCP_WEATHER_URL:-http://mcp-weather:8091/mcp}
@@ -137,6 +146,7 @@ services:
     environment:
       TZ: Asia/Seoul
       JAVA_TOOL_OPTIONS: "-Xmx112m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8091/actuator/health || exit 1"]
@@ -150,10 +160,12 @@ services:
       TZ: Asia/Seoul
       JAVA_TOOL_OPTIONS: "-Xmx112m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fashion
-      SPRING_DATASOURCE_USERNAME: fashion
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_USERNAME: ${SCHEDULE_DB_USER:-fashion}
+      SPRING_DATASOURCE_PASSWORD: ${SCHEDULE_DB_PASSWORD:-${POSTGRES_PASSWORD}}
       SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: "3"
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:?.env에 JWT_SECRET 필요}
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8092/actuator/health || exit 1"]
@@ -175,6 +187,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CLOTHES_EMBED_MODEL: ${CLOTHES_EMBED_MODEL:-}
       CLOTHES_CANDIDATE_DIR: /app/data/train-candidates
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
     volumes:
       - ../models:/models:ro
       - clothes-candidates:/app/data
@@ -194,6 +207,7 @@ services:
     environment:
       TZ: Asia/Seoul
       JAVA_TOOL_OPTIONS: "-Xmx320m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8094/actuator/health || exit 1"]
@@ -208,9 +222,10 @@ services:
       TZ: Asia/Seoul
       JAVA_TOOL_OPTIONS: "-Xmx160m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fashion
-      SPRING_DATASOURCE_USERNAME: fashion
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_USERNAME: ${CLOSET_DB_USER:-fashion}
+      SPRING_DATASOURCE_PASSWORD: ${CLOSET_DB_PASSWORD:-${POSTGRES_PASSWORD}}
       SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE: "3"
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8095/actuator/health || exit 1"]

@@ -102,6 +102,7 @@ class GatewayAuth {
     http.Client? client,
     DateTime Function()? now,
     this.devDeviceId,
+    this.devLoginKey = '',
   })  : _client = client ?? http.Client(),
         _now = now ?? DateTime.now;
 
@@ -111,6 +112,10 @@ class GatewayAuth {
   /// 구글 로그인을 안 했을 때 개발용 로그인(`POST /api/v1/auth/dev`)에 쓸 이 폰의 id.
   /// null이면 개발용 로그인을 하지 않는다. 게이트웨이가 `APP_ENV=dev`일 때만 받아 준다.
   final Future<String> Function()? devDeviceId;
+
+  /// 게이트웨이의 `GATEWAY_DEV_LOGIN_KEY`와 같은 값(빌드할 때 `--dart-define=DEV_LOGIN_KEY=`).
+  /// 비어 있으면 헤더를 안 보낸다. 게이트웨이에 키가 있는데 틀리면 404라서 개발용 로그인을 쉰다(2026-11-25 보안 점검).
+  final String devLoginKey;
 
   /// 개발용 로그인을 게이트웨이가 거절했으면(발표 빌드 등) 이번 실행에서는 다시 묻지 않는다.
   bool _devRefused = false;
@@ -144,7 +149,10 @@ class GatewayAuth {
     try {
       final res = await _client.post(
         _url('/api/v1/auth/dev'),
-        headers: {'content-type': 'application/json'},
+        headers: {
+          'content-type': 'application/json',
+          if (devLoginKey.isNotEmpty) 'x-dev-login-key': devLoginKey,
+        },
         body: jsonEncode({'deviceId': await deviceId()}),
       );
       await tokens.write(_tokensFrom(_decode(res)));
