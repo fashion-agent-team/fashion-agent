@@ -5,7 +5,7 @@ import 'package:fashion_agent/services/voices.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'agent_test.dart' show FakeSpeech, ScriptedListen;
+import '../helpers/agent_fakes.dart' show FakeSpeech, ScriptedListen;
 
 /// 목소리 고르기를 [heard] 대답으로 끝까지 돌린다. 안내 문장과 고른 목소리를 돌려준다.
 Future<(List<String>, Voice?, FakeSpeech)> _pick(List<String?> heard,

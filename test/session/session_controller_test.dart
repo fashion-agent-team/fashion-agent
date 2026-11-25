@@ -17,7 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/fake_speech_extras.dart';
 
-import '../agent/agent_test.dart' show ScriptedListen;
+import '../helpers/agent_fakes.dart' show ScriptedListen;
 
 class FakeSpeech with FakeSpeechExtras implements SpeechService {
   final spoken = <String>[];
