@@ -10,9 +10,7 @@ import 'package:fashion_agent/services/profile_store.dart';
 import 'package:fashion_agent/services/turn_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../helpers/agent_fakes.dart'
-    show FakeSpeech, ScriptedListen, FakeWeatherService, onboardingWith;
-import 'turn_test.dart' show FakeTurnApi, reply, here;
+import '../helpers/fakes.dart';
 
 /// 비동기로 도는 루프가 한 바퀴씩 돌 시간을 준다.
 Future<void> spin([int times = 20]) async {
@@ -92,7 +90,7 @@ void main() {
         onboarding: onboardingWith(speech, const []),
         weatherService: FakeWeatherService(),
         turns: turns,
-        location: here,
+        location: busanLocation,
         handsFree: true,
       );
       await agent.start();
@@ -106,7 +104,7 @@ void main() {
       );
       await spin();
       expect(agent.resting, isTrue);
-      expect(speech.spoken.last, restSpeech);
+      expect(speech.said.last, restSpeech);
       expect(turns.sent, isEmpty, reason: '쉬는 동안은 이름을 불러도 듣지 않는다');
       await agent.pauseHandsFree();
     });
@@ -120,9 +118,9 @@ void main() {
       await spin();
       expect(turns.sent, ['say:오늘 뭐 입지?']);
       // 인사 뒤 조용할 때 사과 없이 한 번 길게 안내했으니, 그다음부터는 짧게 한다(2026-11-13 점검).
-      expect(speech.spoken, contains('다른 게 필요하면 "코디" 하고 불러 주세요.'));
-      expect(speech.spoken, isNot(contains(startsWith('앗, 제가 잘 못 들었어요'))));
-      expect(speech.spoken.last, '또 필요하시면 "코디" 하고 불러 주세요.');
+      expect(speech, saidLine('다른 게 필요하면 "코디" 하고 불러 주세요.'));
+      expect(speech, neverSaidLineStartingWith('앗, 제가 잘 못 들었어요'));
+      expect(speech.said.last, '또 필요하시면 "코디" 하고 불러 주세요.');
       expect(listen.waiting, isTrue, reason: '끝나면 다시 이름을 기다린다');
       await agent.pauseHandsFree();
     });
@@ -133,7 +131,7 @@ void main() {
         [reply('오늘은 일정이 없어요.', TurnNext.done)],
       );
       await spin();
-      expect(speech.spoken, contains('네, 말씀해 주세요.'));
+      expect(speech, saidLine('네, 말씀해 주세요.'));
       expect(turns.sent, ['say:일정 알려 줘']);
       await agent.pauseHandsFree();
     });
@@ -176,7 +174,7 @@ void main() {
         listen: listen,
         turns: turns,
         camera: camera,
-        location: here,
+        location: busanLocation,
         handsFree: true,
       );
 
@@ -197,7 +195,7 @@ void main() {
         listen: listen,
         turns: turns,
         camera: camera,
-        location: here,
+        location: busanLocation,
         handsFree: true,
       );
 
@@ -205,7 +203,7 @@ void main() {
 
       expect(end, isNull);
       expect(turns.sent, isEmpty);
-      expect(speech.spoken, contains('처음으로 돌아갈게요.'));
+      expect(speech, saidLine('처음으로 돌아갈게요.'));
       expect(camera.closed, isTrue);
     });
 
@@ -222,7 +220,7 @@ void main() {
         listen: listen,
         turns: turns,
         camera: camera,
-        location: here,
+        location: busanLocation,
         handsFree: true,
       );
       final end = c.run('s_1', ImageKind.outfit);

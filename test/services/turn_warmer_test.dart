@@ -1,7 +1,7 @@
 import 'package:fashion_agent/services/turn_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../agent/turn_test.dart' show FakeTurnApi;
+import '../helpers/fakes.dart';
 
 /// 미리 준비가 실패하는 agent 흉내.
 class _FailingWarm extends FakeTurnApi {

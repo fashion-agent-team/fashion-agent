@@ -10,10 +10,7 @@ import 'package:fashion_agent/services/turn_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../helpers/agent_fakes.dart'
-    show FakeSpeech, FakeWeatherService, ScriptedListen, onboardingWith;
-import '../agent/turn_test.dart' show FakeTurnApi, here;
-import '../session/session_controller_test.dart' as session;
+import '../helpers/fakes.dart';
 
 /// 접근성 검사. 이 앱은 시각장애인이 VoiceOver·TalkBack으로 쓰므로 화면마다 아래 네 가지를 자동으로 확인한다.
 ///
@@ -127,7 +124,7 @@ void main() {
           listen: ScriptedListen(const []),
           turns: FakeTurnApi(const []),
           camera: camera,
-          location: here,
+          location: busanLocation,
         );
 
     for (final kind in [ImageKind.outfit, ImageKind.face]) {
@@ -175,8 +172,7 @@ void main() {
   group('옷 검사 화면(SessionScreen, 데모)', () {
     testWidgets('이름·크기·명암비 기준을 지킨다', (tester) async {
       final handle = tester.ensureSemantics();
-      await tester
-          .pumpWidget(app(SessionScreen(controller: session.controllerWith())));
+      await tester.pumpWidget(app(SessionScreen(controller: controllerWith())));
       await tester.pumpAndSettle();
 
       await expectAccessible(tester);
@@ -187,9 +183,8 @@ void main() {
       testWidgets('글씨 ${(scale * 100).round()}%·작은 폰에서도 넘치지 않는다',
           (tester) async {
         smallPhone(tester);
-        await tester.pumpWidget(app(
-            SessionScreen(controller: session.controllerWith()),
-            scale: scale));
+        await tester.pumpWidget(
+            app(SessionScreen(controller: controllerWith()), scale: scale));
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);

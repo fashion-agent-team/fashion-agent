@@ -18,83 +18,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:image/image.dart' as img;
 
-import '../helpers/agent_fakes.dart'
-    show
-        FakeAccount,
-        FakeSpeech,
-        ScriptedListen,
-        FakeWeatherService,
-        onboardingWith;
-
-TurnReply reply(String speech, TurnNext next, {String id = 's_1'}) =>
-    TurnReply(sessionId: id, speech: speech, next: next);
-
-/// agent 흉내. 받은 요청을 적어 두고 정해 둔 답을 차례로 준다.
-class FakeTurnApi implements TurnApi {
-  FakeTurnApi(this.replies, {this.signedIn = true});
-
-  final List<Object> replies;
-  bool signedIn;
-  final sent = <String>[];
-  final sessions = <String?>[];
-  final locations = <TurnLocation?>[];
-  final mouthBoxes = <MouthBox?>[];
-  final faceLandmarks = <Map<String, Object>?>[];
-  final warmed = <TurnLocation?>[];
-
-  @override
-  Future<bool> get available async => signedIn;
-
-  @override
-  Future<void> warm({TurnLocation? location}) async {
-    warmed.add(location);
-  }
-
-  Future<TurnReply> _next() async {
-    final r = replies.removeAt(0);
-    if (r is TurnReply) return r;
-    throw r;
-  }
-
-  @override
-  Future<TurnReply> say(String? sessionId, String utterance,
-      {TurnLocation? location}) {
-    sent.add('say:$utterance');
-    sessions.add(sessionId);
-    locations.add(location);
-    return _next();
-  }
-
-  @override
-  Future<TurnReply> show(String? sessionId, ImageKind kind, Uint8List jpeg,
-      {TurnLocation? location,
-      MouthBox? mouthBox,
-      Map<String, Object>? faceLandmarks}) {
-    mouthBoxes.add(mouthBox);
-    this.faceLandmarks.add(faceLandmarks);
-    sent.add('show:${kind.name}:${jpeg.length}');
-    sessions.add(sessionId);
-    locations.add(location);
-    return _next();
-  }
-}
-
-final here =
-    LocationProvider(read: () async => const TurnLocation(35.1, 129.0));
-
-AgentController agentWith(FakeSpeech speech, FakeTurnApi turns,
-        {List<String?> heard = const []}) =>
-    AgentController(
-      speech: speech,
-      listen: ScriptedListen(heard),
-      profiles: InMemoryProfileStore(),
-      onboarding: onboardingWith(speech, const []),
-      weatherService: FakeWeatherService(),
-      turns: turns,
-      location: here,
-    );
-
-Future<void> settle() => Future<void>.delayed(Duration.zero);
+import '../helpers/fakes.dart';
 
 void main() {
   group('계약 모양', () {
@@ -342,7 +266,7 @@ void main() {
       expect(turns.sent, ['say:오늘 날씨 어때?', 'say:고마워']);
       expect(turns.sessions, [null, 's_1']);
       expect(turns.locations.first?.lat, 35.1);
-      expect(speech.spoken, ['오늘은 맑고 15도예요.', '좋은 하루 보내세요.', tapToTalk]);
+      expect(speech.said, ['오늘은 맑고 15도예요.', '좋은 하루 보내세요.', tapToTalk]);
     });
 
     test('done 뒤 새 대화는 sessionId 없이 시작한다', () async {
@@ -364,7 +288,7 @@ void main() {
       ]);
       final agent = agentWith(speech, turns);
       await agent.handle('얼굴 확인해 줘');
-      expect(speech.spoken.last, tapToTalk);
+      expect(speech.said.last, tapToTalk);
 
       await agent.handle('이');
       expect(turns.sessions, [null, 's_1']);
@@ -385,7 +309,7 @@ void main() {
       await agent.handle('오늘 뭐 입지?');
 
       expect(opened, ['s_1:outfit']);
-      expect(speech.spoken, [
+      expect(speech.said, [
         '옷을 꺼내서 카메라에 보여 주세요.',
         '좋은 선택이에요. 잘 다녀오세요.',
         tapToTalk,
@@ -398,7 +322,7 @@ void main() {
           speech, FakeTurnApi([reply('얼굴을 보여 주세요.', TurnNext.cameraFace)]));
       agent.openCamera = (_, __) async => null;
       await agent.handle('화장 봐 줘');
-      expect(speech.spoken, ['얼굴을 보여 주세요.', '카메라를 껐어요.', tapToTalk]);
+      expect(speech.said, ['얼굴을 보여 주세요.', '카메라를 껐어요.', tapToTalk]);
     });
 
     test('카메라를 그만두면 다음 말은 새 대화로 보낸다', () async {
@@ -419,7 +343,7 @@ void main() {
       final agent = agentWith(
           speech, FakeTurnApi([GatewayException(502, 'upstream_error')]));
       await agent.handle('오늘 뭐 입지?');
-      expect(speech.spoken, [contains('서버'), tapToTalk]);
+      expect(speech.said, [contains('서버'), tapToTalk]);
     });
 
     test('로그인이 풀리면 폰 안 기능으로 이어서 처리한다', () async {
@@ -427,8 +351,8 @@ void main() {
       final agent = agentWith(
           speech, FakeTurnApi([GatewayException(401, 'unauthorized')]));
       await agent.handle('오늘 날씨 어때?');
-      expect(speech.spoken.first, contains('로그인이 풀렸어요'));
-      expect(speech.spoken.any((s) => s.contains('15')), isTrue);
+      expect(speech.said.first, contains('로그인이 풀렸어요'));
+      expect(speech, saidLineContaining('15'));
     });
 
     test('로그인하지 않았으면 agent를 부르지 않는다', () async {
@@ -436,7 +360,7 @@ void main() {
       final speech = FakeSpeech();
       await agentWith(speech, turns).handle('기능 알려 줘');
       expect(turns.sent, isEmpty);
-      expect(speech.spoken.first, featureIntro);
+      expect(speech.said.first, featureIntro);
     });
 
     test('로그인이 풀린 채 다시 켜면 먼저 다시 로그인하고 agent로 보낸다', () async {
@@ -454,10 +378,10 @@ void main() {
         onboarding: onboardingWith(speech, const [], account: account),
         weatherService: FakeWeatherService(),
         turns: turns,
-        location: here,
+        location: busanLocation,
       );
       await agent.start();
-      expect(speech.spoken.first, contains('다시 로그인'));
+      expect(speech.said.first, contains('다시 로그인'));
       expect(turns.sent, ['say:안녕']);
       expect((await store.load())!.accountId, 'acc-1');
       expect(account.uploaded?.name, '진행');
@@ -476,11 +400,11 @@ void main() {
         onboarding: onboardingWith(speech, const []),
         weatherService: FakeWeatherService(),
         turns: turns,
-        location: here,
+        location: busanLocation,
       );
       await agent.start();
-      expect(speech.spoken, contains('로그인이 잘 안 돼서, 지금은 폰 안에서 되는 것만 같이 할게요.'));
-      expect(speech.spoken, contains(featureIntro));
+      expect(speech, saidLine('로그인이 잘 안 돼서, 지금은 폰 안에서 되는 것만 같이 할게요.'));
+      expect(speech, saidLine(featureIntro));
       expect(turns.sent, isEmpty);
     });
 
@@ -497,7 +421,7 @@ void main() {
         onboarding: onboardingWith(speech, const []),
         weatherService: FakeWeatherService(),
         turns: turns,
-        location: here,
+        location: busanLocation,
       );
       await agent.start();
       await settle();
@@ -524,7 +448,7 @@ void main() {
         onboarding: onboardingWith(speech, const []),
         weatherService: FakeWeatherService(),
         turns: turns,
-        location: here,
+        location: busanLocation,
       );
       await agent.start();
       expect(turns.sent, ['say:안녕']);
@@ -544,7 +468,7 @@ void main() {
           listen: ScriptedListen(heard),
           turns: turns,
           camera: camera,
-          location: here,
+          location: busanLocation,
           mouths: mouths,
           faces: faces,
         );
@@ -567,7 +491,7 @@ void main() {
       expect(turns.locations.first?.lat, 35.1);
       expect(end?.speech, '자켓도 좋아요. 이걸로 하시겠어요?');
       expect(camera.closed, isTrue);
-      expect(speech.spoken, [
+      expect(speech.said, [
         '찍었어요. 잘 볼게요.',
         '흰 셔츠가 면접에 잘 맞아요. 겉옷도 보여 주세요.',
         '찍었어요. 잘 볼게요.',
@@ -607,7 +531,7 @@ void main() {
       final camera = FakeAutoCaptureCamera([null, null, null]);
       await cameraWith(speech, FakeTurnApi([]), camera)
           .run('s_1', ImageKind.worn);
-      expect(speech.spoken.first, contains('뒤로'));
+      expect(speech.said.first, contains('뒤로'));
     });
 
     test('이 사진에만 입 박스를 찾아 같이 보낸다', () async {
@@ -663,7 +587,7 @@ void main() {
 
       expect(turns.faceLandmarks, [marks]);
       expect(faces.calls, 2);
-      expect(speech.spoken, contains(faceRetrySpeech));
+      expect(speech, saidLine(faceRetrySpeech));
       expect(c.shots, 1);
     });
 
@@ -678,7 +602,7 @@ void main() {
 
       expect(turns.faceLandmarks, [null]);
       expect(faces.calls, 3);
-      expect(speech.spoken.where((t) => t == faceRetrySpeech).length,
+      expect(speech.said.where((t) => t == faceRetrySpeech).length,
           CameraTurnController.maxFaceMisses);
     });
 
@@ -693,7 +617,7 @@ void main() {
       expect(turns.mouthBoxes, [null]);
       expect(camera.subjects, everyElement(Subject.mouth));
       expect(
-          speech.spoken
+          speech.said
               .where((t) => t == '입이 잘 안 보여요. 폰을 입 앞에 들고 "이~" 해 주세요.')
               .length,
           CameraTurnController.maxMouthMisses);
@@ -711,7 +635,7 @@ void main() {
 
       await c.run('s_1', ImageKind.teeth);
 
-      expect(speech.spoken, contains(contains('입을 조금 더 벌리고')));
+      expect(speech, saidLineContaining('입을 조금 더 벌리고'));
       // 읽을 수 없는 사진(테스트용 바이트)은 자르지 못해 원래 박스 그대로 간다
       expect(turns.mouthBoxes, [open]);
       expect(c.shots, 1);
@@ -761,7 +685,7 @@ void main() {
       final end = await cameraWith(speech, FakeTurnApi([]), camera)
           .run('s_1', ImageKind.outfit);
       expect(end, isNull);
-      expect(speech.spoken, [
+      expect(speech.said, [
         contains('옷이 잘 안 보여요'),
         contains('옷이 잘 안 보여요'),
         '잘 안 보여서 카메라는 잠깐 끌게요. 다시 하고 싶으면 말씀해 주세요.',
@@ -778,7 +702,7 @@ void main() {
       final end =
           await cameraWith(speech, turns, camera).run('s_1', ImageKind.outfit);
       expect(end?.speech, '좋아요.');
-      expect(speech.spoken, contains(contains('오래 걸렸어요')));
+      expect(speech, saidLineContaining('오래 걸렸어요'));
     });
   });
 

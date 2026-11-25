@@ -13,9 +13,7 @@ import 'package:fashion_agent/services/turn_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../helpers/agent_fakes.dart'
-    show FakeSpeech, FakeWeatherService, ScriptedListen, onboardingWith;
-import '../agent/turn_test.dart' show FakeTurnApi, here;
+import '../helpers/fakes.dart';
 
 /// 화면(위젯) 테스트. 마스코트가 계속 움직여서 pumpAndSettle은 끝나지 않으므로 정해진 시간만큼 pump한다.
 void main() {
@@ -45,7 +43,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: AgentScreen(agent: agent)));
       await settle(tester);
 
-      expect(speech.spoken, isNotEmpty, reason: '버튼을 누르지 않아도 먼저 말한다');
+      expect(speech.said, isNotEmpty, reason: '버튼을 누르지 않아도 먼저 말한다');
       expect(find.text('하늘'), findsOneWidget);
       expect(find.text('화면을 눌러 말씀해 주세요'), findsOneWidget);
       expect(find.text('다시 듣기'), findsOneWidget);
@@ -59,13 +57,13 @@ void main() {
       final agent = agentWith(speech, profile: profile);
       await tester.pumpWidget(MaterialApp(home: AgentScreen(agent: agent)));
       await settle(tester);
-      final before = speech.spoken.length;
+      final before = speech.said.length;
 
       await tester.tap(find.text('다시 듣기'));
       await settle(tester);
 
-      expect(speech.spoken.length, greaterThan(before));
-      expect(speech.spoken.last, contains(agent.message.split('.').first));
+      expect(speech.said.length, greaterThan(before));
+      expect(speech.said.last, contains(agent.message.split('.').first));
     });
 
     testWidgets('VoiceOver: 위쪽 큰 영역은 "말하기" 버튼 하나로 읽히고 긴 안내는 읽지 않는다',
@@ -110,7 +108,7 @@ void main() {
           listen: ScriptedListen(const []),
           turns: FakeTurnApi(const []),
           camera: camera,
-          location: here,
+          location: busanLocation,
         );
 
     testWidgets('안내가 없으면 "멈추면 알아서 찍어요", 옷이면 진행 막대, 그만하기 버튼', (tester) async {
