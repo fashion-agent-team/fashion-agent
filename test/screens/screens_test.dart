@@ -13,7 +13,7 @@ import 'package:fashion_agent/services/turn_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../agent/agent_test.dart'
+import '../helpers/agent_fakes.dart'
     show FakeSpeech, FakeWeatherService, ScriptedListen, onboardingWith;
 import '../agent/turn_test.dart' show FakeTurnApi, here;
 

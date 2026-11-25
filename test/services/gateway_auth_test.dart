@@ -16,6 +16,7 @@ class FakeGateway {
   final calls = <String>[];
   var devEnabled = true;
   final devIds = <String>[];
+  final devKeys = <String?>[];
 
   Map<String, dynamic> _issue() {
     n++;
@@ -38,6 +39,7 @@ class FakeGateway {
           return _json(404, {'code': 'not_found', 'message': 'dev off'});
         }
         devIds.add((jsonDecode(req.body) as Map)['deviceId'] as String);
+        devKeys.add(req.headers['x-dev-login-key']);
         return _json(200, _issue());
       case '/api/v1/auth/refresh':
         refreshCalls++;
@@ -150,6 +152,22 @@ void main() {
       expect(gw.devIds, ['phone-1']);
       final json = await guest.sendJson('GET', '/api/v1/me/profile');
       expect(json!['agentName'], '코디');
+    });
+
+    test('키 없이 빌드하면 개발용 로그인 키 헤더를 보내지 않는다', () async {
+      expect(await guest.ensureSignedIn(), isTrue);
+      expect(gw.devKeys, [null]);
+    });
+
+    test('DEV_LOGIN_KEY로 빌드하면 개발용 로그인에 키 헤더를 붙인다', () async {
+      final keyed = GatewayAuth(
+          baseUrl: Uri.parse('http://gw:8080'),
+          tokens: MemoryTokenStore(),
+          client: gw.client,
+          devDeviceId: () async => 'phone-2',
+          devLoginKey: 'app-key');
+      expect(await keyed.ensureSignedIn(), isTrue);
+      expect(gw.devKeys, ['app-key']);
     });
 
     test('이미 로그인했으면 개발용 로그인을 하지 않는다', () async {

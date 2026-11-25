@@ -14,7 +14,7 @@ import 'package:fashion_agent/services/server_stt.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fashion_agent/agent/onboarding_flow.dart';
 
-import 'agent_test.dart' show FakeSpeech, ScriptedListen;
+import '../helpers/agent_fakes.dart' show FakeSpeech, ScriptedListen;
 
 /// 2026-11-09 발표 피드백 반영 시험.
 void main() {

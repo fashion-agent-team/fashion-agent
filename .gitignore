@@ -30,3 +30,4 @@ ios/signing.local
 
 # flutter test --coverage 결과
 /coverage/
+.dev-login-key

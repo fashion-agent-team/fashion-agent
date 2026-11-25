@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:fashion_agent/agent/agent_controller.dart';
-import 'package:fashion_agent/agent/agent_speech.dart';
 import 'package:fashion_agent/models/schedule_event.dart';
 import 'package:fashion_agent/models/user_profile.dart';
 import 'package:fashion_agent/services/gateway_auth.dart';
@@ -12,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import '../agent/agent_test.dart'
+import '../helpers/agent_fakes.dart'
     show FakeSpeech, ScriptedListen, FakeWeatherService, onboardingWith;
 import '../agent/turn_test.dart' show FakeTurnApi, reply, settle;
 
@@ -624,7 +623,7 @@ void main() {
 
     // then
     expect(speech.spoken.take(2), [
-      returningGreeting('하늘'),
+      '반가워요. 저 하늘이에요. 오늘도 같이 준비해 봐요. 필요한 게 있으면 편하게 말씀해 주세요.',
       '사흘 뒤 11월 29일 일요일 오후 8시, 친구 모임이 있어요.',
     ]);
     expect(source.asked, hasLength(1)); // 인사 때 받은 일정을 알림 맞추기에 다시 쓴다
