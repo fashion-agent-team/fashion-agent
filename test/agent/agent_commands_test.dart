@@ -6,7 +6,7 @@ import 'package:fashion_agent/services/profile_store.dart';
 import 'package:fashion_agent/services/speech_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'agent_test.dart'
+import '../helpers/agent_fakes.dart'
     show
         FakeAccount,
         FakeSpeech,
