@@ -50,6 +50,8 @@ services:
       CLOTHES_ORT_THREADS: ${CLOTHES_ORT_THREADS:-}
       CLOTHES_ORT_SHARED_THREADS: ${CLOTHES_ORT_SHARED_THREADS:-}
       CLOTHES_CANDIDATE_DIR: /app/data/train-candidates
+      # 2026-11-25 보안: agent만 부르게 내부 호출 키(앱 서버 .env와 같은 값, 비우면 누구나)
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
     volumes:
       - ../models:/models:ro
       - clothes-candidates:/app/data
@@ -69,6 +71,7 @@ services:
     environment:
       TZ: Asia/Seoul
       JAVA_TOOL_OPTIONS: "-Xmx320m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8094/actuator/health || exit 1"]
@@ -83,6 +86,7 @@ services:
     environment:
       TZ: Asia/Seoul
       JAVA_TOOL_OPTIONS: "-Xmx112m -XX:MaxMetaspaceSize=112m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+ExitOnOutOfMemoryError"
+      MCP_SHARED_KEY: ${MCP_SHARED_KEY:-}
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "curl -fsS http://localhost:8091/actuator/health || exit 1"]

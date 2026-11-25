@@ -53,6 +53,9 @@ const _cloudTts = bool.fromEnvironment('CLOUD_TTS', defaultValue: true);
 /// 노트북에서 띄운 게이트웨이: `flutter run --dart-define=GATEWAY_URL=http://192.168.0.10:8080`
 const _gatewayUrl = String.fromEnvironment('GATEWAY_URL');
 
+/// 개발용 로그인 키(게이트웨이 `GATEWAY_DEV_LOGIN_KEY`와 같은 값). `scripts/ios-install.sh`가 `.dev-login-key`에서 읽어 넣는다.
+const _devLoginKey = String.fromEnvironment('DEV_LOGIN_KEY');
+
 /// 게이트웨이와 Firebase가 준비되면 구글 로그인, 아니면 이 폰에만 저장.
 ///
 /// 로그인하지 않아도(구글 로그인 전, Firebase 실패) 게이트웨이는 쓴다. 개발용 로그인으로 들어가서
@@ -62,7 +65,8 @@ Future<(AccountService, GatewayAuth?)> _account() async {
   final gateway = GatewayAuth(
       baseUrl: Uri.parse(_gatewayUrl),
       tokens: SecureTokenStore(),
-      devDeviceId: secureDeviceId);
+      devDeviceId: secureDeviceId,
+      devLoginKey: _devLoginKey);
   try {
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);

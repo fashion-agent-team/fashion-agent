@@ -83,7 +83,13 @@ fi
 
 echo "▶ 설치·실행 (기기 $DEVICE, 서버 $GATEWAY_URL)"
 flutter pub get
-if ! flutter run --release -d "$DEVICE" --dart-define=GATEWAY_URL="$GATEWAY_URL"; then
+# 개발용 로그인 키(게이트웨이 GATEWAY_DEV_LOGIN_KEY와 같은 값). 환경 변수나 앱 폴더의 .dev-login-key(.gitignore)에서 읽는다.
+# 없으면 빈 값: 이미 로그인한 폰은 그대로 쓰이고, 처음 설치한 폰은 게이트웨이가 키를 요구하면 로그인을 못 한다.
+DEV_LOGIN_KEY="${DEV_LOGIN_KEY:-$(cat .dev-login-key 2>/dev/null || true)}"
+if [[ -z "$DEV_LOGIN_KEY" ]]; then
+  echo "⚠ .dev-login-key가 없어요. 게이트웨이가 개발용 로그인 키를 요구하면 새로 설치한 앱은 로그인하지 못해요."
+fi
+if ! flutter run --release -d "$DEVICE" --dart-define=GATEWAY_URL="$GATEWAY_URL" --dart-define=DEV_LOGIN_KEY="$DEV_LOGIN_KEY"; then
   echo "✖ 실행에 실패했어요. 앱이 깔렸는데 안 열리면 폰에서"
   echo "  설정 → 일반 → VPN 및 기기 관리 → 개발자 앱 → '신뢰'를 누른 뒤 앱 아이콘을 눌러 주세요."
   exit 1

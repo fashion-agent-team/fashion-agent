@@ -8,6 +8,8 @@ read -rsp "KAKAO_REST_API_KEY (없으면 엔터): " KAKAO; echo
 umask 077
 sed -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" \
     -e "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" \
+    -e "s|^GATEWAY_DEV_LOGIN_KEY=.*|GATEWAY_DEV_LOGIN_KEY=$(openssl rand -hex 24)|" \
+    -e "s|^MCP_SHARED_KEY=.*|MCP_SHARED_KEY=$(openssl rand -hex 32)|" \
     -e "s|^OPENAI_API_KEY=.*|OPENAI_API_KEY=${OPENAI}|" \
     -e "s|^KAKAO_REST_API_KEY=.*|KAKAO_REST_API_KEY=${KAKAO}|" \
     .env.example > .env
