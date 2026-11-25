@@ -4,7 +4,7 @@ import 'package:fashion_agent/services/profile_store.dart';
 import 'package:fashion_agent/services/speech_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../helpers/agent_fakes.dart';
+import '../helpers/fakes.dart';
 
 const speedQuestion =
     '제 말 빠르기 괜찮으세요? 괜찮으면 "괜찮아", 더 천천히 들으시려면 "천천히", 조금 빠르게 들으시려면 "빠르게"라고 해 주세요.';
@@ -21,14 +21,14 @@ void main() {
           await onboardingWith(speech, [...sampleAnswers, '네'], store: store)
               .run();
 
-      expect(speech.spoken.first, '안녕하세요, 저는 당신의 곁에서 패션을 책임질 에이전트 심청이예요.');
-      expect(speech.spoken, contains(startsWith('좋아요, 이제 제 이름은 하늘이에요.')));
+      expect(speech.said.first, '안녕하세요, 저는 당신의 곁에서 패션을 책임질 에이전트 심청이예요.');
+      expect(speech, saidLineStartingWith('좋아요, 이제 제 이름은 하늘이에요.'));
       expect(
-          speech.spoken,
-          contains('말씀해주신 정보를 읽어 드릴게요. 이름 김민수, 생년월일 1990년 3월 5일, '
+          speech,
+          saidLine('말씀해주신 정보를 읽어 드릴게요. 이름 김민수, 생년월일 1990년 3월 5일, '
               '성별 남성, 직업 회사원, 키 170센티미터, 몸무게 건너뜀. 말씀해주신 정보와 일치할까요?'));
-      expect(speech.spoken, contains('지금은 계정 연결 없이 이 폰에만 저장할게요.'));
-      expect(speech.spoken.last, featureGuide);
+      expect(speech, saidLine('지금은 계정 연결 없이 이 폰에만 저장할게요.'));
+      expect(speech.said.last, featureGuide);
 
       expect(profile.agentName, '하늘');
       expect(profile.birthDate, DateTime(1990, 3, 5));
@@ -45,7 +45,7 @@ void main() {
 
       expect(permissions.requests, 1);
       expect(profile.consented, isTrue);
-      expect(speech.spoken.take(9), [
+      expect(speech.said.take(9), [
         '안녕하세요, 저는 당신의 곁에서 패션을 책임질 에이전트 심청이예요.',
         '시작하기 전에 알려 드릴게요. 말씀과 옷 사진은 옷 추천을 위해 서버에서만 살펴보고, 다른 곳에는 쓰지 않아요.',
         "이제 허용 창이 몇 개 떠요. 오른쪽으로 쓸어 넘기다 보면 '허용 안 함'이 먼저 들려요. 그건 지나치고, '허용'이나 '확인'이 들리면 두 번 탭해 주세요. 위치는 '앱을 사용하는 동안 허용'을 골라 주세요.",
@@ -56,7 +56,7 @@ void main() {
         '목소리는 맘에 드시나요? "괜찮아", "바꾸고 싶어"로 알려주세요.',
         '제 이름은 심청이예요. 다른 이름으로 부르고 싶으시면 지금 말씀해 주시고, 이대로 좋으시면 "좋아"라고 해 주세요.',
       ]);
-      expect(speech.spoken, isNot(contains(startsWith('혹시 다른 폰에서'))));
+      expect(speech, neverSaidLineStartingWith('혹시 다른 폰에서'));
     });
 
     test('마이크를 막으면 들을 수 없다고 알려 준다', () async {
@@ -65,7 +65,7 @@ void main() {
               permissions: FakePermissionService(canListen: false))
           .run();
 
-      expect(speech.spoken.last,
+      expect(speech.said.last,
           '마이크나 음성 인식이 꺼져 있어서 말씀을 들을 수가 없어요. 설정 앱에서 켜고 다시 열어 주세요.');
       expect(profile.isOnboarded, isFalse);
     });
@@ -80,7 +80,7 @@ void main() {
           .run();
 
       expect(speech.rate, lessThan(SpeechService.speechRate));
-      expect(speech.spoken, contains('네, 이제 이 속도로 말할게요. 괜찮으세요?'));
+      expect(speech, saidLine('네, 이제 이 속도로 말할게요. 괜찮으세요?'));
     });
 
     test('목소리를 바꾸고 싶다고 하면 하나씩 들려준다', () async {
@@ -90,9 +90,8 @@ void main() {
               consentFirst: false)
           .run();
 
-      expect(speech.spoken, contains('목소리는 맘에 드시나요? "괜찮아", "바꾸고 싶어"로 알려주세요.'));
-      expect(
-          speech.spoken, contains('목소리를 하나씩 들려 드릴게요. 원하는 목소리면 "좋아"라고 해주세요.'));
+      expect(speech, saidLine('목소리는 맘에 드시나요? "괜찮아", "바꾸고 싶어"로 알려주세요.'));
+      expect(speech, saidLine('목소리를 하나씩 들려 드릴게요. 원하는 목소리면 "좋아"라고 해주세요.'));
     });
   });
 
@@ -103,8 +102,8 @@ void main() {
           await onboardingWith(speech, [null, ...sampleAnswers.skip(2), '네'])
               .run();
 
-      expect(speech.spoken,
-          contains('좋아요, 심청이라고 불러 주세요. 나중에라도 "네 이름 바꿔 줘"라고 하시면 바꿀 수 있어요.'));
+      expect(speech,
+          saidLine('좋아요, 심청이라고 불러 주세요. 나중에라도 "네 이름 바꿔 줘"라고 하시면 바꿀 수 있어요.'));
       expect(profile.agentName, '심청이');
     });
 
@@ -116,7 +115,7 @@ void main() {
       final speech = FakeSpeech();
       final guessed = await onboardingWith(
           speech, ['신청이', '네', ...sampleAnswers.skip(2), '네']).run();
-      expect(speech.spoken, contains('제 이름이 심청이, 맞나요?'));
+      expect(speech, saidLine('제 이름이 심청이, 맞나요?'));
       expect(guessed.agentName, '심청이');
     });
   });
@@ -170,7 +169,7 @@ void main() {
 
       // then
       expect(profile.heightCm, 170);
-      expect(speech.spoken.where((s) => s.contains('키는 몇 센티미터인가요?')).length,
+      expect(speech.countLinesContaining('키는 몇 센티미터인가요?'),
           greaterThanOrEqualTo(2));
     });
 
@@ -210,9 +209,9 @@ void main() {
       // then
       expect(tall.heightCm, 250);
       expect(tall.weightKg, 300);
-      expect(speech.spoken.where((s) => s.contains('키는 몇 센티미터인가요?')).length,
+      expect(speech.countLinesContaining('키는 몇 센티미터인가요?'),
           greaterThanOrEqualTo(2));
-      expect(speech.spoken.where((s) => s.contains('몸무게는 몇 킬로그램인가요?')).length,
+      expect(speech.countLinesContaining('몸무게는 몇 킬로그램인가요?'),
           greaterThanOrEqualTo(2));
       expect(small.heightCm, 50);
       expect(small.weightKg, 10);
@@ -227,11 +226,10 @@ void main() {
 
       expect(profile.agentName, '하늘');
       expect(profile.name, isNull);
-      expect(speech.spoken,
-          contains('알겠어요, 내 정보는 나중에 여쭤볼게요. "내 키 바꿔 줘"처럼 말씀하시면 언제든 넣을 수 있어요.'));
-      expect(speech.spoken, isNot(contains(startsWith('말씀해주신 정보를 읽어 드릴게요'))));
-      expect(speech.spoken,
-          isNot(contains('생년월일을 말씀해 주세요. 예를 들면 1990년 3월 5일처럼요.')));
+      expect(speech,
+          saidLine('알겠어요, 내 정보는 나중에 여쭤볼게요. "내 키 바꿔 줘"처럼 말씀하시면 언제든 넣을 수 있어요.'));
+      expect(speech, neverSaidLineStartingWith('말씀해주신 정보를 읽어 드릴게요'));
+      expect(speech, neverSaidLine('생년월일을 말씀해 주세요. 예를 들면 1990년 3월 5일처럼요.'));
     });
   });
 
@@ -243,14 +241,14 @@ void main() {
 
       expect(profile.heightCm, 175);
       expect(profile.name, '김민수');
-      expect(speech.spoken.where((s) => s.contains('일치할까요')).length, 2);
+      expect(speech.countLinesContaining('일치할까요'), 2);
     });
 
     test('대답을 못 알아들으면 맞다고 치지 않고 다시 묻는다', () async {
       final speech = FakeSpeech();
       await onboardingWith(speech, [...sampleAnswers, '음', '음', '음', '네'])
           .run();
-      expect(speech.spoken.where((s) => s.contains('일치할까요')).length, 4);
+      expect(speech.countLinesContaining('일치할까요'), 4);
     });
   });
 
@@ -266,11 +264,11 @@ void main() {
           await onboardingWith(speech, [...withName, '진행 님', '네']).run();
 
       expect(
-          speech.spoken,
-          contains(
+          speech,
+          saidLine(
               '제가 어떻게 불러 드릴까요? 진행 님으로 불러드리면 될까요? 아니라면 불리고 싶은 호칭을 말씀해 주세요.'));
       expect(profile.callName, '진행 님');
-      expect(speech.spoken, contains('잘 부탁드려요 진행 님.'));
+      expect(speech, saidLine('잘 부탁드려요 진행 님.'));
     });
 
     test('제안한 호칭에 "아니요"라고 하면 호칭을 다시 듣는다', () async {
@@ -278,9 +276,9 @@ void main() {
       final profile =
           await onboardingWith(speech, [...withName, '아니요', '대표님', '네']).run();
 
-      expect(speech.spoken, contains('불리고 싶은 호칭을 말씀해 주세요.'));
+      expect(speech, saidLine('불리고 싶은 호칭을 말씀해 주세요.'));
       expect(profile.callName, '대표님');
-      expect(speech.spoken, contains('잘 부탁드려요 대표님.'));
+      expect(speech, saidLine('잘 부탁드려요 대표님.'));
     });
 
     test('제안한 호칭에 "네"라고 하면 그대로 정한다', () async {
@@ -288,8 +286,8 @@ void main() {
       final profile = await onboardingWith(speech, [...withName, '네']).run();
 
       expect(profile.callName, '진행 님');
-      expect(speech.spoken, isNot(contains(startsWith('앞으로'))));
-      expect(speech.spoken.last, featureGuide);
+      expect(speech, neverSaidLineStartingWith('앞으로'));
+      expect(speech.said.last, featureGuide);
     });
   });
 
@@ -311,8 +309,8 @@ void main() {
               account: FakeAccount(id: 'uid-new'))
           .run();
 
-      expect(speech.spoken, contains('처음 오셨군요. 반가워요.'));
-      expect(speech.spoken, isNot(contains('지금은 계정 연결 없이 이 폰에만 저장할게요.')));
+      expect(speech, saidLine('처음 오셨군요. 반가워요.'));
+      expect(speech, neverSaidLine('지금은 계정 연결 없이 이 폰에만 저장할게요.'));
     });
 
     test('로그인한 계정에 전에 쓴 정보가 있으면 묻지 않고 불러와 바로 시작한다', () async {
@@ -330,13 +328,13 @@ void main() {
       expect(profile.consented, isTrue);
       expect(store.profile?.accountId, 'uid-1');
       expect(speech.rate, 0.36);
-      expect(speech.spoken, contains('전에 쓰신 적 있군요. 기존 정보를 불러오겠습니다.'));
-      expect(speech.spoken, isNot(contains(speedQuestion)));
+      expect(speech, saidLine('전에 쓰신 적 있군요. 기존 정보를 불러오겠습니다.'));
+      expect(speech, neverSaidLine(speedQuestion));
       expect(
-          speech.spoken,
-          isNot(contains(
-              '제 이름은 심청이예요. 다른 이름으로 부르고 싶으시면 지금 말씀해 주시고, 이대로 좋으시면 "좋아"라고 해 주세요.')));
-      expect(speech.spoken.last, '다시 만나서 반가워요. 저 하늘이에요. 오늘은 뭘 같이 해 볼까요?');
+          speech,
+          neverSaidLine(
+              '제 이름은 심청이예요. 다른 이름으로 부르고 싶으시면 지금 말씀해 주시고, 이대로 좋으시면 "좋아"라고 해 주세요.'));
+      expect(speech.said.last, '다시 만나서 반가워요. 저 하늘이에요. 오늘은 뭘 같이 해 볼까요?');
     });
   });
 }

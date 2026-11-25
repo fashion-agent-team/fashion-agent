@@ -14,7 +14,7 @@ import 'package:fashion_agent/services/server_stt.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fashion_agent/agent/onboarding_flow.dart';
 
-import '../helpers/agent_fakes.dart' show FakeSpeech, ScriptedListen;
+import '../helpers/fakes.dart';
 
 /// 2026-11-09 발표 피드백 반영 시험.
 void main() {
@@ -69,7 +69,7 @@ void main() {
       final listen = ScriptedListen(['내일 결혼식이 있는데', '뭐 입을지 추천해 줘']);
       final c = CommandListener(listen, ask: speech.speak);
       expect(await c.hear(), '내일 결혼식이 있는데 뭐 입을지 추천해 줘');
-      expect(speech.spoken, [askMore]);
+      expect(speech.said, [askMore]);
     });
 
     test('"없어"면 들은 말 그대로', () async {
@@ -84,7 +84,7 @@ void main() {
       final c =
           CommandListener(ScriptedListen(['내일 옷 추천해 줘']), ask: speech.speak);
       expect(await c.hear(), '내일 옷 추천해 줘');
-      expect(speech.spoken, isEmpty);
+      expect(speech.said, isEmpty);
     });
   });
 
@@ -107,17 +107,29 @@ void main() {
   });
 
   group('목소리 고르기', () {
-    test('말을 뜻으로 바꾼다', () {
-      VoiceAnswerKind? kind(String s) => parseVoiceAnswer(s, 7)?.kind;
-      expect(kind('다음'), VoiceAnswerKind.next);
-      expect(kind('처음부터'), VoiceAnswerKind.first);
-      expect(kind('지금 목소리 좋아'), VoiceAnswerKind.choose);
-      expect(kind('별로야'), VoiceAnswerKind.next);
-      expect(kind('그만'), VoiceAnswerKind.cancel);
-      expect(parseVoiceAnswer('처음부터 해서 3번 목소리가 좋아', 7)?.number, 3);
-      expect(parseVoiceAnswer('세 번째 목소리로 할게', 7)?.number, 3);
-      expect(parseVoiceAnswer('2번 들려줘', 7)?.kind, VoiceAnswerKind.listen);
-      expect(parseVoiceAnswer('이번 목소리 좋아', 7)?.number, isNull);
+    group('말을 뜻으로 바꾼다(목소리 7개)', () {
+      const kinds = {
+        '다음': VoiceAnswerKind.next,
+        '별로야': VoiceAnswerKind.next,
+        '처음부터': VoiceAnswerKind.first,
+        '지금 목소리 좋아': VoiceAnswerKind.choose,
+        '그만': VoiceAnswerKind.cancel,
+        '2번 들려줘': VoiceAnswerKind.listen,
+      };
+      kinds.forEach((said, kind) {
+        test('"$said" → ${kind.name}',
+            () => expect(parseVoiceAnswer(said, 7)?.kind, kind));
+      });
+
+      for (final said in ['처음부터 해서 3번 목소리가 좋아', '세 번째 목소리로 할게']) {
+        test('"$said" → 3번', () {
+          expect(parseVoiceAnswer(said, 7)?.number, 3);
+        });
+      }
+
+      test('"이번 목소리"의 "이"는 2번이 아니다(번호 없음)', () {
+        expect(parseVoiceAnswer('이번 목소리 좋아', 7)?.number, isNull);
+      });
     });
 
     test('"목소리 순서대로 들려줘"는 목소리 고르기', () {
@@ -135,7 +147,7 @@ void main() {
       expect(speech.chosen, cloudVoices[1]);
       expect(speech.sampled.whereType<Voice>().take(4).toList(),
           [cloudVoices[0], cloudVoices[1], cloudVoices[2], cloudVoices[0]]);
-      expect(speech.spoken.last, '좋아요. 이제부터 2번 목소리로 말할게요.');
+      expect(speech.said.last, '좋아요. 이제부터 2번 목소리로 말할게요.');
     });
 
     test('듣던 목소리에서 "이 목소리 좋아"', () async {

@@ -104,7 +104,7 @@ void main() {
     });
   });
 
-  test('"기능 뭐 있어?" 같은 비슷한 말도 기능 설명으로', () {
+  group('"기능 뭐 있어?" 같은 비슷한 말도 기능 설명으로', () {
     for (final said in [
       '기능 설명',
       '기능 뭐 있어?',
@@ -117,10 +117,12 @@ void main() {
       '사용법 알려 줘',
       '이거 어떻게 써?',
     ]) {
-      expect(isFeatureExplainCommand(said), isTrue, reason: said);
+      test('정상: "$said" → 기능 설명',
+          () => expect(isFeatureExplainCommand(said), isTrue));
     }
     for (final said in ['오늘 뭐 입지?', '옷 추천해 줘', '내일 날씨 어때', '이거 무슨 색이야?']) {
-      expect(isFeatureExplainCommand(said), isFalse, reason: said);
+      test('비정상: 다른 기능 말 "$said"은 기능 설명이 아니다',
+          () => expect(isFeatureExplainCommand(said), isFalse));
     }
   });
 

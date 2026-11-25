@@ -5,7 +5,7 @@ import 'package:fashion_agent/services/voices.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../helpers/agent_fakes.dart' show FakeSpeech, ScriptedListen;
+import '../helpers/fakes.dart';
 
 /// 목소리 고르기를 [heard] 대답으로 끝까지 돌린다. 안내 문장과 고른 목소리를 돌려준다.
 Future<(List<String>, Voice?, FakeSpeech)> _pick(List<String?> heard,
@@ -27,7 +27,7 @@ void main() {
       expect(speech.chosen, cloudVoices[1]);
       expect(speech.sampled.take(4),
           [cloudVoices[0], cloudVoices[1], cloudVoices[2], cloudVoices[1]]);
-      expect(speech.spoken.last, '좋아요. 이제부터 2번 목소리로 말할게요.');
+      expect(speech.said.last, '좋아요. 이제부터 2번 목소리로 말할게요.');
     });
 
     test('"4번 들려줘"로 건너뛰고 "처음부터"로 돌아가 번호로 고른다', () async {
@@ -69,13 +69,28 @@ void main() {
       expect(speech.sampled, hasLength(1));
     });
 
-    test('대답 읽기: 싫다는 말은 다음, 번호만 말하면 들어 보기', () {
-      expect(parseVoiceAnswer('별로야', 7)!.kind, VoiceAnswerKind.next);
-      expect(parseVoiceAnswer('5번', 7)!.kind, VoiceAnswerKind.listen);
-      expect(parseVoiceAnswer('5번', 7)!.number, 5);
-      expect(parseVoiceAnswer('9번 좋아', 7)!.number, isNull);
-      expect(voiceNumber('일곱째', 7), 7);
-      expect(voiceNumber('여덟 번', 7), isNull);
+    group('대답 읽기(목소리 7개)', () {
+      test('싫다는 말 "별로야" → 다음 목소리', () {
+        expect(parseVoiceAnswer('별로야', 7)!.kind, VoiceAnswerKind.next);
+      });
+
+      test('번호만 말한 "5번" → 5번 들어 보기', () {
+        final answer = parseVoiceAnswer('5번', 7)!;
+        expect(answer.kind, VoiceAnswerKind.listen);
+        expect(answer.number, 5);
+      });
+
+      test('한글 서수 "일곱째" → 7번', () {
+        expect(voiceNumber('일곱째', 7), 7);
+      });
+
+      test('비정상: 없는 번호 "9번 좋아"는 번호로 보지 않는다', () {
+        expect(parseVoiceAnswer('9번 좋아', 7)!.number, isNull);
+      });
+
+      test('비정상: 없는 번호 "여덟 번" → null', () {
+        expect(voiceNumber('여덟 번', 7), isNull);
+      });
     });
   });
 

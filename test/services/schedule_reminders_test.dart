@@ -11,9 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import '../helpers/agent_fakes.dart'
-    show FakeSpeech, ScriptedListen, FakeWeatherService, onboardingWith;
-import '../agent/turn_test.dart' show FakeTurnApi, reply, settle;
+import '../helpers/fakes.dart';
 
 ScheduleEvent ev(
   String title,
@@ -570,7 +568,7 @@ void main() {
       await agent.askFromReminder('내일 뭐 입지?');
       await settle();
       expect(turns.sent, ['say:내일 뭐 입지?']);
-      expect(speech.spoken.first, AgentController.reminderIntro);
+      expect(speech.said.first, AgentController.reminderIntro);
     });
 
     test('앱이 알림으로 막 켜져 정보를 아직 안 불러왔으면 시작 인사 뒤 듣지 않고 보낸다', () async {
@@ -590,7 +588,7 @@ void main() {
       await settle();
       await settle();
       expect(turns.sent, ['say:오늘 뭐 입지?']);
-      expect(speech.spoken, isNot(contains(startsWith('앗'))));
+      expect(speech, neverSaidLineStartingWith('앗'));
     });
   });
 
@@ -622,7 +620,7 @@ void main() {
     await settle();
 
     // then
-    expect(speech.spoken.take(2), [
+    expect(speech.said.take(2), [
       '반가워요. 저 하늘이에요. 오늘도 같이 준비해 봐요. 필요한 게 있으면 편하게 말씀해 주세요.',
       '사흘 뒤 11월 29일 일요일 오후 8시, 친구 모임이 있어요.',
     ]);
@@ -658,7 +656,7 @@ void main() {
     await settle();
 
     // then
-    expect(speech.spoken, isNot(contains(contains('친구 모임'))));
+    expect(speech, neverSaidLineContaining('친구 모임'));
   });
 
   test('시리 단축어로 들어온 말을 한 번만 보낸다', () async {

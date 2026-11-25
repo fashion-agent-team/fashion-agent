@@ -4,32 +4,43 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// 말을 듣고 어떤 기능·설정·명령인지 고른다.
 void main() {
-  test('말에서 기능을 고른다', () {
-    expect(routeIntent('오늘 일정 알려 줘'), Intent.schedule);
-    expect(routeIntent('오늘 날씨 어때'), Intent.weather);
-    expect(routeIntent('겉옷 챙겨야 해?'), Intent.weather);
-    expect(routeIntent('날씨에 맞게 입었는지 옷 검사해 줘'), Intent.outfitCheck);
-    expect(routeIntent('이에 뭐 꼈는지 봐 줘'), Intent.faceCheck);
-    // 2026-11-09 리허설: "옷 검사"가 얼굴 확인으로 넘어갔다.
-    expect(routeIntent('옷검사 해 줘'), Intent.outfitCheck);
-    expect(routeIntent('머리부터 옷 검사해 줘'), Intent.outfitCheck);
-    expect(routeIntent('머리 정돈됐는지 봐 줘'), Intent.faceCheck);
-    expect(routeIntent('뭐 할 수 있어?'), Intent.help);
-    expect(routeIntent('안녕'), Intent.unknown);
+  group('말에서 기능 고르기(routeIntent)', () {
+    const cases = {
+      '오늘 일정 알려 줘': Intent.schedule,
+      '오늘 날씨 어때': Intent.weather,
+      '겉옷 챙겨야 해?': Intent.weather,
+      '날씨에 맞게 입었는지 옷 검사해 줘': Intent.outfitCheck,
+      // 2026-11-09 리허설: "옷 검사"가 얼굴 확인으로 넘어갔다.
+      '옷검사 해 줘': Intent.outfitCheck,
+      '머리부터 옷 검사해 줘': Intent.outfitCheck,
+      '이에 뭐 꼈는지 봐 줘': Intent.faceCheck,
+      '머리 정돈됐는지 봐 줘': Intent.faceCheck,
+      '뭐 할 수 있어?': Intent.help,
+    };
+    cases.forEach((said, intent) {
+      test('"$said" → ${intent.name}', () => expect(routeIntent(said), intent));
+    });
+
+    test('비정상: 기능과 상관없는 "안녕" → unknown',
+        () => expect(routeIntent('안녕'), Intent.unknown));
   });
 
   group('설정 말 고르기', () {
-    test('설정 말을 고른다', () {
-      expect(routeSetting('네 이름 바꿔 줘'), Setting.agentName);
-      expect(routeSetting('이름을 코디로 바꿔 줘'), Setting.agentName);
-      expect(routeSetting('에이전트 이름 변경'), Setting.agentName);
-      expect(routeSetting('나를 진행 님이라고 불러 줘'), Setting.callName);
-      expect(routeSetting('호칭 바꿔 줘'), Setting.callName);
-      expect(routeSetting('저를 어떻게 부를지 정하고 싶어'), Setting.callName);
-      expect(routeSetting('내 키 바꿔 줘'), Setting.profile);
-      expect(routeSetting('제 정보 수정할래'), Setting.profile);
-      expect(routeSetting('생일 바꿔 줘'), Setting.profile);
-      expect(routeSetting('내 정보 알려 줘'), Setting.readProfile);
+    const settings = {
+      '네 이름 바꿔 줘': Setting.agentName,
+      '이름을 코디로 바꿔 줘': Setting.agentName,
+      '에이전트 이름 변경': Setting.agentName,
+      '나를 진행 님이라고 불러 줘': Setting.callName,
+      '호칭 바꿔 줘': Setting.callName,
+      '저를 어떻게 부를지 정하고 싶어': Setting.callName,
+      '내 키 바꿔 줘': Setting.profile,
+      '제 정보 수정할래': Setting.profile,
+      '생일 바꿔 줘': Setting.profile,
+      '내 정보 알려 줘': Setting.readProfile,
+    };
+    settings.forEach((said, setting) {
+      test('"$said" → ${setting.name}',
+          () => expect(routeSetting(said), setting));
     });
 
     test('설정과 상관없는 말은 설정으로 고르지 않는다', () {
@@ -48,14 +59,14 @@ void main() {
     });
   });
 
-  test('"처음으로"와 "첫 화면"을 알아듣는다', () {
-    expect(isHomeCommand('처음으로'), isTrue);
-    expect(isHomeCommand('처음으로 가 줘'), isTrue);
-    expect(isHomeCommand('첫 화면'), isTrue);
-    expect(isHomeCommand('첫화면으로 가 줘'), isTrue);
-    expect(isHomeCommand('처음 화면'), isTrue);
-    expect(isHomeCommand('오늘 날씨 어때'), isFalse);
-    expect(isHomeCommand('처음으로 입어 보는 옷이야'), isFalse);
+  group('"처음으로"·"첫 화면" 명령(isHomeCommand)', () {
+    for (final said in ['처음으로', '처음으로 가 줘', '첫 화면', '첫화면으로 가 줘', '처음 화면']) {
+      test('"$said" → 첫 화면으로', () => expect(isHomeCommand(said), isTrue));
+    }
+    test('비정상: 상관없는 "오늘 날씨 어때"는 아니다',
+        () => expect(isHomeCommand('오늘 날씨 어때'), isFalse));
+    test('비정상: "처음으로 입어 보는 옷이야"의 "처음으로"는 명령이 아니다',
+        () => expect(isHomeCommand('처음으로 입어 보는 옷이야'), isFalse));
   });
 
   test('"기능 설명"과 기능별 "자세히 알려 줘"', () {
@@ -76,6 +87,9 @@ void main() {
         featureDetailFor('일정 추가 설명해 줘'),
         '일정을 추가하실 수 있어요. 날짜와 시간 일정을 알려 주시면 일정에 맞는 패션을 추천해드려요. '
         '당일에 알림으로 리마인드 해드려요. 알림을 누르시면 그날 입을 옷 추천으로 바로 이어져요.');
+  });
+
+  test('비정상: "자세히"가 없는 "날씨 알려 줘"는 기능 설명이 아니다(null)', () {
     expect(featureDetailFor('날씨 알려 줘'), isNull);
   });
 }
