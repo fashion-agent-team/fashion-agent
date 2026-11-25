@@ -692,7 +692,10 @@ void main() {
 
       expect(turns.mouthBoxes, [null]);
       expect(camera.subjects, everyElement(Subject.mouth));
-      expect(speech.spoken.where((t) => t == '입이 잘 안 보여요. 폰을 입 앞에 들고 "이~" 해 주세요.').length,
+      expect(
+          speech.spoken
+              .where((t) => t == '입이 잘 안 보여요. 폰을 입 앞에 들고 "이~" 해 주세요.')
+              .length,
           CameraTurnController.maxMouthMisses);
       expect(c.shots, 1);
     });
