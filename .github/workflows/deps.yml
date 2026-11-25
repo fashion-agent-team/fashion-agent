@@ -1,0 +1,54 @@
+# 의존성 취약점 검사. 앱이 쓰는 Dart/Flutter 패키지(pubspec.lock 전체, 따라 들어오는 것 포함)를
+# OSV(구글 공개 취약점 DB, GitHub 보안 공지 포함)와 맞춰 봅니다. 알려진 취약점이 있으면 빨간 X가 뜹니다.
+# 새 취약점은 코드를 안 바꿔도 생기므로 매주 월요일 아침에도 한 번 돕니다.
+# 예외가 필요하면 osv-scanner.toml에 이유·만료일과 함께 적습니다.
+name: 의존성 취약점 검사
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+  schedule:
+    - cron: '0 0 * * 1' # 매주 월요일 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  osv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+
+      # pubspec.lock은 레포에 없어서(.gitignore) CI에서 실제로 고른 버전으로 만듭니다.
+      - run: flutter pub get
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: osv-scanner 설치
+        run: go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.1
+
+      - name: 취약점 검사 (osv-scanner)
+        run: |
+          set +e
+          cfg=""; [ -f osv-scanner.toml ] && cfg="--config osv-scanner.toml"
+          ~/go/bin/osv-scanner scan source $cfg --format markdown --output osv.md -L pubspec.lock > osv.log 2>&1
+          code=$?
+          { echo "### 의존성 취약점 검사"; echo; cat osv.md; } | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -E 'Scanned|Filtered|rror' osv.log || true
+          exit $code
