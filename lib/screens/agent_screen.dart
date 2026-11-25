@@ -240,7 +240,9 @@ class _TalkArea extends StatelessWidget {
                   Expanded(
                     child: ColoredBox(
                       color: water,
-                      child: Padding(
+                      // 시스템 글씨를 크게 키우면(손쉬운 사용 > 더 큰 텍스트) 상태 글씨만으로도 화면을 넘는다.
+                      // 넘치면 이 아래 전체가 위로 밀려 올라가게(스크롤) 해서 글씨가 잘리지 않게 한다.
+                      child: SingleChildScrollView(
                         padding: const EdgeInsets.fromLTRB(28, 20, 28, 8),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,18 +289,14 @@ class _TalkArea extends StatelessWidget {
                                       ),
                               ),
                             if (!listening && agent.message.isNotEmpty)
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 16),
-                                  child: SingleChildScrollView(
-                                    child: Text(agent.message,
-                                        style: const TextStyle(
-                                            fontFamily: SeaFonts.batang,
-                                            fontSize: 22,
-                                            height: 1.7,
-                                            color: SeaColors.hanji)),
-                                  ),
-                                ),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Text(agent.message,
+                                    style: const TextStyle(
+                                        fontFamily: SeaFonts.batang,
+                                        fontSize: 22,
+                                        height: 1.7,
+                                        color: SeaColors.hanji)),
                               ),
                           ],
                         ),

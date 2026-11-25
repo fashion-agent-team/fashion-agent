@@ -87,26 +87,30 @@ class BigButton extends StatelessWidget {
         color: color,
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 36, fontWeight: FontWeight.bold)),
-                if (detail != null && detail!.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Text(detail!,
+          // 시스템 글씨를 아주 크게 키우면 버튼 칸보다 글씨가 커질 수 있어서, 넘치면 칸 안에서 스크롤한다.
+          // 넘치지 않을 때는 예전처럼 가운데에 놓인다(minHeight).
+          child: LayoutBuilder(
+            builder: (context, box) => SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    minHeight: (box.maxHeight - 48).clamp(0, double.infinity)),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(label,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 36, fontWeight: FontWeight.bold)),
+                    if (detail != null && detail!.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text(detail!,
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 20)),
-                    ),
-                  ),
-                ],
-              ],
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),

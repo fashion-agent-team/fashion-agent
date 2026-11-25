@@ -31,6 +31,11 @@ jobs:
       - name: 정적 분석 (flutter analyze)
         run: flutter analyze
 
+      # 시각장애인용 앱이라 화면마다 VoiceOver 이름, 누르는 곳 크기(44·48), 글씨 명암비(WCAG AA),
+      # 글씨 200·300%에서 넘치지 않는지를 따로 확인합니다. 자세한 기준은 test/a11y/accessibility_test.dart.
+      - name: 접근성 검사 (test/a11y)
+        run: flutter test test/a11y
+
       - name: 테스트 + 커버리지 (flutter test --coverage)
         run: flutter test --coverage
 
