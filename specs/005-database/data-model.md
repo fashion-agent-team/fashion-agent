@@ -27,7 +27,7 @@ erDiagram
   USERS ||--|{ USER_IDENTITIES : "로그인 수단"
   USERS ||--o{ PUSH_TOKENS : "폰 여러 대"
   USERS ||--o{ REFRESH_TOKENS : "갱신 토큰"
-  PLACES ||--o{ EVENTS : "카카오 장소"
+  PLACES |o--o{ EVENTS : "카카오 장소"
   GARMENTS ||--o{ GARMENT_DEFECTS : "얼룩·찢어짐"
   GARMENTS ||--o{ WEARS : "입은 날"
   USERS ||..o{ EVENTS : "user_id"
@@ -140,7 +140,7 @@ erDiagram
 
 ## 정규화 (2026-11-20 V4)
 
-강사님 피드백("정규화 맞춰서")으로 세 레포에 V4 마이그레이션을 넣었습니다. 지금 표는 모두 BCNF이고, 다치 종속·조인 종속이 따로 없어 4NF·5NF도 만족합니다.
+강사님 피드백("정규화 맞춰서")으로 세 레포에 V4 마이그레이션을 넣었습니다. 지금 표는 모두 3NF입니다. BCNF가 아닌 곳은 `user_identities` 하나로, `sign_in_provider`(apple·google·dev)가 `issuer`(firebase·dev)를 정합니다. 마지막 로그인 방법을 남기려는 칸이라 따로 나누지 않았습니다.
 
 | 무엇 | 전 | 지금 | 이유 |
 | --- | --- | --- | --- |
@@ -177,7 +177,7 @@ erDiagram
 | | `place`, `kakao_place_id` FK(places) | 말한 장소 그대로, 카카오에서 찾았으면 그 id(못 찾으면 null) |
 | | `occasion` | mourning·wedding·formal·business·active·casual, 기본 casual |
 | | `occasion_source` | title·place·default. 정하는 순서는 제목 → 장소 → 기본값 |
-| | `remind`, `remind_days_before` | 폰 알림을 받을지, 며칠 전에 미리 알릴지. null이면 전날 저녁 + 당일 아침 |
+| | `remind`, `remind_days_before` | 폰 알림을 받을지, 며칠 전에 미리 알릴지. null이면 전날 아침 8시 + 당일 아침(2026-11-20부터, 전에는 전날 저녁) |
 | | `remind_time` | 미리 알림을 띄울 시각(V5, `time`). null이면 아침 8시, `remind_days_before`가 0이면 당일 알림 시각. `remind`가 false면 null |
 | | `notified_at`, `care_reminded_at` | 서버가 기록만 하는 시각(일정 알림은 앱이 폰 로컬 알림으로 띄움) |
 

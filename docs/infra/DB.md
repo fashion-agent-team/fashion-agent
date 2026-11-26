@@ -18,7 +18,7 @@ PostgreSQL 16.15 + pgvector에서 실행하고 검사가 모두 통과하는 것
 - 다른 서비스 스키마는 직접 읽지 않습니다. 그래서 **스키마를 넘는 FK는 없습니다.** `user_id`는 `account.users.id`와 값만 같습니다.
 - 표는 각 서비스가 뜰 때 Flyway로 만듭니다. 머지된 마이그레이션은 고치지 않고 새 버전을 더합니다.
 - 사진은 옷 부분만 자른 작은 사진(`closet.garments.thumbnail`, 64KB 이하) 하나만 둡니다. agent는 DB 없이 Redis에 대화 상태를 30분 둡니다.
-- 표는 BCNF까지 정규화했습니다(2026-11-20 V4, [data-model.md "정규화"](../../specs/005-database/data-model.md#정규화-2026-11-20-v4)).
+- 표는 3NF까지 정규화했습니다(2026-11-20 V4, [data-model.md "정규화"](../../specs/005-database/data-model.md#정규화-2026-11-20-v4)). BCNF가 아닌 곳은 `user_identities` 하나입니다(로그인 방법이 issuer를 정함).
 
 ## 표 (11개)
 
